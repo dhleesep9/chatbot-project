@@ -1113,6 +1113,101 @@ class ChatbotService:
         else:
             return ""
     
+    def _build_system_prompt(self) -> str:
+        """
+        시스템 프롬프트 생성 (캐릭터 설정, 역할 지침, 대화 예시 포함)
+        """
+        if not self.config:
+            return "당신은 도움이 되는 AI 챗봇입니다."
+
+        system_parts = []
+
+        # 1. 기본 캐릭터 정보
+        character = self.config.get("character", {})
+        if character:
+            bot_name = self.config.get("name", "챗봇")
+            system_parts.append(f"## 캐릭터 정보")
+            system_parts.append(f"당신은 '{bot_name}'입니다.")
+
+            # 나이, 대학, 전공
+            if character.get("age"):
+                system_parts.append(f"- 나이: {character.get('age')}세")
+            if character.get("university"):
+                system_parts.append(f"- 대학/상태: {character.get('university')}")
+            if character.get("major"):
+                system_parts.append(f"- 전공/목표: {character.get('major')}")
+
+            # 성격
+            if character.get("personality"):
+                system_parts.append(f"\n### 성격")
+                system_parts.append(character.get("personality"))
+
+            # 배경
+            if character.get("background"):
+                system_parts.append(f"\n### 배경")
+                system_parts.append(character.get("background"))
+
+            # 주요 고민사항
+            concerns = character.get("major_concerns", [])
+            if concerns:
+                system_parts.append(f"\n### 주요 고민사항")
+                for concern in concerns:
+                    system_parts.append(f"- {concern}")
+
+            # 도움이 필요한 부분
+            needs_help = character.get("needs_help_with", [])
+            if needs_help:
+                system_parts.append(f"\n### 도움이 필요한 부분")
+                for need in needs_help:
+                    system_parts.append(f"- {need}")
+
+            # 역할 지침
+            role_directives = character.get("role_directives", {})
+            if role_directives:
+                system_parts.append(f"\n## 역할 지침")
+
+                # 반드시 따라야 할 규칙
+                must_follow = role_directives.get("must_follow_rules", [])
+                if must_follow:
+                    system_parts.append(f"\n### ✅ 반드시 따라야 할 규칙:")
+                    for i, rule in enumerate(must_follow, 1):
+                        system_parts.append(f"{i}. {rule}")
+
+                # 절대 하지 말아야 할 것
+                must_not = role_directives.get("must_not_do", [])
+                if must_not:
+                    system_parts.append(f"\n### 🚫 절대 하지 말아야 할 것:")
+                    for i, rule in enumerate(must_not, 1):
+                        system_parts.append(f"{i}. {rule}")
+
+        # 2. 대화 예시
+        dialogue_examples = self.config.get("dialogue_examples", {})
+        if dialogue_examples:
+            system_parts.append(f"\n## 대화 예시")
+
+            # 도움 요청 시
+            asking = dialogue_examples.get("asking_for_help", [])
+            if asking:
+                system_parts.append(f"\n### 도움을 요청할 때:")
+                for example in asking:
+                    system_parts.append(f"- \"{example}\"")
+
+            # 불안감 표현 시
+            anxiety = dialogue_examples.get("expressing_anxiety", [])
+            if anxiety:
+                system_parts.append(f"\n### 불안감을 표현할 때:")
+                for example in anxiety:
+                    system_parts.append(f"- \"{example}\"")
+
+            # 멘토 조언에 반응할 때
+            reacting = dialogue_examples.get("reacting_to_mentor_advice", [])
+            if reacting:
+                system_parts.append(f"\n### 멘토의 조언에 반응할 때:")
+                for example in reacting:
+                    system_parts.append(f"- \"{example}\"")
+
+        return "\n".join(system_parts)
+
     def _build_prompt(self, user_message: str, context: str = None, username: str = "사용자", affection: int = 5, game_state: str = "ice_break", selected_subjects: list = None, subject_selected: bool = False, schedule_set: bool = False):
         """
         LLM 프롬프트 구성 (호감도 및 게임 상태 반영)
@@ -1120,19 +1215,19 @@ class ChatbotService:
         """
         if selected_subjects is None:
             selected_subjects = []
-        
+
         # 프롬프트 시작 (호감도 말투가 메인)
         prompt_parts = []
-        
+
         # 호감도에 따른 말투 추가 (가장 먼저)
         affection_tone = self._get_affection_tone(affection)
         prompt_parts.append(affection_tone.strip())
-        
+
         # 게임 상태 컨텍스트 추가
         state_context = self._get_state_context(game_state)
         if state_context.strip():
             prompt_parts.append(state_context.strip())
-        
+
         # 선택과목 정보 추가 (멘토링 단계)
         if game_state == "mentoring":
             if selected_subjects:
@@ -1143,15 +1238,15 @@ class ChatbotService:
             else:
                 prompt_parts.append("[선택된 탐구과목: 없음]")
                 prompt_parts.append("(아직 탐구과목을 선택하지 않았습니다. 자연스럽게 선택과목을 선택하도록 유도하세요.)")
-        
+
         # 시간표 설정 안내 (daily_routine 단계)
         if game_state == "daily_routine":
             if not schedule_set:
                 prompt_parts.append("[중요] 아직 주간 학습 시간표가 설정되지 않았습니다. 플레이어에게 14시간을 자유롭게 분배하여 시간표를 설정하도록 안내하세요. 예: '수학4시간 국어4시간 영어4시간 탐구1 1시간 탐구2 1시간'")
-        
+
         # 프롬프트 조립
         sys_prompt = "\n\n".join(prompt_parts)
-        
+
         prompt = sys_prompt.strip() + "\n\n"
         if context:
             prompt += "[참고 정보]\n" + context.strip() + "\n\n"
@@ -1790,10 +1885,13 @@ class ChatbotService:
                     reply = "죄송해요, 현재 AI 서비스에 연결할 수 없어요. 잠시 후 다시 시도해주세요."
                 else:
                     try:
+                        # 시스템 프롬프트 생성 (캐릭터 설정, 역할 지침, 대화 예시 포함)
+                        system_prompt = self._build_system_prompt()
+
                         response = self.client.chat.completions.create(
                             model="gpt-4o-mini",
                             messages=[
-                                {"role": "system", "content": ""},
+                                {"role": "system", "content": system_prompt},
                                 {"role": "user", "content": prompt}
                             ],
                             temperature=0.7,
