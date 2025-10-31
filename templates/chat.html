@@ -315,6 +315,39 @@
         height: auto; /* 비율 유지 */
         max-height: 85vh; /* 카드 최대 높이와 동일 제한 */
       }
+      .character-status {
+        position: absolute;
+        bottom: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        align-items: center;
+        z-index: 12;
+        width: 90%;
+      }
+      .status-badge {
+        padding: 4px 12px;
+        border-radius: 12px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: white;
+        text-align: center;
+        white-space: nowrap;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        width: fit-content;
+        min-width: 60px;
+      }
+      .status-normal {
+        background: #4caf50;
+      }
+      .status-sick {
+        background: #f44336;
+      }
+      .status-burnout {
+        background: #ff9800;
+      }
       /* UI 레이아웃 컨테이너 (모든 UI 요소를 담는 패널) */
       .ui-layout-container {
         position: fixed;
@@ -415,15 +448,22 @@
         font-weight: bold;
         color: #764ba2;
       }
+      /* 체력/멘탈 컨테이너 */
+      .stats-container {
+        display: flex;
+        gap: 12px;
+        width: 100%;
+        margin-bottom: 12px;
+      }
       /* 체력 표시 */
       .stamina-display {
         position: relative;
-        width: 100%;
+        flex: 1;
+        width: 50%;
         padding: 12px 16px;
         background: rgba(255, 255, 255, 0.98);
         border: 2px solid #f39c12;
         border-radius: 12px;
-        margin-bottom: 12px;
         box-shadow: 0 2px 8px rgba(243, 156, 18, 0.15);
         transition: box-shadow 0.3s ease;
         box-sizing: border-box;
@@ -432,6 +472,17 @@
       }
       .stamina-display:hover {
         box-shadow: 0 6px 20px rgba(243, 156, 18, 0.3);
+      }
+      /* 멘탈 표시용 스타일 (체력과 동일한 스타일 사용, 테두리 색상만 변경) */
+      #mental-display {
+        border-color: #9b59b6;
+        box-shadow: 0 2px 8px rgba(155, 89, 182, 0.15);
+      }
+      #mental-display:hover {
+        box-shadow: 0 6px 20px rgba(155, 89, 182, 0.3);
+      }
+      #mental-display .stamina-value {
+        color: #9b59b6;
       }
       .stamina-label {
         font-size: 0.9rem;
@@ -753,9 +804,11 @@
     <div class="side-image-frame">
       <img
         class="side-image"
-        src="{{ url_for('static', filename='images/chatbot/하-0.png') }}"
+        src="static/images/chatbot/하-0.png"
         alt="서가윤"
       />
+      <!-- 서가윤 상태 표시 -->
+      <div class="character-status" id="character-status"></div>
     </div>
     <!-- UI 레이아웃 컨테이너 (모든 UI 요소를 담는 패널) -->
     <div class="ui-layout-container" id="ui-layout-container">
@@ -783,11 +836,21 @@
           <div class="affection-label">호감도</div>
           <div class="affection-value" id="affection-value">5</div>
         </div>
-        <!-- 체력 표시 -->
-        <div class="stamina-display" id="stamina-display">
-          <div class="stamina-label">체력</div>
-          <div class="stamina-value" id="stamina-value">30</div>
-          <div class="stamina-efficiency" id="stamina-efficiency">(효율: 100%)</div>
+        <!-- 체력/멘탈 컨테이너 -->
+        <div class="stats-container">
+          <!-- 체력 표시 -->
+          <div class="stamina-display" id="stamina-display">
+            <div class="stamina-label">체력</div>
+            <div class="stamina-value" id="stamina-value">30</div>
+            <div class="stamina-efficiency" id="stamina-efficiency">
+              (효율: 100%)
+            </div>
+          </div>
+          <!-- 멘탈 표시 -->
+          <div class="stamina-display" id="mental-display">
+            <div class="stamina-label">멘탈</div>
+            <div class="stamina-value" id="mental-value">50</div>
+          </div>
         </div>
         <!-- 능력치 표시 -->
         <div class="abilities-display" id="abilities-display">
@@ -908,10 +971,7 @@
           controls
           style="width: 100%; border-radius: 12px; margin-top: 20px"
         >
-          <source
-            src="{{ url_for('static', filename='videos/chatbot/video.mp4') }}"
-            type="video/mp4"
-          />
+          <source src="static/videos/chatbot/video.mp4" type="video/mp4" />
           브라우저가 비디오를 지원하지 않습니다.
         </video>
       </div>

@@ -71,6 +71,11 @@ async function sendMessage(isInitial = false) {
       updateStaminaDisplay(data.stamina);
     }
 
+    // 멘탈 업데이트 (mental 값이 있으면 상태 계산 및 표시)
+    if (data.mental !== undefined) {
+      updateMentalDisplay(data.mental, data.stamina);
+    }
+
     // 시간표 업데이트
     if (data.schedule !== undefined) {
       updateScheduleDisplay(data.schedule, data.game_state || "daily_routine");
@@ -105,9 +110,17 @@ async function sendMessage(isInitial = false) {
       appendNarration(data.narration);
     }
 
+    // 사설모의고사 성적표 표시 (나레이션에 포함되어 있으므로 추가 UI는 선택사항)
+    // 나레이션에 이미 성적표가 포함되어 있음
+
     // 현재 호감도 업데이트
     if (data.affection !== undefined) {
       currentAffection = data.affection;
+    }
+
+    // 현재 체력 업데이트 (stamina가 정의되지 않았으면 기본값 유지)
+    if (data.stamina !== undefined) {
+      currentStamina = data.stamina;
     }
 
     // 서가윤 뻐끔뻐끔 애니메이션 시작 (호감도 전달)
@@ -151,7 +164,13 @@ function updateAbilitiesDisplay(abilities) {
   abilityNames.forEach((name) => {
     const abilityElem = document.getElementById(`ability-${name}`);
     if (abilityElem && abilities[name] !== undefined) {
-      abilityElem.textContent = abilities[name];
+      // 소수점 첫째자리까지만 표시
+      const value = parseFloat(abilities[name]);
+      if (!isNaN(value)) {
+        abilityElem.textContent = value.toFixed(1);
+      } else {
+        abilityElem.textContent = abilities[name];
+      }
     }
   });
 }
@@ -170,7 +189,10 @@ function updateAffectionDisplay(affection) {
   if (!speakingAnimationInterval) {
     const sideImage = document.querySelector(".side-image");
     if (sideImage) {
-      const defaultImage = getDefaultImageByAffection(affection);
+      const defaultImage = getDefaultImageByAffectionAndStamina(
+        affection,
+        currentStamina
+      );
       sideImage.src = defaultImage;
     }
   }
@@ -189,6 +211,60 @@ function updateStaminaDisplay(stamina) {
   const efficiency = 100 + (stamina - 30);
   if (staminaEfficiency) {
     staminaEfficiency.textContent = `(효율: ${efficiency}%)`;
+  }
+
+  // 현재 체력 저장
+  currentStamina = stamina;
+
+  // 체력 변경 시 이미지 업데이트 (애니메이션 중이 아닐 때만)
+  if (!speakingAnimationInterval) {
+    const sideImage = document.querySelector(".side-image");
+    if (sideImage) {
+      const defaultImage = getDefaultImageByAffectionAndStamina(
+        currentAffection,
+        currentStamina
+      );
+      sideImage.src = defaultImage;
+    }
+  }
+}
+
+// 멘탈 표시 및 상태 업데이트
+function updateMentalDisplay(mental, stamina) {
+  // 멘탈 값 표시
+  const mentalValue = document.getElementById("mental-value");
+  if (mentalValue) {
+    mentalValue.textContent = mental;
+  }
+
+  // 상태 계산
+  const statuses = [];
+
+  // 병듦 상태: 체력 10 이하
+  if (stamina !== undefined && stamina <= 10) {
+    statuses.push({ type: "sick", text: "병듦" });
+  }
+
+  // 번아웃 상태: 멘탈 40 미만
+  if (mental < 40) {
+    statuses.push({ type: "burnout", text: "번아웃" });
+  }
+
+  // 평범한 상태: 위 상태가 없을 때만 표시
+  if (statuses.length === 0) {
+    statuses.push({ type: "normal", text: "평범" });
+  }
+
+  // 상태 표시 업데이트
+  const statusContainer = document.getElementById("character-status");
+  if (statusContainer) {
+    statusContainer.innerHTML = "";
+    statuses.forEach((status) => {
+      const badge = document.createElement("div");
+      badge.className = `status-badge status-${status.type}`;
+      badge.textContent = status.text;
+      statusContainer.appendChild(badge);
+    });
   }
 }
 
@@ -258,6 +334,7 @@ function saveGameState(data) {
     // 게임 상태 저장
     const gameState = {
       abilities: data.abilities,
+      mental: data.mental,
       affection: data.affection,
       stamina: data.stamina,
       schedule: data.schedule,
@@ -314,6 +391,11 @@ function loadGameState() {
       // 체력 복원
       if (gameState.stamina !== undefined) {
         updateStaminaDisplay(gameState.stamina);
+      }
+
+      // 멘탈 복원 및 상태 표시
+      if (gameState.mental !== undefined) {
+        updateMentalDisplay(gameState.mental, gameState.stamina);
       }
 
       // 시간표 복원
@@ -387,6 +469,7 @@ function removeMessage(messageId) {
 let speakingAnimationInterval = null;
 let speakingAnimationTimeout = null;
 let currentAffection = 5; // 현재 호감도 저장
+let currentStamina = 30; // 현재 체력 저장
 
 // 호감도에 따른 이미지 프리픽스 반환
 function getImagePrefixByAffection(affection) {
@@ -403,11 +486,23 @@ function getImagePrefixByAffection(affection) {
   }
 }
 
-// 호감도에 따른 기본 이미지 경로 반환
-function getDefaultImageByAffection(affection) {
+// 호감도와 체력에 따른 기본 이미지 경로 반환
+function getDefaultImageByAffectionAndStamina(affection, stamina) {
+  const basePath = "static/images/chatbot/";
+
+  // 체력이 10 미만이면 체력 10미만 이미지 사용
+  if (stamina < 10) {
+    return basePath + "서가윤_체력10미만.png";
+  }
+
+  // 체력이 10 이상이면 호감도에 따라 이미지 선택
   const prefix = getImagePrefixByAffection(affection);
-  const basePath = "/static/images/chatbot/";
   return basePath + prefix + "-0.png";
+}
+
+// 호감도에 따른 기본 이미지 경로 반환 (하위 호환성을 위해 유지)
+function getDefaultImageByAffection(affection) {
+  return getDefaultImageByAffectionAndStamina(affection, currentStamina);
 }
 
 function startSpeakingAnimation(affection = null) {
@@ -417,12 +512,22 @@ function startSpeakingAnimation(affection = null) {
   // 호감도가 전달되지 않으면 현재 저장된 호감도 사용
   const targetAffection = affection !== null ? affection : currentAffection;
 
+  // 체력이 10 미만이면 애니메이션 사용하지 않음 (체력 10미만 이미지만 사용)
+  if (currentStamina < 10) {
+    const defaultImage = getDefaultImageByAffectionAndStamina(
+      targetAffection,
+      currentStamina
+    );
+    sideImage.src = defaultImage;
+    return;
+  }
+
   // 기존 애니메이션 중지
   stopSpeakingAnimation(targetAffection);
 
   // 호감도에 따른 이미지 프리픽스 결정
   const prefix = getImagePrefixByAffection(targetAffection);
-  const basePath = "/static/images/chatbot/";
+  const basePath = "static/images/chatbot/";
   const image0 = basePath + prefix + "-0.png";
   const image1 = basePath + prefix + "-1.png";
 
@@ -467,11 +572,14 @@ function stopSpeakingAnimation(affection = null) {
     speakingAnimationTimeout = null;
   }
 
-  // 기본 이미지로 복원 (호감도에 따라)
+  // 기본 이미지로 복원 (호감도와 체력에 따라)
   const sideImage = document.querySelector(".side-image");
   if (sideImage) {
     const targetAffection = affection !== null ? affection : currentAffection;
-    const defaultImage = getDefaultImageByAffection(targetAffection);
+    const defaultImage = getDefaultImageByAffectionAndStamina(
+      targetAffection,
+      currentStamina
+    );
     sideImage.src = defaultImage;
   }
 }
@@ -935,8 +1043,11 @@ window.addEventListener("load", () => {
           if (!speakingAnimationInterval) {
             const sideImage = document.querySelector(".side-image");
             if (sideImage) {
-              const defaultImage = getDefaultImageByAffection(
-                gameState.affection
+              const savedStamina =
+                gameState.stamina !== undefined ? gameState.stamina : 30;
+              const defaultImage = getDefaultImageByAffectionAndStamina(
+                gameState.affection,
+                savedStamina
               );
               sideImage.src = defaultImage;
             }

@@ -194,6 +194,10 @@ class ChatbotService:
         # 9. 체력 저장 (기본값 30)
         self.staminas = {}  # {username: stamina_value}
         print("[ChatbotService] 체력 시스템 초기화 완료")
+        
+        # 10. 멘탈 저장 (기본값 50)
+        self.mentals = {}  # {username: mental_value}
+        print("[ChatbotService] 멘탈 시스템 초기화 완료")
 
         # 9. 대화 횟수 추적 (daily_routine 상태에서만)
         self.conversation_counts = {}  # {username: count}
@@ -206,7 +210,15 @@ class ChatbotService:
         # 11. 게임 날짜 저장
         self.game_dates = {}  # {username: "2023-11-17"}
         print("[ChatbotService] 게임 날짜 시스템 초기화 완료")
-
+        
+        # 12. 시험 직후 자책 상태 저장 (최근 시험 성적이 나쁘면 True)
+        self.exam_disappointment = {}  # {username: True/False}
+        print("[ChatbotService] 시험 직후 자책 상태 초기화 완료")
+        
+        # 13. 시험 직후 문제점 저장 (시험 후 랜덤으로 선택된 문제점)
+        self.exam_issues = {}  # {username: {"question": "국어 푸는데 시간이 부족해서...", "expected_advice": "모르는 문제는 넘어가"}}
+        print("[ChatbotService] 시험 직후 문제점 초기화 완료")
+        
         print("[ChatbotService] 초기화 완료")
     
     
@@ -358,6 +370,18 @@ class ChatbotService:
         사용자의 체력 설정
         """
         self.staminas[username] = max(0, stamina)  # 체력은 0 이상
+    
+    def _get_mental(self, username: str) -> int:
+        """
+        사용자의 현재 멘탈 반환 (없으면 기본값 50)
+        """
+        return self.mentals.get(username, 50)
+    
+    def _set_mental(self, username: str, mental: int):
+        """
+        사용자의 멘탈 설정
+        """
+        self.mentals[username] = max(0, min(100, mental))  # 멘탈은 0~100 범위
     
     def _calculate_stamina_efficiency(self, stamina: int) -> float:
         """
@@ -711,6 +735,196 @@ class ChatbotService:
         """
         self.game_dates[username] = date_str
     
+    def _set_exam_disappointment(self, username: str, is_disappointed: bool):
+        """
+        시험 직후 자책 상태 설정
+        """
+        self.exam_disappointment[username] = is_disappointed
+    
+    def _get_exam_disappointment(self, username: str) -> bool:
+        """
+        시험 직후 자책 상태 반환
+        """
+        return self.exam_disappointment.get(username, False)
+    
+    def _get_exam_issue_combinations(self) -> list:
+        """
+        시험 직후 문제점-조언 조합 반환
+        """
+        return [
+            # 국어 관련 (7개)
+            {
+                "question": "국어 푸는데 시간이 부족해서 뒤에 부분은 보지도 못했어요",
+                "subject": "국어",
+                "expected_advice": ["모르는 문제는", "넘어가", "그냥 넘어가", "건너뛰", "포기", "스킵", "바로 넘어가"]
+            },
+            {
+                "question": "국어 비문학 지문을 너무 자세히 읽다가 뒤 문제들을 못 봤어요",
+                "subject": "국어",
+                "expected_advice": ["빨리 읽", "요지 파악", "핵심만", "꼼꼼히 읽지 말", "스킵", "대략적으로 읽"]
+            },
+            {
+                "question": "국어 문학 작품을 매번 처음부터 다 읽으려고 해서 시간을 많이 썼어요",
+                "subject": "국어",
+                "expected_advice": ["문제 중심", "지문 일부", "핵심만", "빠르게", "스킵", "문제 먼저 보"]
+            },
+            {
+                "question": "국어 시간 분배를 잘못해서 마지막 문제들을 못 봤어요",
+                "subject": "국어",
+                "expected_advice": ["시간 관리", "시간 분배", "체크", "시간 확인", "분배", "계획"]
+            },
+            {
+                "question": "국어 어휘 문제를 한 글자 한 글자 너무 꼼꼼하게 풀었어요",
+                "subject": "국어",
+                "expected_advice": ["빨리 풀", "빠르게", "신속하게", "스피드", "체감으로"]
+            },
+            {
+                "question": "국어 비문학에서 찾기 문제를 너무 꼼꼼히 찾다가 시간을 다 썼어요",
+                "subject": "국어",
+                "expected_advice": ["대략적", "요지만", "핵심만", "빠르게", "대충 찾"]
+            },
+            {
+                "question": "국어 문법 문제를 반복해서 확인하다가 시간이 부족했어요",
+                "subject": "국어",
+                "expected_advice": ["넘어가", "확인하지 말", "그냥 넘어가", "시간 아껴", "스킵"]
+            },
+            # 수학 관련 (8개)
+            {
+                "question": "수학 문제 이해는 되는데 시간이 부족해서 못 풀었어요",
+                "subject": "수학",
+                "expected_advice": ["빨리 풀", "시간 단축", "속도를 올려", "시간 관리", "시간 분배", "빠르게"]
+            },
+            {
+                "question": "수학 계산을 계속 반복해서 틀렸는데 시간을 너무 많이 써버렸어요",
+                "subject": "수학",
+                "expected_advice": ["넘어가", "포기", "확인하지 말", "그냥 넘어가", "시간 관리", "체크 안 해"]
+            },
+            {
+                "question": "수학 고난도 문제에만 집중하다가 쉬운 문제들을 못 봤어요",
+                "subject": "수학",
+                "expected_advice": ["쉬운 문제", "순서", "전략", "선택과 집중", "포기", "기본 문제 먼저"]
+            },
+            {
+                "question": "수학 풀이 과정을 너무 자세히 쓰다가 시간이 부족했어요",
+                "subject": "수학",
+                "expected_advice": ["간략히", "핵심만", "줄여서", "짧게", "요약", "축약"]
+            },
+            {
+                "question": "수학 풀이법을 고민하다가 결국 못 풀고 시간만 많이 썼어요",
+                "subject": "수학",
+                "expected_advice": ["포기", "그냥 넘어가", "스킵", "시간 낭비", "빠르게 결정"]
+            },
+            {
+                "question": "수학 계산 실수가 걱정되어 계속 재계산하다가 시간이 부족했어요",
+                "subject": "수학",
+                "expected_advice": ["확인 안 해", "재계산 안 해", "넘어가", "그냥 넘어가", "시간 아껴"]
+            },
+            {
+                "question": "수학 문제 읽는 속도가 너무 느려서 모든 문제를 못 봤어요",
+                "subject": "수학",
+                "expected_advice": ["빨리 읽", "스피드", "빠르게 읽", "핵심만", "대략적"]
+            },
+            {
+                "question": "수학 문제를 앞에서부터 하나씩 풀다가 뒤 문제들을 못 봤어요",
+                "subject": "수학",
+                "expected_advice": ["순서", "전략", "난이도 순", "쉬운 거 먼저", "시간 분배"]
+            },
+            # 영어 관련 (8개)
+            {
+                "question": "영어 단어를 너무 오래 생각하다가 시간이 부족했어요",
+                "subject": "영어",
+                "expected_advice": ["빨리 풀", "쉽게 생각", "고민하지 말", "즉각 판단", "빠르게 풀", "체감으로"]
+            },
+            {
+                "question": "영어 지문을 처음부터 끝까지 다 읽어서 문제 푸는데 시간이 부족했어요",
+                "subject": "영어",
+                "expected_advice": ["문제 먼저", "지문 안 읽", "핵심만", "스키밍", "빠르게 읽", "문제 중심"]
+            },
+            {
+                "question": "영어 정답을 확신하지 못해 고민하다가 시간을 너무 써버렸어요",
+                "subject": "영어",
+                "expected_advice": ["빨리 결정", "즉각 판단", "고민하지 말", "첫 느낌", "확신하지 말", "빠르게 선택"]
+            },
+            {
+                "question": "영어 단어 뜻을 계속 추론하려다가 시간이 부족했어요",
+                "subject": "영어",
+                "expected_advice": ["추론 안 해", "넘어가", "그냥 넘어가", "스킵", "시간 아껴"]
+            },
+            {
+                "question": "영어 빈칸 추론 문제를 너무 오래 생각하다가 시간이 부족했어요",
+                "subject": "영어",
+                "expected_advice": ["빨리 결정", "빠르게", "체감으로", "즉각 판단", "포기"]
+            },
+            {
+                "question": "영어 어법 문제를 계속 다시 읽어보다가 시간이 부족했어요",
+                "subject": "영어",
+                "expected_advice": ["다시 안 읽", "한 번에", "빠르게 결정", "확인 안 해", "넘어가"]
+            },
+            {
+                "question": "영어 문장 순서 문제를 여러 번 재배치하다가 시간을 다 썼어요",
+                "subject": "영어",
+                "expected_advice": ["빠르게 결정", "재배치 안 해", "한 번에", "시간 아껴", "첫 느낌"]
+            },
+            {
+                "question": "영어 시간이 부족해서 마지막 지문을 거의 못 봤어요",
+                "subject": "영어",
+                "expected_advice": ["시간 분배", "시간 관리", "계획", "순서", "전략", "속도"]
+            },
+            # 탐구 관련 (8개)
+            {
+                "question": "탐구 문제가 너무 어려워서 시간 분배를 잘 못했어요",
+                "subject": "탐구1",
+                "expected_advice": ["시간 관리", "시간 분배", "전략", "순서", "계획", "체크"]
+            },
+            {
+                "question": "탐구 개념을 완전히 기억하려고 하다가 시간이 부족했어요",
+                "subject": "탐구1",
+                "expected_advice": ["대략적", "추론", "빠르게", "완벽하지 말", "가능성", "체감으로"]
+            },
+            {
+                "question": "탐구 계산 문제에서 실수를 찾기 위해 계속 다시 풀어서 시간이 부족했어요",
+                "subject": "탐구1",
+                "expected_advice": ["넘어가", "다시 하지 말", "시간 관리", "그냥 넘어가", "확인하지 말", "체크 안 해"]
+            },
+            {
+                "question": "탐구 지문을 너무 자세히 읽어서 문제를 못 봤어요",
+                "subject": "탐구2",
+                "expected_advice": ["빨리 읽", "핵심만", "스킵", "대략적", "요지만", "빠르게 읽"]
+            },
+            {
+                "question": "탐구 개념 정확히 떠올리려다가 시간을 너무 많이 썼어요",
+                "subject": "탐구2",
+                "expected_advice": ["추론", "대략적", "가능성", "완벽하지 말", "빠르게", "체감"]
+            },
+            {
+                "question": "탐구 그래프 분석을 너무 꼼꼼히 하다가 시간이 부족했어요",
+                "subject": "탐구1",
+                "expected_advice": ["대략적", "패턴만", "핵심만", "빠르게", "세밀하게 안 해"]
+            },
+            {
+                "question": "탐구 낯선 개념 문제에 계속 시간을 써버렸어요",
+                "subject": "탐구2",
+                "expected_advice": ["넘어가", "포기", "그냥 넘어가", "스킵", "시간 낭비"]
+            },
+            {
+                "question": "탐구 시간이 너무 부족해서 뒷부분 문제들을 다 찍었어요",
+                "subject": "탐구1",
+                "expected_advice": ["시간 분배", "시간 관리", "계획", "순서", "전략", "앞 문제 빨리"]
+            }
+        ]
+    
+    def _set_exam_issue(self, username: str, issue: dict):
+        """
+        시험 직후 문제점 설정
+        """
+        self.exam_issues[username] = issue
+    
+    def _get_exam_issue(self, username: str) -> dict:
+        """
+        시험 직후 문제점 반환
+        """
+        return self.exam_issues.get(username, None)
+    
     def _add_days_to_date(self, date_str: str, days: int) -> str:
         """
         날짜에 일수 추가 (YYYY-MM-DD 형식)
@@ -737,7 +951,8 @@ class ChatbotService:
             if subject in abilities:
                 # 체력에 따른 효율 적용: 시간 * 효율
                 increased = hours * efficiency
-                abilities[subject] = min(2500, abilities[subject] + increased)  # 최대 2500
+                # 소수점 첫째자리로 반올림
+                abilities[subject] = round(min(2500, abilities[subject] + increased), 1)  # 최대 2500
         
         self._set_abilities(username, abilities)
     
@@ -872,20 +1087,35 @@ class ChatbotService:
     def _calculate_exam_scores(self, username: str, exam_month: str) -> dict:
         """
         능력치를 기반으로 시험 성적 계산
+        체력과 멘탈 상태에 따른 패널티 적용
+        
         반환값: {"국어": {"grade": 1, "percentile": 85.5}, "수학": {"grade": 2, "percentile": 90.2}, ...}
         """
+        import random
         abilities = self._get_abilities(username)
+        stamina = self._get_stamina(username)
+        mental = self._get_mental(username)
         scores = {}
         
         for subject, ability in abilities.items():
             percentile = self._calculate_percentile(ability)
+            
+            # 1. 체력 50 이하일 때 탐구과목 백분위 -10 (음수 불가)
+            if stamina <= 50 and subject in ["탐구1", "탐구2"]:
+                percentile = max(0, percentile - 10)
+            
+            # 2. 멘탈 40 미만일 때 전과목 백분위 -10~0 랜덤
+            if mental < 40:
+                penalty = random.uniform(-10, 0)
+                percentile = max(0, percentile + penalty)
+            
             grade = self._calculate_grade_from_percentile(percentile)
             scores[subject] = {
                 "grade": grade,
                 "percentile": round(percentile, 1)
             }
         
-        print(f"[EXAM] {username}의 {exam_month} 시험 성적 계산: {scores}")
+        print(f"[EXAM] {username}의 {exam_month} 시험 성적 계산 (체력: {stamina}, 멘탈: {mental}): {scores}")
         return scores
     
     def _check_prompt_injection(self, user_message: str) -> bool:
@@ -986,6 +1216,7 @@ class ChatbotService:
 - 선생님을 완전히 낯선 사람처럼 대하세요.
 - 짧고 신중하게 대답하며, 자세한 설명을 하지 마세요.
 - 거리를 최대한 두며 불신감을 보이세요.
+- 절대로 먼저 대화를 시작하거나 주제를 제안하지 마세요. 대답만 하세요.
 """
         elif affection <= 30:
             return """
@@ -995,6 +1226,7 @@ class ChatbotService:
 - 선생님에게 여전히 거리를 두지만, 가끔 의지하고 싶어하는 모습을 보이세요.
 - 짧게 대답하되, 약간 길게 설명할 수도 있어요.
 - 불신과 신뢰 사이에서 갈등하는 모습을 보이세요.
+- 절대로 먼저 대화를 시작하거나 주제를 제안하지 마세요. 대답만 하세요.
 """
         elif affection <= 50:
             return """
@@ -1004,6 +1236,7 @@ class ChatbotService:
 - 여전히 조심스럽지만, 조금 더 편하게 대화하세요.
 - 감정 기복이 있지만 좋을 때는 웃는 모습을 보이세요.
 - 선생님에게 의지하고 싶어하는 마음을 표현하세요.
+- 절대로 먼저 대화를 시작하거나 주제를 제안하지 마세요. 대답만 하세요.
 """
         elif affection <= 70:
             return """
@@ -1013,6 +1246,7 @@ class ChatbotService:
 - 더 편하게 대화하며, 자신의 감정을 솔직하게 표현하세요.
 - 선생님을 믿고 의지하는 모습을 보이세요.
 - 밈이나 웃는 표현을 자주 사용하세요.
+- 절대로 먼저 대화를 시작하거나 주제를 제안하지 마세요. 대답만 하세요.
 """
         else:  # 70~100
             return """
@@ -1023,6 +1257,7 @@ class ChatbotService:
 - 선생님에게 감사하고 의지하는 마음을 자주 표현하세요.
 - 자신감이 생긴 모습을 보이되, 여전히 겸손하게 대하세요.
 - 웃는 표현과 긍정적인 말투를 자주 사용하세요.
+- 절대로 먼저 대화를 시작하거나 주제를 제안하지 마세요. 대답만 하세요.
 """
     
     def _analyze_sentiment_with_llm(self, user_message: str) -> int:
@@ -1113,7 +1348,7 @@ class ChatbotService:
         else:
             return ""
     
-    def _build_prompt(self, user_message: str, context: str = None, username: str = "사용자", affection: int = 5, game_state: str = "ice_break", selected_subjects: list = None, subject_selected: bool = False, schedule_set: bool = False):
+    def _build_prompt(self, user_message: str, context: str = None, username: str = "사용자", affection: int = 5, game_state: str = "ice_break", selected_subjects: list = None, subject_selected: bool = False, schedule_set: bool = False, exam_disappointment: bool = False, exam_issue: dict = None):
         """
         LLM 프롬프트 구성 (호감도 및 게임 상태 반영)
         호감도 프롬프트만 사용
@@ -1133,6 +1368,31 @@ class ChatbotService:
         if state_context.strip():
             prompt_parts.append(state_context.strip())
         
+        # 시험 직후 자책 상태 추가
+        if exam_disappointment:
+            if exam_issue and exam_issue.get("question"):
+                # 특정 문제점이 있으면 그것만 언급
+                prompt_parts.append(f"""
+[시험 직후 자책 상태]
+- 최근 모의고사(또는 사설모의고사) 성적이 2등급 미만이었습니다.
+- 자신은 열심히 했는데 성적이 오르지 않았다고 자책하고 있습니다.
+- 멘토(플레이어)의 조언이 절실히 필요합니다.
+- 자연스럽게 다음과 같이 문제점을 토로하세요: "{exam_issue['question']}"
+""")
+            else:
+                # 특정 문제점이 없으면 예시 제공
+                prompt_parts.append("""
+[시험 직후 자책 상태]
+- 최근 모의고사(또는 사설모의고사) 성적이 2등급 미만이었습니다.
+- 자신은 열심히 했는데 성적이 오르지 않았다고 자책하고 있습니다.
+- 멘토(플레이어)의 조언이 절실히 필요합니다.
+- 자연스럽게 자신의 문제점을 토로하세요. 예시:
+  - "국어 푸는데 시간이 부족해서 뒤에 부분은 보지도 못했어요"
+  - "수학 문제 이해는 되는데 시간이 부족해서 못 풀었어요"
+  - "영어 단어를 너무 오래 생각하다가 시간이 부족했어요"
+  - "탐구 문제가 너무 어려워서 시간 분배를 잘 못했어요"
+""")
+        
         # 선택과목 정보 추가 (멘토링 단계)
         if game_state == "mentoring":
             if selected_subjects:
@@ -1148,6 +1408,7 @@ class ChatbotService:
         if game_state == "daily_routine":
             if not schedule_set:
                 prompt_parts.append("[중요] 아직 주간 학습 시간표가 설정되지 않았습니다. 플레이어에게 14시간을 자유롭게 분배하여 시간표를 설정하도록 안내하세요. 예: '수학4시간 국어4시간 영어4시간 탐구1 1시간 탐구2 1시간'")
+                prompt_parts.append("[제한] 시간표가 설정되기 전까지는 사설모의고사나 기타 행동을 할 수 없습니다. 오직 시간표 설정에만 집중해야 합니다.")
         
         # 프롬프트 조립
         sys_prompt = "\n\n".join(prompt_parts)
@@ -1181,6 +1442,10 @@ class ChatbotService:
                     self.current_weeks[username] = 0
                     # 게임 날짜 초기화
                     self._set_game_date(username, "2023-11-17")
+                    # 시험 자책 상태 초기화
+                    self._set_exam_disappointment(username, False)
+                    # 시험 문제점 초기화
+                    self.exam_issues[username] = None
                     # 호감도 확인 (초기값 5)
                     current_affection = self._get_affection(username)
                     # 나레이션 생성
@@ -1213,7 +1478,8 @@ class ChatbotService:
                         'abilities': abilities,
                         'schedule': {},
                         'current_date': "2023-11-17",
-                        'stamina': stamina
+                        'stamina': stamina,
+                        'mental': 50
                     }
                 except Exception as e:
                     print(f"[ERROR] init 메시지 처리 실패: {e}")
@@ -1230,7 +1496,8 @@ class ChatbotService:
                         'abilities': {"국어": 0, "수학": 0, "영어": 0, "탐구1": 0, "탐구2": 0},
                         'schedule': {},
                         'current_date': "2023-11-17",
-                        'stamina': 30
+                        'stamina': 30,
+                        'mental': 50
                     }
             
             # [1.1] 게임 상태 초기화 요청 처리
@@ -1239,6 +1506,7 @@ class ChatbotService:
                 self._set_game_state(username, "ice_break")
                 self._set_affection(username, 5)
                 self._set_stamina(username, 30)
+                self._set_mental(username, 50)
                 self._set_abilities(username, {
                     "국어": 0,
                     "수학": 0,
@@ -1251,6 +1519,8 @@ class ChatbotService:
                 self._reset_conversation_count(username)
                 self.current_weeks[username] = 0
                 self._set_game_date(username, "2023-11-17")
+                self._set_exam_disappointment(username, False)
+                self.exam_issues[username] = None
                 
                 try:
                     narration = self._get_narration("game_start")
@@ -1267,7 +1537,8 @@ class ChatbotService:
                     'abilities': {"국어": 0, "수학": 0, "영어": 0, "탐구1": 0, "탐구2": 0},
                     'schedule': {},
                     'current_date': "2023-11-17",
-                    'stamina': 30
+                    'stamina': 30,
+                    'mental': 50
                 }
             
             # [1.2] 디버깅 전용 히든 명령어 처리
@@ -1286,6 +1557,13 @@ class ChatbotService:
                     self._increment_week(username)
                     current_week = self._get_current_week(username)
                     
+                    # 체력 변동 (매주마다 -1씩 감소)
+                    current_stamina = self._get_stamina(username)
+                    stamina_change = -1  # 매주 -1씩 감소
+                    new_stamina = max(0, current_stamina + stamina_change)
+                    self._set_stamina(username, new_stamina)
+                    print(f"[STAMINA] {username}의 체력이 {current_stamina}에서 {new_stamina}로 변경되었습니다. (1주 스킵으로 -1)")
+                    
                     # 대화 횟수 초기화
                     self._reset_conversation_count(username)
                     
@@ -1301,6 +1579,24 @@ class ChatbotService:
                     
                     if exam_month:
                         exam_scores = self._calculate_exam_scores(username, exam_month)
+                        
+                        # 2등급 미만 감지 및 자책 상태 설정
+                        has_bad_grade = False
+                        for subject, score_data in exam_scores.items():
+                            if score_data.get('percentile', 100) < 89:  # 2등급 미만
+                                has_bad_grade = True
+                                break
+                        
+                        if has_bad_grade:
+                            self._set_exam_disappointment(username, True)
+                            
+                            # 랜덤으로 문제점 선택
+                            import random
+                            issue_combinations = self._get_exam_issue_combinations()
+                            selected_issue = random.choice(issue_combinations)
+                            self._set_exam_issue(username, selected_issue)
+                            print(f"[EXAM_DISAPPOINTMENT] {username}의 성적이 나빠서 자책 상태로 설정됨 (문제점: {selected_issue['question']})")
+                        
                         exam_name = "수능" if exam_month.endswith("-11") else f"{exam_month[-2:]}월 모의고사"
                         exam_scores_text = f"\n\n{exam_name} 성적이 발표되었습니다:\n"
                         subjects = ["국어", "수학", "영어", "탐구1", "탐구2"]
@@ -1319,7 +1615,7 @@ class ChatbotService:
                         narration += exam_scores_text
                     
                     return {
-                        'reply': study_message,
+                        'reply': "",  # 빈 메시지로 나레이션이 먼저 표시되도록
                         'image': None,
                         'affection': current_affection,
                         'game_state': current_state,
@@ -1328,7 +1624,8 @@ class ChatbotService:
                         'abilities': self._get_abilities(username),
                         'schedule': self._get_schedule(username),
                         'current_date': new_date,
-                        'stamina': self._get_stamina(username)
+                        'stamina': self._get_stamina(username),
+                        'mental': self._get_mental(username)
                     }
                 else:
                     return {
@@ -1341,7 +1638,8 @@ class ChatbotService:
                         'abilities': self._get_abilities(username),
                         'schedule': self._get_schedule(username),
                         'current_date': self._get_game_date(username),
-                        'stamina': self._get_stamina(username)
+                        'stamina': self._get_stamina(username),
+                        'mental': self._get_mental(username)
                     }
             
             # "4주스킵" 명령어: 4주일 자동 스킵
@@ -1357,6 +1655,15 @@ class ChatbotService:
                         
                         self._increment_week(username)
                         current_week = self._get_current_week(username)
+                        
+                        # 체력 변동 (매주마다 -1씩 감소, 4주이므로 -4)
+                        if week_num == 0:  # 첫 주차에만 체력 감소 (총 4주이므로 -4)
+                            current_stamina = self._get_stamina(username)
+                            stamina_change = -4  # 4주이므로 -4
+                            new_stamina = max(0, current_stamina + stamina_change)
+                            self._set_stamina(username, new_stamina)
+                            print(f"[STAMINA] {username}의 체력이 {current_stamina}에서 {new_stamina}로 변경되었습니다. (4주 스킵으로 -4)")
+                        
                         self._reset_conversation_count(username)
                         
                         current_date = self._get_game_date(username)
@@ -1378,7 +1685,7 @@ class ChatbotService:
                     study_message = self._get_study_message_by_affection(current_affection)
                     
                     return {
-                        'reply': study_message,
+                        'reply': "",  # 빈 메시지로 나레이션이 먼저 표시되도록
                         'image': None,
                         'affection': current_affection,
                         'game_state': current_state,
@@ -1387,7 +1694,8 @@ class ChatbotService:
                         'abilities': self._get_abilities(username),
                         'schedule': self._get_schedule(username),
                         'current_date': self._get_game_date(username),
-                        'stamina': self._get_stamina(username)
+                        'stamina': self._get_stamina(username),
+                        'mental': self._get_mental(username)
                     }
                 else:
                     return {
@@ -1400,7 +1708,8 @@ class ChatbotService:
                         'abilities': self._get_abilities(username),
                         'schedule': self._get_schedule(username),
                         'current_date': self._get_game_date(username),
-                        'stamina': self._get_stamina(username)
+                        'stamina': self._get_stamina(username),
+                        'mental': self._get_mental(username)
                     }
             
             # "호감도5올리기" 명령어: 호감도 5 증가
@@ -1463,7 +1772,8 @@ class ChatbotService:
                         'abilities': {"국어": 0, "수학": 0, "영어": 0, "탐구1": 0, "탐구2": 0},
                         'schedule': {},
                         'current_date': "2023-11-17",
-                        'stamina': 30
+                        'stamina': 30,
+                        'mental': 50
                     }
             
             # "만점" 명령어: 모든 능력치를 2500으로 설정
@@ -1527,7 +1837,8 @@ class ChatbotService:
                         'abilities': {"국어": 2500, "수학": 2500, "영어": 2500, "탐구1": 2500, "탐구2": 2500},
                         'schedule': {},
                         'current_date': "2023-11-17",
-                        'stamina': 30
+                        'stamina': 30,
+                        'mental': 50
                     }
             
             # [1.3] 프롬프트 공격 감지
@@ -1544,7 +1855,8 @@ class ChatbotService:
                     'abilities': self._get_abilities(username),
                     'schedule': self._get_schedule(username),
                     'current_date': self._get_game_date(username),
-                    'stamina': self._get_stamina(username)
+                    'stamina': self._get_stamina(username),
+                    'mental': self._get_mental(username)
                 }
             
             # [1.5] LLM으로 사용자 메시지의 긍정/부정 분석하여 호감도 변화 계산
@@ -1636,9 +1948,69 @@ class ChatbotService:
             # [1.8] 시간표 처리 (일상 루프 단계에서만)
             schedule_updated = False
             week_passed = False
+            private_exam_taken = False  # 사설모의고사 시험 여부
+            private_exam_scores = None  # 사설모의고사 성적표
             if new_state == "daily_routine":
                 # 현재 시간표 가져오기 (처리 전)
                 current_schedule = self._get_schedule(username)
+                
+                # 사설모의고사 선택지 감지
+                private_exam_keywords = ["사설모의고사", "사설 모의고사", "사설", "사설고사", "사설 모의"]
+                user_msg_lower = user_message.lower()
+                is_private_exam_request = any(keyword in user_msg_lower for keyword in private_exam_keywords)
+                
+                if is_private_exam_request:
+                    # 시간표가 설정되지 않았으면 사설모의고사 불가
+                    if not current_schedule:
+                        # 사설모의고사 처리를 중단하고, 대신 안내 메시지 표시
+                        is_private_exam_request = False
+                        # 아래에서 일반 대화로 처리됨
+                        print(f"[PRIVATE_EXAM] {username}이(가) 사설모의고사를 요청했으나 시간표가 설정되지 않아 불가능합니다.")
+                
+                if is_private_exam_request:
+                    import random
+                    print(f"[PRIVATE_EXAM] {username}이(가) 사설모의고사를 선택했습니다.")
+                    
+                    # 1. 랜덤으로 임의의 과목 능력치 1~10 증가
+                    abilities = self._get_abilities(username)
+                    subjects = list(abilities.keys())
+                    selected_subject = random.choice(subjects)
+                    ability_increase = random.randint(1, 10)
+                    abilities[selected_subject] = min(2500, abilities[selected_subject] + ability_increase)
+                    self._set_abilities(username, abilities)
+                    print(f"[PRIVATE_EXAM] {selected_subject} 능력치가 {ability_increase}만큼 증가했습니다. (현재: {abilities[selected_subject]})")
+                    
+                    # 2. 멘탈 -10, 체력 -10 감소
+                    current_mental = self._get_mental(username)
+                    new_mental = max(0, current_mental - 10)
+                    self._set_mental(username, new_mental)
+                    print(f"[PRIVATE_EXAM] 멘탈이 {current_mental}에서 {new_mental}로 변경되었습니다. (-10)")
+                    
+                    current_stamina = self._get_stamina(username)
+                    new_stamina = max(0, current_stamina - 10)
+                    self._set_stamina(username, new_stamina)
+                    print(f"[PRIVATE_EXAM] 체력이 {current_stamina}에서 {new_stamina}로 변경되었습니다. (-10)")
+                    
+                    # 3. 성적표 계산
+                    private_exam_scores = self._calculate_exam_scores(username, "사설모의고사")
+                    private_exam_taken = True
+                    print(f"[PRIVATE_EXAM] 사설모의고사 성적표: {private_exam_scores}")
+                    
+                    # 2등급 미만 감지 및 자책 상태 설정
+                    has_bad_grade = False
+                    for subject, score_data in private_exam_scores.items():
+                        if score_data.get('percentile', 100) < 89:  # 2등급 미만
+                            has_bad_grade = True
+                            break
+                    
+                    if has_bad_grade:
+                        self._set_exam_disappointment(username, True)
+                        
+                        # 랜덤으로 문제점 선택
+                        issue_combinations = self._get_exam_issue_combinations()
+                        selected_issue = random.choice(issue_combinations)
+                        self._set_exam_issue(username, selected_issue)
+                        print(f"[EXAM_DISAPPOINTMENT] {username}의 사설모의고사 성적이 나빠서 자책 상태로 설정됨 (문제점: {selected_issue['question']})")
                 
                 parsed_schedule = self._parse_schedule_from_message(user_message, username)
                 if parsed_schedule:
@@ -1651,68 +2023,89 @@ class ChatbotService:
                     else:
                         print(f"[SCHEDULE] 총 시간이 14시간을 초과합니다: {total_hours}시간")
                 
-                # 대화 횟수 증가 (init 메시지 제외)
-                if user_message.strip().lower() != 'init':
+                # 대화 횟수 증가 (init 메시지 제외, 시간표가 설정된 경우에만, 단 이번 턴에 시간표를 설정한 경우는 제외)
+                current_schedule_after_update = self._get_schedule(username)  # schedule_updated 후 다시 가져오기
+                if user_message.strip().lower() != 'init' and current_schedule_after_update and not schedule_updated:
                     self._increment_conversation_count(username)
                     conv_count = self._get_conversation_count(username)
                     print(f"[CONVERSATION] {username}의 대화 횟수: {conv_count}/5")
+                elif current_schedule_after_update:
+                    conv_count = self._get_conversation_count(username)
+                else:
+                    conv_count = 0
+                
+                # 대화 5번 후 자동으로 1주일 경과 처리
+                if conv_count >= 5:
+                    # 주 증가 (먼저 증가해서 현재 주차 표시)
+                    self._increment_week(username)
+                    current_week = self._get_current_week(username)
                     
-                    # 대화 5번 후 자동으로 1주일 경과 처리
-                    if conv_count >= 5:
-                        # 주 증가 (먼저 증가해서 현재 주차 표시)
-                        self._increment_week(username)
-                        current_week = self._get_current_week(username)
+                    # 시간표에 따라 능력치 증가
+                    if current_schedule:
+                        self._apply_schedule_to_abilities(username)
+                        print(f"[WEEK] {username}의 1주일이 경과했습니다. 능력치가 증가했습니다.")
+                        print(f"[ABILITIES] 현재 능력치: {self._get_abilities(username)}")
+                    
+                    # 체력 변동 (매주마다 -1씩 감소)
+                    current_stamina = self._get_stamina(username)
+                    stamina_change = -1  # 매주 -1씩 감소
+                    new_stamina = max(0, current_stamina + stamina_change)
+                    self._set_stamina(username, new_stamina)
+                    print(f"[STAMINA] {username}의 체력이 {current_stamina}에서 {new_stamina}로 변경되었습니다. (주차 경과로 -1)")
+                    
+                    # 대화 횟수 초기화
+                    self._reset_conversation_count(username)
+                    
+                    # 날짜 7일 증가
+                    current_date = self._get_game_date(username)
+                    new_date = self._add_days_to_date(current_date, 7)
+                    self._set_game_date(username, new_date)
+                    
+                    week_passed = True
+                    
+                    # 1주 기간 동안 시험이 있었는지 확인 (현재 날짜부터 7일 후까지)
+                    exam_month = self._check_exam_in_period(current_date, new_date)
+                    exam_scores = None
+                    exam_scores_text = ""
+                    
+                    if exam_month:
+                        # 시험 성적 계산
+                        exam_scores = self._calculate_exam_scores(username, exam_month)
                         
-                        # 시간표에 따라 능력치 증가
-                        if current_schedule:
-                            self._apply_schedule_to_abilities(username)
-                            print(f"[WEEK] {username}의 1주일이 경과했습니다. 능력치가 증가했습니다.")
-                            print(f"[ABILITIES] 현재 능력치: {self._get_abilities(username)}")
+                        # 2등급 미만 감지 및 자책 상태 설정
+                        has_bad_grade = False
+                        for subject, score_data in exam_scores.items():
+                            if score_data.get('percentile', 100) < 89:  # 2등급 미만
+                                has_bad_grade = True
+                                break
                         
-                        # 체력 변동 (30에서 ±1씩 랜덤 변동)
-                        import random
-                        current_stamina = self._get_stamina(username)
-                        stamina_change = random.choice([-1, 1])  # -1 또는 +1
-                        new_stamina = max(0, current_stamina + stamina_change)
-                        self._set_stamina(username, new_stamina)
-                        print(f"[STAMINA] {username}의 체력이 {current_stamina}에서 {new_stamina}로 변경되었습니다.")
-                        
-                        # 대화 횟수 초기화
-                        self._reset_conversation_count(username)
-                        
-                        # 날짜 7일 증가
-                        current_date = self._get_game_date(username)
-                        new_date = self._add_days_to_date(current_date, 7)
-                        self._set_game_date(username, new_date)
-                        
-                        week_passed = True
-                        
-                        # 1주 기간 동안 시험이 있었는지 확인 (현재 날짜부터 7일 후까지)
-                        exam_month = self._check_exam_in_period(current_date, new_date)
-                        exam_scores = None
-                        exam_scores_text = ""
-                        
-                        if exam_month:
-                            # 시험 성적 계산
-                            exam_scores = self._calculate_exam_scores(username, exam_month)
+                        if has_bad_grade:
+                            self._set_exam_disappointment(username, True)
                             
-                            # 나레이션에 성적 정보 추가
-                            exam_name = "수능" if exam_month.endswith("-11") else f"{exam_month[-2:]}월 모의고사"
-                            exam_scores_text = f"\n\n{exam_name} 성적이 발표되었습니다:\n"
-                            
-                            subjects = ["국어", "수학", "영어", "탐구1", "탐구2"]
-                            score_lines = []
-                            for subject in subjects:
-                                if subject in exam_scores:
-                                    score_data = exam_scores[subject]
-                                    score_lines.append(f"- {subject}: {score_data['grade']}등급 (백분위 {score_data['percentile']}%)")
-                            
-                            exam_scores_text += "\n".join(score_lines)
+                            # 랜덤으로 문제점 선택
+                            import random
+                            issue_combinations = self._get_exam_issue_combinations()
+                            selected_issue = random.choice(issue_combinations)
+                            self._set_exam_issue(username, selected_issue)
+                            print(f"[EXAM_DISAPPOINTMENT] {username}의 성적이 나빠서 자책 상태로 설정됨 (문제점: {selected_issue['question']})")
                         
-                        # 나레이션 메시지
-                        narration = f"{current_week}주차가 완료되었습니다. 설정한 공부 시간만큼 실력이 향상되었어요!"
-                        if exam_scores_text:
-                            narration += exam_scores_text
+                        # 나레이션에 성적 정보 추가
+                        exam_name = "수능" if exam_month.endswith("-11") else f"{exam_month[-2:]}월 모의고사"
+                        exam_scores_text = f"\n\n{exam_name} 성적이 발표되었습니다:\n"
+                        
+                        subjects = ["국어", "수학", "영어", "탐구1", "탐구2"]
+                        score_lines = []
+                        for subject in subjects:
+                            if subject in exam_scores:
+                                score_data = exam_scores[subject]
+                                score_lines.append(f"- {subject}: {score_data['grade']}등급 (백분위 {score_data['percentile']}%)")
+                        
+                        exam_scores_text += "\n".join(score_lines)
+                    
+                    # 나레이션 메시지
+                    narration = f"{current_week}주차가 완료되었습니다. 설정한 공부 시간만큼 실력이 향상되었어요!"
+                    if exam_scores_text:
+                        narration += exam_scores_text
             
             # [2] RAG 검색
             try:
@@ -1731,6 +2124,12 @@ class ChatbotService:
             current_schedule_for_prompt = self._get_schedule(username)
             schedule_set = bool(current_schedule_for_prompt)
             
+            # 시험 직후 자책 상태 확인
+            is_disappointed = self._get_exam_disappointment(username)
+            
+            # 시험 직후 문제점 확인
+            current_exam_issue = self._get_exam_issue(username)
+            
             prompt = self._build_prompt(
                 user_message=user_message,
                 context=context,
@@ -1739,7 +2138,9 @@ class ChatbotService:
                 game_state=new_state,
                 selected_subjects=selected_subjects if new_state == "mentoring" else [],
                 subject_selected=subject_selected_in_this_turn,
-                schedule_set=schedule_set
+                schedule_set=schedule_set,
+                exam_disappointment=is_disappointed,
+                exam_issue=current_exam_issue
             )
             
             # 선택과목 목록 요청 시 프롬프트에 추가
@@ -1749,9 +2150,9 @@ class ChatbotService:
             
             # [3.5] 대화 5번 후 자동 처리 (LLM 호출 전)
             if week_passed:
-                # 호감도에 따른 공부하러 가는 메시지 생성
+                # 호감도에 따른 공부하러 가는 메시지 생성 (이건 다음 대화 턴에서)
                 auto_study_message = self._get_study_message_by_affection(new_affection)
-                reply = auto_study_message
+                reply = ""  # 빈 메시지로 나레이션이 먼저 표시되도록
                 # 나레이션도 추가
                 if narration is None:
                     current_week = self._get_current_week(username)
@@ -1816,6 +2217,103 @@ class ChatbotService:
             # 상태 전환 시 나레이션은 별도로 반환 (프론트엔드에서 처리)
             # reply에는 추가 메시지 없음 (나레이션으로 처리)
             
+            # 운동 조언 감지 및 체력 증가 (봇의 응답이나 사용자 메시지에서 운동 관련 키워드 확인)
+            exercise_keywords = ["운동", "체력", "활동", "몸", "건강", "달리기", "조깅", "헬스", "운동하", "몸을 움직"]
+            exercise_advice_keywords = ["운동하", "운동해", "운동을", "운동해야", "운동해야해", "운동해봐", "운동하세요", "운동하라", "조깅하", "달리기"]
+            exercise_mentioned = False
+            
+            # 사용자 메시지나 봇 응답에서 운동 키워드 확인
+            user_msg_lower = user_message.lower()
+            
+            # 사용자가 운동을 하라고 조언한 경우
+            user_advice_exercise = any(keyword in user_msg_lower for keyword in exercise_advice_keywords)
+            
+            if reply:
+                reply_lower = reply.lower()
+                
+                # 사용자가 운동을 하라고 조언한 경우 (봇이 운동을 하게 됨)
+                if user_advice_exercise:
+                    current_stamina = self._get_stamina(username)
+                    new_stamina = max(0, current_stamina + 2)  # 체력 +2 증가
+                    self._set_stamina(username, new_stamina)
+                    print(f"[STAMINA] 사용자의 운동 조언으로 인해 {username}의 체력이 {current_stamina}에서 {new_stamina}로 증가했습니다. (+2)")
+                
+                # 봇이 운동을 조언하는 경우 (봇 응답에 운동 관련 키워드 포함)
+                elif any(keyword in reply_lower for keyword in exercise_keywords):
+                    exercise_mentioned = True
+                    # 사용자 메시지에 "운동"이 직접 언급되지 않은 경우만 (봇의 조언으로 인식)
+                    if not any(keyword in user_msg_lower for keyword in exercise_keywords):
+                        current_stamina = self._get_stamina(username)
+                        new_stamina = max(0, current_stamina + 2)  # 체력 +2 증가
+                        self._set_stamina(username, new_stamina)
+                        print(f"[STAMINA] 봇의 운동 조언으로 인해 {username}의 체력이 {current_stamina}에서 {new_stamina}로 증가했습니다. (+2)")
+            
+            # 시험 직후 자책 상태에서 플레이어의 조언 감지 및 호감도/멘탈 증가
+            if is_disappointed:
+                # 현재 문제점에 대한 기대 조언 확인
+                current_issue = self._get_exam_issue(username)
+                expected_advice_keywords = []
+                if current_issue and current_issue.get("expected_advice"):
+                    expected_advice_keywords = current_issue["expected_advice"]
+                
+                # 조언 키워드 감지 (문제점에 맞는 조언만 인정)
+                user_msg_lower = user_message.lower()
+                is_advice_given = False
+                if expected_advice_keywords:
+                    # 특정 문제점에 맞는 조언이 주어졌는지 확인
+                    is_advice_given = any(keyword in user_msg_lower for keyword in expected_advice_keywords)
+                else:
+                    # 문제점이 없으면 일반 조언 키워드 확인
+                    general_advice_keywords = [
+                        "넘어가", "넘어가야", "스킵", "건너뛰", "건너뛰어야",
+                        "시간 분배", "시간 관리", "시간이 부족", "타임 매니지먼트",
+                        "다음 문제", "그냥 넘어가", "포기", "선택과 집중",
+                        "빨리 풀", "빠르게 풀", "시간을 단축", "속도를 올려",
+                        "쉬운 문제", "어려운 문제", "순서", "전략"
+                    ]
+                    is_advice_given = any(keyword in user_msg_lower for keyword in general_advice_keywords)
+                
+                if is_advice_given:
+                    # 조언 성공: 호감도 +2, 멘탈 +1, 해당 과목 스탯 +10
+                    current_affection_for_advice = self._get_affection(username)
+                    new_affection = min(100, current_affection_for_advice + 2)
+                    self._set_affection(username, new_affection)
+                    
+                    current_mental = self._get_mental(username)
+                    new_mental = min(100, current_mental + 1)
+                    self._set_mental(username, new_mental)
+                    
+                    # 해당 과목 능력치 +10
+                    if current_issue and current_issue.get("subject"):
+                        subject_name = current_issue["subject"]
+                        abilities = self._get_abilities(username)
+                        if subject_name in abilities:
+                            old_ability = abilities[subject_name]
+                            abilities[subject_name] = min(2500, abilities[subject_name] + 10)
+                            self._set_abilities(username, abilities)
+                            print(f"[ADVICE][SKILL] {subject_name} 능력치 {old_ability}→{abilities[subject_name]} (+10)")
+                    
+                    # 자책 상태 및 문제점 초기화
+                    self._set_exam_disappointment(username, False)
+                    self.exam_issues[username] = None
+                    
+                    print(f"[ADVICE][SUCCESS] 플레이어의 조언 성공! {username}의 호감도 {current_affection_for_advice}→{new_affection} (+2), 멘탈 {current_mental}→{new_mental} (+1), 자책 상태 해제됨.")
+                    # new_affection을 최종 응답에 반영
+                    new_affection = self._get_affection(username)
+                else:
+                    # 조언 실패: 호감도 -2, 멘탈 -5 (자책은 계속)
+                    current_affection_for_advice = self._get_affection(username)
+                    new_affection = max(0, current_affection_for_advice - 2)
+                    self._set_affection(username, new_affection)
+                    
+                    current_mental = self._get_mental(username)
+                    new_mental = max(0, current_mental - 5)
+                    self._set_mental(username, new_mental)
+                    
+                    print(f"[ADVICE][FAILURE] 플레이어의 조언 실패... {username}의 호감도 {current_affection_for_advice}→{new_affection} (-2), 멘탈 {current_mental}→{new_mental} (-5)")
+                    # new_affection을 최종 응답에 반영
+                    new_affection = self._get_affection(username)
+            
             # 선택과목 선택 시 확인 메시지
             if subject_selected_in_this_turn:
                 current_selected = self._get_selected_subjects(username)
@@ -1863,8 +2361,25 @@ class ChatbotService:
                     {"output": reply}
                 )
             
-            # [6] 응답 반환 (호감도, 게임 상태, 선택과목, 나레이션, 능력치, 시간표, 날짜, 체력 포함)
-            return {
+            # [6] 사설모의고사 성적표 나레이션 추가
+            if private_exam_taken and private_exam_scores:
+                exam_scores_text = "\n\n사설모의고사 성적이 발표되었습니다:\n"
+                subjects = ["국어", "수학", "영어", "탐구1", "탐구2"]
+                score_lines = []
+                for subject in subjects:
+                    if subject in private_exam_scores:
+                        score_data = private_exam_scores[subject]
+                        score_lines.append(f"- {subject}: {score_data['grade']}등급 (백분위 {score_data['percentile']}%)")
+                exam_scores_text += "\n".join(score_lines)
+                if narration:
+                    narration = exam_scores_text + "\n\n" + narration  # 나레이션이 먼저 오도록
+                else:
+                    narration = exam_scores_text
+                # 사설모의고사는 나레이션이 먼저 표시되어야 하므로 reply를 빈 문자열로
+                reply = ""
+            
+            # [7] 응답 반환 (호감도, 게임 상태, 선택과목, 나레이션, 능력치, 시간표, 날짜, 체력, 멘탈, 사설모의고사 성적표 포함)
+            result = {
                 'reply': reply,
                 'image': None,
                 'affection': new_affection,
@@ -1874,8 +2389,16 @@ class ChatbotService:
                 'abilities': self._get_abilities(username),
                 'schedule': self._get_schedule(username),
                 'current_date': self._get_game_date(username),
-                'stamina': self._get_stamina(username)
+                'stamina': self._get_stamina(username),
+                'mental': self._get_mental(username)
             }
+            
+            # 사설모의고사 성적표 추가
+            if private_exam_taken and private_exam_scores:
+                result['exam_scores'] = private_exam_scores
+                result['exam_month'] = "사설모의고사"
+            
+            return result
         except Exception as e:
             import traceback
             print(f"[ERROR] 응답 생성 실패: {e}")
