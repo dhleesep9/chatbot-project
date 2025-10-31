@@ -51,6 +51,11 @@ async function sendMessage(isInitial = false) {
     // 로딩 메시지 제거
     removeMessage(loadingId);
 
+    // 응답 데이터 검증
+    if (!data || typeof data !== "object") {
+      throw new Error("서버 응답이 올바르지 않습니다.");
+    }
+
     // 능력치 업데이트
     if (data.abilities !== undefined) {
       updateAbilitiesDisplay(data.abilities);
@@ -61,9 +66,9 @@ async function sendMessage(isInitial = false) {
       updateAffectionDisplay(data.affection);
     }
 
-    // 능력치 업데이트
-    if (data.abilities !== undefined) {
-      updateAbilitiesDisplay(data.abilities);
+    // 체력 업데이트
+    if (data.stamina !== undefined) {
+      updateStaminaDisplay(data.stamina);
     }
 
     // 시간표 업데이트
@@ -76,32 +81,58 @@ async function sendMessage(isInitial = false) {
       updateGameDate(data.current_date);
     }
 
-    // 나레이션 표시 (있을 경우)
+    // 응답 파싱 및 표시 (나레이션보다 먼저 표시)
+    let replyText, imagePath;
+    if (data.reply) {
+      if (typeof data.reply === "object" && data.reply !== null) {
+        replyText = data.reply.reply || data.reply;
+        imagePath = data.reply.image || null;
+      } else {
+        replyText = data.reply;
+        imagePath = null;
+      }
+      if (replyText) {
+        appendMessage("bot", replyText, imagePath);
+      }
+    } else {
+      // reply가 없는 경우 기본 메시지 표시
+      console.warn("[API] 응답에 reply가 없습니다:", data);
+      appendMessage("bot", "안녕하세요! 게임을 시작하겠습니다.");
+    }
+
+    // 나레이션 표시 (reply 이후에 표시)
     if (data.narration) {
       appendNarration(data.narration);
     }
 
-    // 응답 파싱
-    let replyText, imagePath;
-    if (typeof data.reply === "object" && data.reply !== null) {
-      replyText = data.reply.reply || data.reply;
-      imagePath = data.reply.image || null;
-    } else {
-      replyText = data.reply;
-      imagePath = null;
+    // 현재 호감도 업데이트
+    if (data.affection !== undefined) {
+      currentAffection = data.affection;
     }
 
-    appendMessage("bot", replyText, imagePath);
-    
-    // 서가윤 뻐끔뻐끔 애니메이션 시작
-    startSpeakingAnimation();
+    // 서가윤 뻐끔뻐끔 애니메이션 시작 (호감도 전달)
+    startSpeakingAnimation(currentAffection);
 
     // 게임 상태 저장 (F5 새로고침 시 복원하기 위해)
     saveGameState(data);
   } catch (err) {
     console.error("메시지 전송 에러:", err);
     removeMessage(loadingId);
-    appendMessage("bot", "죄송합니다. 오류가 발생했습니다. 다시 시도해주세요.");
+
+    // 에러 메시지 표시 (초기화 직후가 아닌 경우에만)
+    const errorMessage = err.message || "알 수 없는 오류";
+    console.error("[ERROR] 상세 오류:", errorMessage);
+
+    // 네트워크 오류나 초기화 직후가 아닌 경우에만 에러 메시지 표시
+    if (!message || message !== "init") {
+      appendMessage(
+        "bot",
+        "죄송합니다. 오류가 발생했습니다. 다시 시도해주세요."
+      );
+    } else {
+      // init 메시지 실패 시 조용히 처리 (페이지가 막 리로드되었을 수 있음)
+      console.warn("[INIT] 초기 메시지 전송 실패 (무시됨):", errorMessage);
+    }
   }
 }
 
@@ -130,6 +161,34 @@ function updateAffectionDisplay(affection) {
   const affectionValue = document.getElementById("affection-value");
   if (affectionValue) {
     affectionValue.textContent = affection;
+  }
+
+  // 현재 호감도 저장
+  currentAffection = affection;
+
+  // 호감도 변경 시 기본 이미지 업데이트 (애니메이션 중이 아닐 때만)
+  if (!speakingAnimationInterval) {
+    const sideImage = document.querySelector(".side-image");
+    if (sideImage) {
+      const defaultImage = getDefaultImageByAffection(affection);
+      sideImage.src = defaultImage;
+    }
+  }
+}
+
+// 체력 표시 업데이트
+function updateStaminaDisplay(stamina) {
+  const staminaValue = document.getElementById("stamina-value");
+  const staminaEfficiency = document.getElementById("stamina-efficiency");
+
+  if (staminaValue) {
+    staminaValue.textContent = stamina;
+  }
+
+  // 체력에 따른 효율 계산: 효율(%) = 100 + (체력 - 30)
+  const efficiency = 100 + (stamina - 30);
+  if (staminaEfficiency) {
+    staminaEfficiency.textContent = `(효율: ${efficiency}%)`;
   }
 }
 
@@ -200,6 +259,7 @@ function saveGameState(data) {
     const gameState = {
       abilities: data.abilities,
       affection: data.affection,
+      stamina: data.stamina,
       schedule: data.schedule,
       current_date: data.current_date,
       game_state: data.game_state,
@@ -249,6 +309,11 @@ function loadGameState() {
       // 호감도 복원
       if (gameState.affection !== undefined) {
         updateAffectionDisplay(gameState.affection);
+      }
+
+      // 체력 복원
+      if (gameState.stamina !== undefined) {
+        updateStaminaDisplay(gameState.stamina);
       }
 
       // 시간표 복원
@@ -321,49 +386,78 @@ function removeMessage(messageId) {
 // 서가윤 뻐끔뻐끔 애니메이션
 let speakingAnimationInterval = null;
 let speakingAnimationTimeout = null;
+let currentAffection = 5; // 현재 호감도 저장
 
-function startSpeakingAnimation() {
+// 호감도에 따른 이미지 프리픽스 반환
+function getImagePrefixByAffection(affection) {
+  if (affection < 10) {
+    return "하";
+  } else if (affection < 30) {
+    return "중하";
+  } else if (affection < 50) {
+    return "중";
+  } else if (affection < 70) {
+    return "중상";
+  } else {
+    return "상";
+  }
+}
+
+// 호감도에 따른 기본 이미지 경로 반환
+function getDefaultImageByAffection(affection) {
+  const prefix = getImagePrefixByAffection(affection);
+  const basePath = "/static/images/chatbot/";
+  return basePath + prefix + "-0.png";
+}
+
+function startSpeakingAnimation(affection = null) {
   const sideImage = document.querySelector(".side-image");
   if (!sideImage) return;
-  
+
+  // 호감도가 전달되지 않으면 현재 저장된 호감도 사용
+  const targetAffection = affection !== null ? affection : currentAffection;
+
   // 기존 애니메이션 중지
-  stopSpeakingAnimation();
-  
-  // 이미지 경로 설정
+  stopSpeakingAnimation(targetAffection);
+
+  // 호감도에 따른 이미지 프리픽스 결정
+  const prefix = getImagePrefixByAffection(targetAffection);
   const basePath = "/static/images/chatbot/";
-  const image0 = basePath + "서가윤-0.png";
-  const image1 = basePath + "서가윤-1.png";
-  
+  const image0 = basePath + prefix + "-0.png";
+  const image1 = basePath + prefix + "-1.png";
+
   // 현재 이미지가 기본 이미지면 -0으로 시작
   let currentImage = 0;
   sideImage.src = image0;
-  
+
   // 메시지 길이에 따라 애니메이션 시간 계산 (최소 1초, 최대 5초)
-  const lastBotMessage = document.querySelector(".message.bot:last-child .bot-text-container");
+  const lastBotMessage = document.querySelector(
+    ".message.bot:last-child .bot-text-container"
+  );
   const messageLength = lastBotMessage ? lastBotMessage.textContent.length : 50;
   const duration = Math.min(Math.max(messageLength * 30, 1000), 5000); // 글자당 30ms, 최소 1초, 최대 5초
-  
-  // 뻐끔뻐끔 애니메이션 (약 200ms마다 이미지 교체)
+
+  // 뻐끔뻐끔 애니메이션 (약 150ms마다 이미지 교체)
   let startTime = Date.now();
   speakingAnimationInterval = setInterval(() => {
     const elapsed = Date.now() - startTime;
     if (elapsed >= duration) {
-      stopSpeakingAnimation();
+      stopSpeakingAnimation(targetAffection);
       return;
     }
-    
+
     // 0과 1을 번갈아가며 표시
     currentImage = currentImage === 0 ? 1 : 0;
     sideImage.src = currentImage === 0 ? image0 : image1;
   }, 150); // 150ms마다 이미지 교체
-  
+
   // 애니메이션 자동 종료 타이머
   speakingAnimationTimeout = setTimeout(() => {
-    stopSpeakingAnimation();
+    stopSpeakingAnimation(targetAffection);
   }, duration);
 }
 
-function stopSpeakingAnimation() {
+function stopSpeakingAnimation(affection = null) {
   if (speakingAnimationInterval) {
     clearInterval(speakingAnimationInterval);
     speakingAnimationInterval = null;
@@ -372,13 +466,13 @@ function stopSpeakingAnimation() {
     clearTimeout(speakingAnimationTimeout);
     speakingAnimationTimeout = null;
   }
-  
-  // 기본 이미지로 복원 (서가윤.png 또는 서가윤-0.png)
+
+  // 기본 이미지로 복원 (호감도에 따라)
   const sideImage = document.querySelector(".side-image");
   if (sideImage) {
-    const basePath = "/static/images/chatbot/";
-    // 기본 이미지로 복원 (말하지 않을 때는 입을 닫은 상태)
-    sideImage.src = basePath + "서가윤-0.png";
+    const targetAffection = affection !== null ? affection : currentAffection;
+    const defaultImage = getDefaultImageByAffection(targetAffection);
+    sideImage.src = defaultImage;
   }
 }
 
@@ -709,25 +803,7 @@ async function resetGame(skipConfirm = false) {
     const username =
       document.querySelector(".chat-area")?.dataset.username || "사용자";
 
-    // 서버에 초기화 요청
-    const response = await fetch("/api/chat", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        message: "__RESET_GAME_STATE__",
-        username: username,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const data = await response.json();
-
-    // localStorage 완전 삭제
+    // localStorage 완전 삭제 (먼저 실행)
     localStorage.removeItem(CHAT_LOG_KEY);
     localStorage.removeItem(GAME_STATE_KEY);
     // 다른 관련 localStorage도 삭제 (UI 위치 등)
@@ -740,38 +816,47 @@ async function resetGame(skipConfirm = false) {
     }
     keysToRemove.forEach((key) => localStorage.removeItem(key));
 
-    // 채팅 로그 초기화
-    if (chatLog) {
-      chatLog.innerHTML = "";
+    console.log("[RESET] localStorage 삭제 완료");
+
+    // 서버에 초기화 요청 (에러가 발생해도 계속 진행)
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          message: "__RESET_GAME_STATE__",
+          username: username,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log("[RESET] 서버 초기화 완료:", data);
+      } else {
+        console.warn("[RESET] 서버 응답 오류:", response.status);
+      }
+    } catch (serverErr) {
+      console.warn("[RESET] 서버 초기화 요청 실패 (계속 진행):", serverErr);
     }
 
-    // messageIdCounter 초기화
-    messageIdCounter = 0;
+    console.log("[RESET] 게임 상태 초기화 완료, 페이지 리로드 중...");
 
-    // UI 초기화
-    updateAbilitiesDisplay({ 국어: 0, 수학: 0, 영어: 0, 탐구1: 0, 탐구2: 0 });
-    updateAffectionDisplay(5);
-    updateScheduleDisplay({}, "ice_break");
-    updateGameDate("2023-11-17");
+    // 초기화 플래그 설정 (리로드 후 자동 init 방지)
+    localStorage.setItem(`${STORAGE_KEY_PREFIX}just_reset`, "true");
 
-    // 나레이션 표시
-    if (data.narration) {
-      appendNarration(data.narration);
-    }
-
-    // 초기 메시지 추가
-    appendMessage("bot", data.reply || "게임이 초기화되었습니다.");
-
-    // 게임 상태 저장 (새로운 상태로)
-    saveGameState(data);
-
-    console.log("게임 상태 초기화 완료");
-
-    // 페이지 전체 리로드
-    location.reload();
+    // 페이지 전체 리로드 (즉시)
+    setTimeout(() => {
+      location.reload();
+    }, 100); // 짧은 지연으로 localStorage 저장 확실히 보장
   } catch (err) {
-    console.error("게임 상태 초기화 실패:", err);
-    alert("게임 상태 초기화에 실패했습니다. 다시 시도해주세요.");
+    console.error("[RESET] 게임 상태 초기화 중 오류:", err);
+    // 에러가 발생해도 localStorage는 이미 삭제되었으므로 리로드
+    alert(
+      "초기화 중 오류가 발생했지만 계속 진행합니다. 페이지를 새로고침합니다."
+    );
+    location.reload();
   }
 }
 
@@ -800,14 +885,35 @@ window.addEventListener("load", () => {
   const stateRestored = loadGameState();
 
   setTimeout(() => {
-    // 저장된 상태가 없거나 채팅 로그가 비어있을 때만 초기 메시지 전송
-    if (!stateRestored && chatLog && chatLog.childElementCount === 0) {
+    // 초기화 직후 플래그 확인
+    const justReset = localStorage.getItem(`${STORAGE_KEY_PREFIX}just_reset`);
+
+    if (justReset === "true") {
+      // 초기화 직후: 플래그 제거
+      localStorage.removeItem(`${STORAGE_KEY_PREFIX}just_reset`);
+      console.log("[INIT] 초기화 직후 - 기본값 설정 및 초기 메시지 전송");
+
+      // 초기 UI 설정
+      updateAbilitiesDisplay({ 국어: 0, 수학: 0, 영어: 0, 탐구1: 0, 탐구2: 0 });
+      updateAffectionDisplay(5);
+      currentAffection = 5;
+      updateScheduleDisplay({}, "ice_break");
+      updateGameDate("2023-11-17");
+
+      // 초기 메시지 전송 (즉시)
+      if (chatLog && chatLog.childElementCount === 0) {
+        console.log("[INIT] 초기 메시지 요청");
+        sendMessage(true);
+      }
+    } else if (!stateRestored && chatLog && chatLog.childElementCount === 0) {
+      // 저장된 상태가 없거나 채팅 로그가 비어있을 때만 초기 메시지 전송
       console.log("저장된 게임 상태가 없어 초기 메시지 요청");
       sendMessage(true);
       // 초기 능력치 표시
       updateAbilitiesDisplay({ 국어: 0, 수학: 0, 영어: 0, 탐구1: 0, 탐구2: 0 });
-      // 초기 호감도 표시
+      // 초기 호감도 표시 (이미지도 함께 업데이트됨)
       updateAffectionDisplay(5);
+      currentAffection = 5;
       // 초기 게임 날짜 설정
       updateGameDate("2023-11-17");
     } else if (stateRestored) {
@@ -820,6 +926,21 @@ window.addEventListener("load", () => {
         const gameState = JSON.parse(savedGameState);
         if (!gameState.current_date) {
           updateGameDate("2023-11-17");
+        }
+
+        // 복원된 호감도에 따라 이미지도 업데이트
+        if (gameState.affection !== undefined) {
+          currentAffection = gameState.affection;
+          // 애니메이션 중이 아닐 때만 이미지 업데이트
+          if (!speakingAnimationInterval) {
+            const sideImage = document.querySelector(".side-image");
+            if (sideImage) {
+              const defaultImage = getDefaultImageByAffection(
+                gameState.affection
+              );
+              sideImage.src = defaultImage;
+            }
+          }
         }
       } else {
         updateGameDate("2023-11-17");

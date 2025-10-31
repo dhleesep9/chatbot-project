@@ -191,6 +191,10 @@ class ChatbotService:
         self.schedules = {}  # {username: {"국어": 4, "수학": 4, "영어": 4, "탐구1": 1, "탐구2": 1}}
         print("[ChatbotService] 시간표 시스템 초기화 완료")
 
+        # 9. 체력 저장 (기본값 30)
+        self.staminas = {}  # {username: stamina_value}
+        print("[ChatbotService] 체력 시스템 초기화 완료")
+
         # 9. 대화 횟수 추적 (daily_routine 상태에서만)
         self.conversation_counts = {}  # {username: count}
         print("[ChatbotService] 대화 횟수 시스템 초기화 완료")
@@ -237,11 +241,15 @@ class ChatbotService:
         """
         if not self.client:
             raise RuntimeError("OpenAI Client가 초기화되지 않았습니다.")
-        response = self.client.embeddings.create(
-            input=[text],
-            model="text-embedding-3-large"
-        )
-        return response.data[0].embedding
+        try:
+            response = self.client.embeddings.create(
+                input=[text],
+                model="text-embedding-3-large"
+            )
+            return response.data[0].embedding
+        except Exception as e:
+            print(f"[ERROR] 임베딩 생성 실패: {e}")
+            raise
     
     
     def _search_similar(self, query: str, threshold: float = 0.45, top_k: int = 5):
@@ -252,28 +260,41 @@ class ChatbotService:
             print("[WARN][RAG] ChromaDB 컬렉션이 연결되지 않았음.")
             return (None, None, None)
 
-        # 1. 쿼리 임베딩 생성
-        query_embedding = self._create_embedding(query)
+        if not self.client:
+            print("[WARN][RAG] OpenAI Client가 연결되지 않았음.")
+            return (None, None, None)
 
-        # 2. 벡터 DB 검색
-        results = self.collection.query(
-            query_embeddings=[query_embedding],
-            n_results=top_k,
-            include=["documents", "distances", "metadatas"]
-        )
-        docs = results.get("documents", [[]])[0] if results.get("documents") else []
-        dists = results.get("distances", [[]])[0] if results.get("distances") else []
-        metas = results.get("metadatas", [[]])[0] if results.get("metadatas") else []
+        try:
+            # 1. 쿼리 임베딩 생성
+            query_embedding = self._create_embedding(query)
+            
+            # 2. 벡터 DB 검색
+            try:
+                results = self.collection.query(
+                    query_embeddings=[query_embedding],
+                    n_results=top_k,
+                    include=["documents", "distances", "metadatas"]
+                )
+            except Exception as e:
+                print(f"[WARN][RAG] 벡터 DB 검색 실패: {e}")
+                return (None, None, None)
+            
+            docs = results.get("documents", [[]])[0] if results.get("documents") else []
+            dists = results.get("distances", [[]])[0] if results.get("distances") else []
+            metas = results.get("metadatas", [[]])[0] if results.get("metadatas") else []
 
-        # 3 & 4. 유사도 계산/최상위 문서 결정
-        best_doc, best_sim, best_meta = None, -1, None
-        for doc, dist, meta in zip(docs, dists, metas):
-            similarity = 1 / (1 + dist)
-            if similarity >= threshold and similarity > best_sim:
-                best_doc, best_sim, best_meta = doc, similarity, meta
-        if best_doc is not None:
-            return (best_doc, best_sim, best_meta)
-        return (None, None, None)
+            # 3 & 4. 유사도 계산/최상위 문서 결정
+            best_doc, best_sim, best_meta = None, -1, None
+            for doc, dist, meta in zip(docs, dists, metas):
+                similarity = 1 / (1 + dist)
+                if similarity >= threshold and similarity > best_sim:
+                    best_doc, best_sim, best_meta = doc, similarity, meta
+            if best_doc is not None:
+                return (best_doc, best_sim, best_meta)
+            return (None, None, None)
+        except Exception as e:
+            print(f"[WARN][RAG] 임베딩 생성 실패: {e}")
+            return (None, None, None)
     
     
     def _get_affection(self, username: str) -> int:
@@ -281,6 +302,21 @@ class ChatbotService:
         사용자의 현재 호감도 반환 (없으면 기본값 5)
         """
         return self.affections.get(username, 5)
+    
+    def _get_study_message_by_affection(self, affection: int) -> str:
+        """
+        호감도에 따라 공부하러 가는 메시지를 반환
+        """
+        if affection < 10:
+            return "저... 이제 공부하러 가볼게요..."
+        elif affection < 30:
+            return "선생님, 이제 공부하러 가볼게요."
+        elif affection < 50:
+            return "선생님, 저는 이제 공부하러 가볼게요!"
+        elif affection < 70:
+            return "선생님, 저 이제 공부하러 가볼게요. 오늘도 열심히 할게요!"
+        else:
+            return "선생님, 저 이제 공부하러 가볼게요! 선생님 덕분에 공부가 즐거워요!"
     
     def _set_affection(self, username: str, affection: int):
         """
@@ -310,6 +346,31 @@ class ChatbotService:
         for key, value in abilities.items():
             normalized[key] = max(0, min(2500, value))
         self.abilities[username] = normalized
+    
+    def _get_stamina(self, username: str) -> int:
+        """
+        사용자의 현재 체력 반환 (없으면 기본값 30)
+        """
+        return self.staminas.get(username, 30)
+    
+    def _set_stamina(self, username: str, stamina: int):
+        """
+        사용자의 체력 설정
+        """
+        self.staminas[username] = max(0, stamina)  # 체력은 0 이상
+    
+    def _calculate_stamina_efficiency(self, stamina: int) -> float:
+        """
+        체력에 따른 능력치 증가 효율 계산
+        공식: 효율(%) = 100 + (체력 - 30)
+        예시:
+        - 체력 30: 100%
+        - 체력 31: 101%
+        - 체력 29: 99%
+        - 체력 20: 90%
+        - 체력 100: 170%
+        """
+        return 100 + (stamina - 30)
     
     def _get_game_state(self, username: str) -> str:
         """
@@ -370,72 +431,83 @@ class ChatbotService:
         user_message_original = user_message.strip()
         user_lower = user_message.lower().strip()
         found_subjects = []
+        matched_positions = set()  # 이미 매칭된 위치 추적
         
-        # "탐구1", "탐구2" 같은 키워드는 무시 (시간표 파싱용이므로)
-        if re.search(r'탐구\s*[12]', user_lower):
-            # 탐구1/탐구2가 언급된 경우 선택과목 파싱에서 제외
-            pass
+        # 먼저 전체 메시지에서 정확한 과목명이 포함되어 있는지 확인 (최우선)
+        for subject in self.subject_options:
+            subject_lower = subject.lower()
+            # 정확한 과목명이 메시지에 포함되어 있는 경우
+            if subject in user_message_original or subject_lower in user_lower:
+                if subject not in found_subjects:
+                    found_subjects.append(subject)
+                    # 매칭된 위치 기록
+                    pos = user_lower.find(subject_lower)
+                    if pos >= 0:
+                        matched_positions.add((pos, pos + len(subject_lower)))
         
-        # 쉼표, 공백, 줄바꿈 등으로 구분된 단어들로 분리 시도
-        separators = r'[,，\s\n]+'
+        # 쉼표, "과", "랑", "와", 공백 등으로 구분된 단어들로 분리
+        # "물리1 화학1", "물리1과 화학1", "물리1, 화학1" 등 처리
+        separators = r'[,，\s\n과와랑과]+'
         possible_phrases = re.split(separators, user_message_original)
         
         # 각 단어/구에서 선택과목 찾기
         for phrase in possible_phrases:
             phrase = phrase.strip()
-            if not phrase:
+            if not phrase or len(phrase) < 2:
                 continue
             
             # "탐구1", "탐구2" 키워드 제외
             if re.match(r'^탐구\s*[12]$', phrase, re.IGNORECASE):
                 continue
             
+            # 이미 정확히 매칭된 과목은 스킵
             phrase_lower = phrase.lower()
+            phrase_pos = user_lower.find(phrase_lower)
+            if phrase_pos >= 0:
+                is_overlap = False
+                for start, end in matched_positions:
+                    if not (phrase_pos + len(phrase_lower) <= start or phrase_pos >= end):
+                        is_overlap = True
+                        break
+                if is_overlap:
+                    continue
             
+            # 과목 옵션과 매칭 시도
             for subject in self.subject_options:
+                if subject in found_subjects:
+                    continue
+                    
                 subject_lower = subject.lower()
                 
                 # 정확한 일치 (가장 높은 우선순위)
                 if phrase_lower == subject_lower or phrase == subject:
-                    if subject not in found_subjects:
-                        found_subjects.append(subject)
-                        break
+                    found_subjects.append(subject)
+                    break
                 
-                # 부분 일치 체크 (정확한 일치가 아닌 경우에만)
-                else:
-                    # "물리학1" vs "물리1" 같은 변형 허용하되, 너무 넓은 매칭 방지
-                    subject_words = set(re.split(r'[\s\-_]+', subject_lower))
-                    phrase_words = set(re.split(r'[\s\-_]+', phrase_lower))
-                    
-                    # 공통 단어가 있는지 확인
-                    common_words = subject_words & phrase_words
-                    
-                    # 숫자가 일치하는지 확인
-                    subject_num = re.search(r'\d+', subject)
-                    phrase_num = re.search(r'\d+', phrase)
-                    
-                    if subject_num and phrase_num:
-                        # 숫자가 있고 일치하는 경우
-                        if subject_num.group() == phrase_num.group() and common_words:
-                            if subject not in found_subjects:
-                                found_subjects.append(subject)
-                                break
-                    elif common_words and len(common_words) >= 2:
-                        # 숫자 없이 공통 단어가 2개 이상인 경우만 매칭 (너무 넓은 매칭 방지)
-                        if subject not in found_subjects:
+                # "물리학1" vs "물리1" 같은 변형 허용
+                # 숫자가 일치하고 앞부분이 유사한 경우
+                subject_num_match = re.search(r'\d+', subject)
+                phrase_num_match = re.search(r'\d+', phrase)
+                
+                if subject_num_match and phrase_num_match:
+                    # 숫자가 일치하는 경우
+                    if subject_num_match.group() == phrase_num_match.group():
+                        # 앞부분이 유사한지 확인
+                        subject_prefix = subject[:subject_num_match.start()].lower().replace("학", "").replace("과", "")
+                        phrase_prefix = phrase[:phrase_num_match.start()].lower()
+                        
+                        # "물리" vs "물리", "화학" vs "화학" 등
+                        # 단어 단위로 비교하여 더 정확한 매칭
+                        subject_words = re.findall(r'\w+', subject_prefix)
+                        phrase_words = re.findall(r'\w+', phrase_prefix)
+                        
+                        # 공통 단어가 있거나, 한쪽이 다른 쪽에 포함되는 경우
+                        has_common = bool(set(subject_words) & set(phrase_words))
+                        is_subset = bool(set(subject_words).issubset(set(phrase_words)) or set(phrase_words).issubset(set(subject_words)))
+                        
+                        if (has_common or is_subset) and len(subject_prefix) >= 1 and len(phrase_prefix) >= 1:
                             found_subjects.append(subject)
                             break
-        
-        # 위 방법으로 찾지 못한 경우, 전체 메시지에서 정확한 과목명이 포함되어 있는지 확인
-        if not found_subjects:
-            for subject in self.subject_options:
-                subject_lower = subject.lower()
-                subject_clean = subject_lower.replace("학", "").replace("과", "")
-                
-                # 정확한 과목명이 포함되어 있는 경우 (예: "물리학1" 메시지에 "물리학1" 포함)
-                if subject in user_message_original or subject_lower in user_lower:
-                    if subject not in found_subjects:
-                        found_subjects.append(subject)
         
         print(f"[SUBJECT_PARSE] '{user_message}' -> {found_subjects}")
         return found_subjects
@@ -651,16 +723,21 @@ class ChatbotService:
     def _apply_schedule_to_abilities(self, username: str):
         """
         시간표에 따라 능력치 증가
-        시간당 +1 증가
+        시간당 +1 증가 (체력에 따른 효율 적용)
         """
         schedule = self._get_schedule(username)
         if not schedule:
             return
         
         abilities = self._get_abilities(username)
+        stamina = self._get_stamina(username)
+        efficiency = self._calculate_stamina_efficiency(stamina) / 100.0  # 효율을 배율로 변환 (1.0 = 100%)
+        
         for subject, hours in schedule.items():
             if subject in abilities:
-                abilities[subject] = min(2500, abilities[subject] + hours)  # 최대 2500
+                # 체력에 따른 효율 적용: 시간 * 효율
+                increased = hours * efficiency
+                abilities[subject] = min(2500, abilities[subject] + increased)  # 최대 2500
         
         self._set_abilities(username, abilities)
     
@@ -837,19 +914,28 @@ class ChatbotService:
         나레이션 메시지 생성
         event_type: "game_start", "state_transition"
         """
-        narration_cfg = self.config.get("narration", {})
-        
-        if not narration_cfg.get("enabled", True):
+        try:
+            if not self.config:
+                return None
+                
+            narration_cfg = self.config.get("narration", {})
+            
+            if not narration_cfg.get("enabled", True):
+                return None
+            
+            if event_type == "game_start":
+                return narration_cfg.get("game_start", "")
+            elif event_type == "state_transition":
+                transitions = narration_cfg.get("state_transitions", {})
+                if context:
+                    transition_key = context.get("transition_key", "")
+                    return transitions.get(transition_key, "")
+                return None
+            
             return None
-        
-        if event_type == "game_start":
-            return narration_cfg.get("game_start", "")
-        elif event_type == "state_transition":
-            transitions = narration_cfg.get("state_transitions", {})
-            transition_key = context.get("transition_key", "")
-            return transitions.get(transition_key, "")
-        
-        return None
+        except Exception as e:
+            print(f"[WARN] _get_narration 오류: {e}")
+            return None
     
     def _get_affection_tone(self, affection: int) -> str:
         """
@@ -1085,34 +1171,74 @@ class ChatbotService:
             
             # [1] 초기 메시지(인사)
             if user_message.strip().lower() == 'init':
-                bot_name = self.config.get('name', '챗봇')
-                # 게임 상태 초기화
-                self._set_game_state(username, "ice_break")
-                # 대화 횟수 초기화
-                self._reset_conversation_count(username)
-                # 주 초기화
-                self.current_weeks[username] = 0
-                # 게임 날짜 초기화
-                self._set_game_date(username, "2023-11-17")
-                # 나레이션 생성
-                narration = self._get_narration("game_start")
-                return {
-                    'reply': f"게임이 시작되었습니다.",
-                    'image': None,
-                    'affection': current_affection,
-                    'game_state': "ice_break",
-                    'selected_subjects': [],
-                    'narration': narration,
-                    'abilities': self._get_abilities(username),
-                    'schedule': {},
-                    'current_date': "2023-11-17"
-                }
+                try:
+                    bot_name = self.config.get('name', '챗봇') if self.config else '챗봇'
+                    # 게임 상태 초기화
+                    self._set_game_state(username, "ice_break")
+                    # 대화 횟수 초기화
+                    self._reset_conversation_count(username)
+                    # 주 초기화
+                    self.current_weeks[username] = 0
+                    # 게임 날짜 초기화
+                    self._set_game_date(username, "2023-11-17")
+                    # 호감도 확인 (초기값 5)
+                    current_affection = self._get_affection(username)
+                    # 나레이션 생성
+                    try:
+                        narration = self._get_narration("game_start")
+                    except Exception as e:
+                        print(f"[WARN] 나레이션 생성 실패: {e}")
+                        narration = None
+                    
+                    # 안전하게 모든 값 가져오기
+                    try:
+                        abilities = self._get_abilities(username)
+                    except Exception as e:
+                        print(f"[WARN] 능력치 가져오기 실패: {e}")
+                        abilities = {"국어": 0, "수학": 0, "영어": 0, "탐구1": 0, "탐구2": 0}
+                    
+                    try:
+                        stamina = self._get_stamina(username)
+                    except Exception as e:
+                        print(f"[WARN] 체력 가져오기 실패: {e}")
+                        stamina = 30
+                    
+                    return {
+                        'reply': f"게임이 시작되었습니다.",
+                        'image': None,
+                        'affection': current_affection,
+                        'game_state': "ice_break",
+                        'selected_subjects': [],
+                        'narration': narration,
+                        'abilities': abilities,
+                        'schedule': {},
+                        'current_date': "2023-11-17",
+                        'stamina': stamina
+                    }
+                except Exception as e:
+                    print(f"[ERROR] init 메시지 처리 실패: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    # 최소한의 응답 반환
+                    return {
+                        'reply': "게임이 시작되었습니다.",
+                        'image': None,
+                        'affection': 5,
+                        'game_state': "ice_break",
+                        'selected_subjects': [],
+                        'narration': None,
+                        'abilities': {"국어": 0, "수학": 0, "영어": 0, "탐구1": 0, "탐구2": 0},
+                        'schedule': {},
+                        'current_date': "2023-11-17",
+                        'stamina': 30
+                    }
             
             # [1.1] 게임 상태 초기화 요청 처리
             if user_message.strip() == "__RESET_GAME_STATE__":
                 # 모든 게임 상태 초기화
                 self._set_game_state(username, "ice_break")
                 self._set_affection(username, 5)
+                self._set_stamina(username, 30)
                 self._set_abilities(username, {
                     "국어": 0,
                     "수학": 0,
@@ -1126,7 +1252,11 @@ class ChatbotService:
                 self.current_weeks[username] = 0
                 self._set_game_date(username, "2023-11-17")
                 
-                narration = self._get_narration("game_start")
+                try:
+                    narration = self._get_narration("game_start")
+                except Exception as e:
+                    print(f"[WARN] 나레이션 생성 실패: {e}")
+                    narration = None
                 return {
                     'reply': "게임이 완전히 초기화되었습니다. 다시 시작하세요!",
                     'image': None,
@@ -1136,7 +1266,8 @@ class ChatbotService:
                     'narration': narration,
                     'abilities': {"국어": 0, "수학": 0, "영어": 0, "탐구1": 0, "탐구2": 0},
                     'schedule': {},
-                    'current_date': "2023-11-17"
+                    'current_date': "2023-11-17",
+                    'stamina': 30
                 }
             
             # [1.2] 디버깅 전용 히든 명령어 처리
@@ -1180,12 +1311,15 @@ class ChatbotService:
                                 score_lines.append(f"- {subject}: {score_data['grade']}등급 (백분위 {score_data['percentile']}%)")
                         exam_scores_text += "\n".join(score_lines)
                     
+                    # 호감도에 따른 공부하러 가는 메시지 생성
+                    study_message = self._get_study_message_by_affection(current_affection)
+                    
                     narration = f"{current_week}주차가 완료되었습니다. 설정한 공부 시간만큼 실력이 향상되었어요!"
                     if exam_scores_text:
                         narration += exam_scores_text
                     
                     return {
-                        'reply': "선생님 저는 이제 공부하러 가볼게요",
+                        'reply': study_message,
                         'image': None,
                         'affection': current_affection,
                         'game_state': current_state,
@@ -1193,7 +1327,8 @@ class ChatbotService:
                         'narration': narration,
                         'abilities': self._get_abilities(username),
                         'schedule': self._get_schedule(username),
-                        'current_date': new_date
+                        'current_date': new_date,
+                        'stamina': self._get_stamina(username)
                     }
                 else:
                     return {
@@ -1205,7 +1340,8 @@ class ChatbotService:
                         'narration': None,
                         'abilities': self._get_abilities(username),
                         'schedule': self._get_schedule(username),
-                        'current_date': self._get_game_date(username)
+                        'current_date': self._get_game_date(username),
+                        'stamina': self._get_stamina(username)
                     }
             
             # "4주스킵" 명령어: 4주일 자동 스킵
@@ -1238,8 +1374,11 @@ class ChatbotService:
                     if narration_parts:
                         narration += "\n\n" + "\n".join(narration_parts)
                     
+                    # 호감도에 따른 공부하러 가는 메시지 생성
+                    study_message = self._get_study_message_by_affection(current_affection)
+                    
                     return {
-                        'reply': "선생님 저는 이제 공부하러 가볼게요",
+                        'reply': study_message,
                         'image': None,
                         'affection': current_affection,
                         'game_state': current_state,
@@ -1247,7 +1386,8 @@ class ChatbotService:
                         'narration': narration,
                         'abilities': self._get_abilities(username),
                         'schedule': self._get_schedule(username),
-                        'current_date': self._get_game_date(username)
+                        'current_date': self._get_game_date(username),
+                        'stamina': self._get_stamina(username)
                     }
                 else:
                     return {
@@ -1259,48 +1399,136 @@ class ChatbotService:
                         'narration': None,
                         'abilities': self._get_abilities(username),
                         'schedule': self._get_schedule(username),
-                        'current_date': self._get_game_date(username)
+                        'current_date': self._get_game_date(username),
+                        'stamina': self._get_stamina(username)
                     }
             
             # "호감도5올리기" 명령어: 호감도 5 증가
             if user_message_clean == "호감도5올리기":
-                new_affection = min(100, current_affection + 5)
-                self._set_affection(username, new_affection)
-                print(f"[DEBUG] 호감도 증가: {current_affection} -> {new_affection}")
-                return {
-                    'reply': f"호감도가 {current_affection}에서 {new_affection}으로 증가했습니다! (디버그 모드)",
-                    'image': None,
-                    'affection': new_affection,
-                    'game_state': current_state,
-                    'selected_subjects': self._get_selected_subjects(username),
-                    'narration': None,
-                    'abilities': self._get_abilities(username),
-                    'schedule': self._get_schedule(username),
-                    'current_date': self._get_game_date(username)
-                }
+                try:
+                    new_affection = min(100, current_affection + 5)
+                    self._set_affection(username, new_affection)
+                    print(f"[DEBUG] 호감도 증가: {current_affection} -> {new_affection}")
+                    
+                    # 안전하게 모든 값 가져오기
+                    try:
+                        selected_subjects = self._get_selected_subjects(username)
+                    except:
+                        selected_subjects = []
+                    
+                    try:
+                        abilities = self._get_abilities(username)
+                    except:
+                        abilities = {"국어": 0, "수학": 0, "영어": 0, "탐구1": 0, "탐구2": 0}
+                    
+                    try:
+                        schedule = self._get_schedule(username)
+                    except:
+                        schedule = {}
+                    
+                    try:
+                        current_date = self._get_game_date(username)
+                    except:
+                        current_date = "2023-11-17"
+                    
+                    try:
+                        stamina = self._get_stamina(username)
+                    except:
+                        stamina = 30
+                    
+                    return {
+                        'reply': f"호감도가 {current_affection}에서 {new_affection}으로 증가했습니다! (디버그 모드)",
+                        'image': None,
+                        'affection': new_affection,
+                        'game_state': current_state,
+                        'selected_subjects': selected_subjects,
+                        'narration': None,
+                        'abilities': abilities,
+                        'schedule': schedule,
+                        'current_date': current_date,
+                        'stamina': stamina
+                    }
+                except Exception as e:
+                    print(f"[ERROR] 호감도5올리기 명령어 처리 실패: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    # 기본 응답 반환
+                    return {
+                        'reply': f"호감도가 증가했습니다! (디버그 모드)",
+                        'image': None,
+                        'affection': min(100, current_affection + 5),
+                        'game_state': current_state,
+                        'selected_subjects': [],
+                        'narration': None,
+                        'abilities': {"국어": 0, "수학": 0, "영어": 0, "탐구1": 0, "탐구2": 0},
+                        'schedule': {},
+                        'current_date': "2023-11-17",
+                        'stamina': 30
+                    }
             
             # "만점" 명령어: 모든 능력치를 2500으로 설정
             if user_message_clean == "만점":
-                max_abilities = {
-                    "국어": 2500,
-                    "수학": 2500,
-                    "영어": 2500,
-                    "탐구1": 2500,
-                    "탐구2": 2500
-                }
-                self._set_abilities(username, max_abilities)
-                print(f"[DEBUG] 모든 능력치를 2500으로 설정했습니다.")
-                return {
-                    'reply': "모든 능력치가 2500으로 설정되었습니다! (디버그 모드)",
-                    'image': None,
-                    'affection': current_affection,
-                    'game_state': current_state,
-                    'selected_subjects': self._get_selected_subjects(username),
-                    'narration': None,
-                    'abilities': max_abilities,
-                    'schedule': self._get_schedule(username),
-                    'current_date': self._get_game_date(username)
-                }
+                try:
+                    max_abilities = {
+                        "국어": 2500,
+                        "수학": 2500,
+                        "영어": 2500,
+                        "탐구1": 2500,
+                        "탐구2": 2500
+                    }
+                    self._set_abilities(username, max_abilities)
+                    print(f"[DEBUG] 모든 능력치를 2500으로 설정했습니다.")
+                    
+                    # 안전하게 모든 값 가져오기
+                    try:
+                        selected_subjects = self._get_selected_subjects(username)
+                    except:
+                        selected_subjects = []
+                    
+                    try:
+                        schedule = self._get_schedule(username)
+                    except:
+                        schedule = {}
+                    
+                    try:
+                        current_date = self._get_game_date(username)
+                    except:
+                        current_date = "2023-11-17"
+                    
+                    try:
+                        stamina = self._get_stamina(username)
+                    except:
+                        stamina = 30
+                    
+                    return {
+                        'reply': "모든 능력치가 2500으로 설정되었습니다! (디버그 모드)",
+                        'image': None,
+                        'affection': current_affection,
+                        'game_state': current_state,
+                        'selected_subjects': selected_subjects,
+                        'narration': None,
+                        'abilities': max_abilities,
+                        'schedule': schedule,
+                        'current_date': current_date,
+                        'stamina': stamina
+                    }
+                except Exception as e:
+                    print(f"[ERROR] 만점 명령어 처리 실패: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    # 기본 응답 반환
+                    return {
+                        'reply': "능력치가 설정되었습니다! (디버그 모드)",
+                        'image': None,
+                        'affection': current_affection,
+                        'game_state': current_state,
+                        'selected_subjects': [],
+                        'narration': None,
+                        'abilities': {"국어": 2500, "수학": 2500, "영어": 2500, "탐구1": 2500, "탐구2": 2500},
+                        'schedule': {},
+                        'current_date': "2023-11-17",
+                        'stamina': 30
+                    }
             
             # [1.3] 프롬프트 공격 감지
             if self._check_prompt_injection(user_message):
@@ -1315,11 +1543,16 @@ class ChatbotService:
                     'narration': None,
                     'abilities': self._get_abilities(username),
                     'schedule': self._get_schedule(username),
-                    'current_date': self._get_game_date(username)
+                    'current_date': self._get_game_date(username),
+                    'stamina': self._get_stamina(username)
                 }
             
             # [1.5] LLM으로 사용자 메시지의 긍정/부정 분석하여 호감도 변화 계산
-            affection_change = self._analyze_sentiment_with_llm(user_message)
+            try:
+                affection_change = self._analyze_sentiment_with_llm(user_message)
+            except Exception as e:
+                print(f"[WARN] 감정 분석 실패: {e}")
+                affection_change = 0  # 기본값
             
             # 호감도가 낮을수록 변화가 작게 (신뢰 없음)
             if current_affection < 30:
@@ -1436,6 +1669,14 @@ class ChatbotService:
                             print(f"[WEEK] {username}의 1주일이 경과했습니다. 능력치가 증가했습니다.")
                             print(f"[ABILITIES] 현재 능력치: {self._get_abilities(username)}")
                         
+                        # 체력 변동 (30에서 ±1씩 랜덤 변동)
+                        import random
+                        current_stamina = self._get_stamina(username)
+                        stamina_change = random.choice([-1, 1])  # -1 또는 +1
+                        new_stamina = max(0, current_stamina + stamina_change)
+                        self._set_stamina(username, new_stamina)
+                        print(f"[STAMINA] {username}의 체력이 {current_stamina}에서 {new_stamina}로 변경되었습니다.")
+                        
                         # 대화 횟수 초기화
                         self._reset_conversation_count(username)
                         
@@ -1474,12 +1715,17 @@ class ChatbotService:
                             narration += exam_scores_text
             
             # [2] RAG 검색
-            context, similarity, metadata = self._search_similar(
-                query=user_message,
-                threshold=0.45,
-                top_k=5
-            )
-            has_context = (context is not None)
+            try:
+                context, similarity, metadata = self._search_similar(
+                    query=user_message,
+                    threshold=0.45,
+                    top_k=5
+                )
+                has_context = (context is not None)
+            except Exception as e:
+                print(f"[WARN] RAG 검색 실패: {e}")
+                context, similarity, metadata = None, None, None
+                has_context = False
             
             # [3] 프롬프트 구성 (업데이트된 호감도 및 게임 상태 반영)
             current_schedule_for_prompt = self._get_schedule(username)
@@ -1502,51 +1748,70 @@ class ChatbotService:
                 prompt += f"\n\n[선택과목 목록]\n{subjects_list}\n\n사용자가 위 목록 중에서 선택과목을 고를 수 있도록 안내하세요. (최대 2개)"
             
             # [3.5] 대화 5번 후 자동 처리 (LLM 호출 전)
-            auto_study_message = None
             if week_passed:
-                auto_study_message = "선생님 저는 이제 공부하러 가볼게요"
-                # 이번 턴에서는 자동 메시지를 reply로 사용하고, 다음 턴부터 정상 대화
-            
-            # [4] LLM 응답 생성
-            print(f"\n{'='*50}")
-            print(f"[USER] {username}: {user_message}")
-            print(f"[GAME_STATE] {current_state}" + (f" → {new_state}" if state_changed else ""))
-            print(f"[AFFECTION] {current_affection} → {new_affection} (변화: {affection_change:+.1f})")
-            print(f"[RAG] Context found: {has_context}")
-            if has_context:
-                print(f"[RAG] Similarity: {similarity:.4f}")
-                print(f"[RAG] Context: {str(context)[:100]}...")
-            print(f"[LLM] Calling API...")
-
-            # 대화 5번 후 자동 처리 시 특별 응답
-            if week_passed:
+                # 호감도에 따른 공부하러 가는 메시지 생성
+                auto_study_message = self._get_study_message_by_affection(new_affection)
                 reply = auto_study_message
                 # 나레이션도 추가
                 if narration is None:
                     current_week = self._get_current_week(username)
                     narration = f"{current_week}주차가 완료되었습니다. 설정한 공부 시간만큼 실력이 향상되었어요!"
-            else:
+                # 주차 완료 시 시험 점수도 확인
+                exam_month = self._get_current_exam_month(username)
+                if exam_month:
+                    exam_scores = self._calculate_exam_scores(username, exam_month)
+                    if exam_scores:
+                        exam_name = "수능" if exam_month.endswith("-11") else f"{exam_month[-2:]}월 모의고사"
+                        exam_scores_text = f"\n\n{exam_name} 성적이 발표되었습니다:\n"
+                        subjects = ["국어", "수학", "영어", "탐구1", "탐구2"]
+                        score_lines = []
+                        for subject in subjects:
+                            if subject in exam_scores:
+                                score_data = exam_scores[subject]
+                                score_lines.append(f"- {subject}: {score_data['grade']}등급 (백분위 {score_data['percentile']}%)")
+                        if score_lines:
+                            exam_scores_text += "\n".join(score_lines)
+                            narration += exam_scores_text
+            if not week_passed:
+                # [4] LLM 응답 생성
+                print(f"\n{'='*50}")
+                print(f"[USER] {username}: {user_message}")
+                print(f"[GAME_STATE] {current_state}" + (f" → {new_state}" if state_changed else ""))
+                print(f"[AFFECTION] {current_affection} → {new_affection} (변화: {affection_change:+.1f})")
+                print(f"[RAG] Context found: {has_context}")
+                if has_context:
+                    print(f"[RAG] Similarity: {similarity:.4f}")
+                    print(f"[RAG] Context: {str(context)[:100]}...")
+                print(f"[LLM] Calling API...")
+                
                 # OpenAI Client 확인
                 if not self.client:
-                    raise RuntimeError("OpenAI Client가 초기화되지 않았습니다.")
-                
-                response = self.client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=[
-                        {"role": "system", "content": ""},
-                        {"role": "user", "content": prompt}
-                    ],
-                    temperature=0.7,
-                    max_tokens=500
-                )
-                
-                if not response or not response.choices or len(response.choices) == 0:
-                    raise RuntimeError("LLM 응답을 받을 수 없습니다.")
-                
-                reply = response.choices[0].message.content
-                
-                if not reply:
-                    reply = "죄송해요, 답변을 생성하지 못했어요. 다시 말씀해주세요."
+                    print("[WARN] OpenAI Client가 초기화되지 않았습니다. 기본 응답을 반환합니다.")
+                    reply = "죄송해요, 현재 AI 서비스에 연결할 수 없어요. 잠시 후 다시 시도해주세요."
+                else:
+                    try:
+                        response = self.client.chat.completions.create(
+                            model="gpt-4o-mini",
+                            messages=[
+                                {"role": "system", "content": ""},
+                                {"role": "user", "content": prompt}
+                            ],
+                            temperature=0.7,
+                            max_tokens=500
+                        )
+                        
+                        if not response or not response.choices or len(response.choices) == 0:
+                            print("[WARN] LLM 응답이 비어있습니다.")
+                            reply = "죄송해요, 응답을 생성할 수 없어요. 다시 시도해주세요."
+                        else:
+                            reply = response.choices[0].message.content
+                            if not reply or not reply.strip():
+                                reply = "죄송해요, 응답을 생성할 수 없어요. 다시 시도해주세요."
+                    except Exception as e:
+                        print(f"[ERROR] LLM 호출 실패: {e}")
+                        import traceback
+                        traceback.print_exc()
+                        reply = "죄송해요, 일시적인 오류가 발생했어요. 다시 시도해주세요."
             
             # 상태 전환 시 나레이션은 별도로 반환 (프론트엔드에서 처리)
             # reply에는 추가 메시지 없음 (나레이션으로 처리)
@@ -1554,13 +1819,13 @@ class ChatbotService:
             # 선택과목 선택 시 확인 메시지
             if subject_selected_in_this_turn:
                 current_selected = self._get_selected_subjects(username)
-                if len(current_selected) == 1:
-                    reply += f"\n\n(선택과목 '{current_selected[0]}'이(가) 선택되었습니다. {2 - len(current_selected)}개 더 선택할 수 있어요.)"
-                elif len(current_selected) == 2:
+                if len(current_selected) == 2:
                     subjects_text = ", ".join(current_selected)
                     reply += f"\n\n(선택과목이 모두 선택되었습니다: {subjects_text})"
+                elif len(current_selected) == 1:
+                    reply += f"\n\n(선택과목 '{current_selected[0]}'이(가) 선택되었습니다. {2 - len(current_selected)}개 더 선택할 수 있어요.)"
                 else:
-                    # 여러 개 한번에 선택된 경우
+                    # 여러 개 한번에 선택된 경우 (이론적으로는 발생하지 않지만 안전장치)
                     subjects_text = ", ".join(current_selected)
                     if len(current_selected) < 2:
                         reply += f"\n\n(선택과목 {subjects_text}이(가) 선택되었습니다. {2 - len(current_selected)}개 더 선택할 수 있어요.)"
@@ -1598,7 +1863,7 @@ class ChatbotService:
                     {"output": reply}
                 )
             
-            # [6] 응답 반환 (호감도, 게임 상태, 선택과목, 나레이션, 능력치, 시간표, 날짜 포함)
+            # [6] 응답 반환 (호감도, 게임 상태, 선택과목, 나레이션, 능력치, 시간표, 날짜, 체력 포함)
             return {
                 'reply': reply,
                 'image': None,
@@ -1608,25 +1873,44 @@ class ChatbotService:
                 'narration': narration,
                 'abilities': self._get_abilities(username),
                 'schedule': self._get_schedule(username),
-                'current_date': self._get_game_date(username)
+                'current_date': self._get_game_date(username),
+                'stamina': self._get_stamina(username)
             }
         except Exception as e:
             import traceback
             print(f"[ERROR] 응답 생성 실패: {e}")
             print(f"[ERROR] Traceback:")
             traceback.print_exc()
-            current_affection = self._get_affection(username)
-            current_state = self._get_game_state(username)
+            try:
+                current_affection = self._get_affection(username)
+                current_state = self._get_game_state(username)
+                selected_subjects = self._get_selected_subjects(username)
+                abilities = self._get_abilities(username)
+                schedule = self._get_schedule(username)
+                current_date = self._get_game_date(username)
+                stamina = self._get_stamina(username)
+            except Exception as inner_e:
+                print(f"[ERROR] 오류 복구 중 추가 오류: {inner_e}")
+                # 기본값 사용
+                current_affection = 5
+                current_state = "ice_break"
+                selected_subjects = []
+                abilities = {"국어": 0, "수학": 0, "영어": 0, "탐구1": 0, "탐구2": 0}
+                schedule = {}
+                current_date = "2023-11-17"
+                stamina = 30
+            
             return {
-                'reply': f"죄송해요, 일시적인 오류가 발생했어요. 다시 시도해주세요. (오류: {str(e)})",
+                'reply': f"죄송해요, 일시적인 오류가 발생했어요. 다시 시도해주세요.",
                 'image': None,
                 'affection': current_affection,
                 'game_state': current_state,
-                'selected_subjects': self._get_selected_subjects(username),
+                'selected_subjects': selected_subjects,
                 'narration': None,
-                'abilities': self._get_abilities(username),
-                'schedule': self._get_schedule(username),
-                'current_date': self._get_game_date(username)
+                'abilities': abilities,
+                'schedule': schedule,
+                'current_date': current_date,
+                'stamina': stamina
             }
 
 

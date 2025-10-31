@@ -329,7 +329,7 @@
         z-index: 20;
         font-family: "IBM Plex Sans KR", sans-serif;
         overflow-y: auto;
-        overflow-x: auto;
+        overflow-x: hidden;
         transition: box-shadow 0.2s;
         cursor: default;
         box-sizing: border-box; /* border 포함한 너비 계산 */
@@ -363,7 +363,9 @@
         flex-direction: column;
         gap: 16px;
         box-sizing: border-box; /* 패딩 포함한 너비 계산 */
+        overflow-x: hidden;
         width: 100%;
+        min-width: 0; /* flex 오버플로우 방지 */
       }
       /* 호감도 표시 (레이아웃 내부용) */
       .affection-display {
@@ -412,6 +414,61 @@
         font-size: 1.5rem;
         font-weight: bold;
         color: #764ba2;
+      }
+      /* 체력 표시 */
+      .stamina-display {
+        position: relative;
+        width: 100%;
+        padding: 12px 16px;
+        background: rgba(255, 255, 255, 0.98);
+        border: 2px solid #f39c12;
+        border-radius: 12px;
+        margin-bottom: 12px;
+        box-shadow: 0 2px 8px rgba(243, 156, 18, 0.15);
+        transition: box-shadow 0.3s ease;
+        box-sizing: border-box;
+        overflow: hidden;
+        word-wrap: break-word;
+      }
+      .stamina-display:hover {
+        box-shadow: 0 6px 20px rgba(243, 156, 18, 0.3);
+      }
+      .stamina-label {
+        font-size: 0.9rem;
+        color: #666;
+        margin-bottom: 4px;
+        cursor: move;
+        user-select: none;
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        padding: 4px 8px;
+        border-radius: 6px;
+        transition: background 0.2s;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .stamina-label:hover {
+        background: rgba(243, 156, 18, 0.1);
+      }
+      .stamina-label:active {
+        cursor: grabbing;
+      }
+      .stamina-value {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: #f39c12;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+      }
+      .stamina-efficiency {
+        font-size: 0.85rem;
+        color: #888;
+        margin-top: 4px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
       /* 능력치 표시 */
       .abilities-display {
@@ -696,7 +753,7 @@
     <div class="side-image-frame">
       <img
         class="side-image"
-        src="{{ url_for('static', filename='images/chatbot/서가윤-0.png') }}"
+        src="{{ url_for('static', filename='images/chatbot/하-0.png') }}"
         alt="서가윤"
       />
     </div>
@@ -725,6 +782,12 @@
         <div class="affection-display" id="affection-display">
           <div class="affection-label">호감도</div>
           <div class="affection-value" id="affection-value">5</div>
+        </div>
+        <!-- 체력 표시 -->
+        <div class="stamina-display" id="stamina-display">
+          <div class="stamina-label">체력</div>
+          <div class="stamina-value" id="stamina-value">30</div>
+          <div class="stamina-efficiency" id="stamina-efficiency">(효율: 100%)</div>
         </div>
         <!-- 능력치 표시 -->
         <div class="abilities-display" id="abilities-display">

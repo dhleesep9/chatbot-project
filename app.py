@@ -125,8 +125,11 @@ def api_chat():
         print(f"[ERROR] 챗봇 서비스 임포트 실패: {e}")
         return jsonify({'reply': '챗봇 서비스를 불러올 수 없습니다. services/chatbot_service.py를 구현해주세요.'}), 500
     except Exception as e:
+        import traceback
         print(f"[ERROR] 응답 생성 실패: {e}")
-        return jsonify({'reply': '죄송해요, 일시적인 오류가 발생했어요. 다시 시도해주세요.'}), 500
+        print(f"[ERROR] Traceback:")
+        traceback.print_exc()
+        return jsonify({'reply': f'죄송해요, 일시적인 오류가 발생했어요. 다시 시도해주세요. (오류: {str(e)})'}), 500
 
 # 헬스체크 엔드포인트 (Vercel용)
 @app.route('/health')
