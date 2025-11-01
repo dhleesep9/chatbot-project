@@ -614,6 +614,7 @@ class ChatbotService:
         for key, value in abilities.items():
             normalized[key] = max(0, min(2500, value))
         self.abilities[username] = normalized
+        self._save_user_data(username)  # 변경사항 저장
     
     def _get_stamina(self, username: str) -> int:
         """
@@ -626,6 +627,7 @@ class ChatbotService:
         사용자의 체력 설정
         """
         self.staminas[username] = max(0, stamina)  # 체력은 0 이상
+        self._save_user_data(username)  # 변경사항 저장
     
     def _calculate_stamina_efficiency(self, stamina: int) -> float:
         """
@@ -658,6 +660,7 @@ class ChatbotService:
             state_info = self._get_state_info(state)
             state_name = state_info.get("name", state)
             print(f"[GAME_STATE] {username}의 상태가 {state}({state_name})로 변경되었습니다.")
+            self._save_user_data(username)  # 변경사항 저장
         else:
             print(f"[WARN] 잘못된 게임 상태: {state}. 유효한 상태: {valid_states}")
     
@@ -748,6 +751,7 @@ class ChatbotService:
         """
         # 최대 2개까지만 저장
         self.selected_subjects[username] = subjects[:2]
+        self._save_user_data(username)  # 변경사항 저장
     
     def _parse_subject_from_message(self, user_message: str) -> list:
         """
@@ -994,8 +998,9 @@ class ChatbotService:
             # 비율로 축소
             scale = 14 / total_hours
             schedule = {k: int(v * scale) for k, v in schedule.items()}
-        
+
         self.schedules[username] = schedule
+        self._save_user_data(username)  # 변경사항 저장
     
     def _get_conversation_count(self, username: str) -> int:
         """
@@ -1008,12 +1013,14 @@ class ChatbotService:
         사용자의 대화 횟수 증가
         """
         self.conversation_counts[username] = self.conversation_counts.get(username, 0) + 1
+        self._save_user_data(username)  # 변경사항 저장
     
     def _reset_conversation_count(self, username: str):
         """
         사용자의 대화 횟수 초기화
         """
         self.conversation_counts[username] = 0
+        self._save_user_data(username)  # 변경사항 저장
     
     def _get_current_week(self, username: str) -> int:
         """
@@ -1026,6 +1033,7 @@ class ChatbotService:
         사용자의 주(week) 증가
         """
         self.current_weeks[username] = self.current_weeks.get(username, 0) + 1
+        self._save_user_data(username)  # 변경사항 저장
     
     def _get_game_date(self, username: str) -> str:
         """
@@ -1038,6 +1046,7 @@ class ChatbotService:
         사용자의 게임 날짜 설정
         """
         self.game_dates[username] = date_str
+        self._save_user_data(username)  # 변경사항 저장
     
     def _add_days_to_date(self, date_str: str, days: int) -> str:
         """
