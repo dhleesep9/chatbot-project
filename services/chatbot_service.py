@@ -133,6 +133,10 @@ class ChatbotService:
         self.config = self._load_config()
         print("[ChatbotService] config loaded. name:", self.config.get('name', ''))
 
+        # 1.5. States 로드 (별도 JSON 파일들)
+        self.states = self._load_states()
+        print(f"[ChatbotService] states loaded: {list(self.states.keys())}")
+
         # 2. OpenAI Client 초기화
         try:
             import openai
@@ -220,6 +224,35 @@ class ChatbotService:
         with open(config_path, encoding="utf-8") as f:
             config = json.load(f)
         return config
+
+    def _load_states(self):
+        """
+        별도 JSON 파일들에서 state 정보 로드
+        """
+        states = {}
+        state_machine = self.config.get("narration", {}).get("state_machine", {})
+        states_directory = state_machine.get("states_directory", "config/states")
+        available_states = state_machine.get("available_states", [])
+
+        for state_name in available_states:
+            state_file = BASE_DIR / f"{states_directory}/{state_name}.json"
+            try:
+                with open(state_file, encoding="utf-8") as f:
+                    state_info = json.load(f)
+                    states[state_name] = state_info
+                    print(f"[STATE_LOADER] {state_name}.json 로드 성공")
+            except FileNotFoundError:
+                print(f"[WARN] State 파일 없음: {state_file}")
+            except Exception as e:
+                print(f"[ERROR] State 파일 로드 실패 ({state_name}): {e}")
+
+        return states
+
+    def _get_state_info(self, state_name: str) -> dict:
+        """
+        State 정보 반환
+        """
+        return self.states.get(state_name, {})
     
     
     def _init_chromadb(self):
@@ -382,17 +415,14 @@ class ChatbotService:
         """
         사용자의 게임 상태 설정
         """
-        # state_machine에서 유효한 상태 목록 가져오기
-        state_machine = self.config.get("narration", {}).get("state_machine", {})
-        valid_states = list(state_machine.get("states", {}).keys())
-
-        # 기본값으로 하드코딩된 상태도 허용 (하위 호환성)
-        if not valid_states:
-            valid_states = ["start", "icebreak", "daily_routine"]
+        # 로드된 states에서 유효한 상태 목록 가져오기
+        valid_states = list(self.states.keys())
 
         if state in valid_states:
             self.game_states[username] = state
-            print(f"[GAME_STATE] {username}의 상태가 {state}로 변경되었습니다.")
+            state_info = self._get_state_info(state)
+            state_name = state_info.get("name", state)
+            print(f"[GAME_STATE] {username}의 상태가 {state}({state_name})로 변경되었습니다.")
         else:
             print(f"[WARN] 잘못된 게임 상태: {state}. 유효한 상태: {valid_states}")
     
@@ -446,12 +476,8 @@ class ChatbotService:
         """
         current_state = self._get_game_state(username)
 
-        # state_machine 설정 가져오기
-        state_machine = self.config.get("narration", {}).get("state_machine", {})
-        states = state_machine.get("states", {})
-
-        # 현재 상태 정보 가져오기
-        state_info = states.get(current_state, {})
+        # 현재 상태 정보 가져오기 (별도 JSON에서 로드)
+        state_info = self._get_state_info(current_state)
         transitions = state_info.get("transitions", [])
 
         # 각 전이 조건 확인
@@ -1973,6 +1999,11 @@ class ChatbotService:
                             reply = response.choices[0].message.content
                             if not reply or not reply.strip():
                                 reply = "죄송해요, 응답을 생성할 수 없어요. 다시 시도해주세요."
+                            else:
+                                # 응답 앞에 [state명] 추가
+                                state_info = self._get_state_info(new_state)
+                                state_name = state_info.get("name", new_state)
+                                reply = f"[{state_name}] {reply}"
                     except Exception as e:
                         print(f"[ERROR] LLM 호출 실패: {e}")
                         import traceback

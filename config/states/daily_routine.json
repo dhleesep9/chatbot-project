@@ -1,0 +1,8 @@
+{
+  "name": "일상루틴단계",
+  "description": "학습 시간표를 관리하고 주차별로 공부하는 단계",
+  "from_states": ["icebreak"],
+  "to_states": [],
+  "narration": null,
+  "transitions": []
+}
