@@ -501,13 +501,16 @@ class ChatbotService:
             (전환 발생 여부, 전환 나레이션)
         """
         current_state = self._get_game_state(username)
+        print(f"[STATE_CHECK] Current state: {current_state}, user_message: '{user_message}'")
 
         # 현재 상태 정보 가져오기 (별도 JSON에서 로드)
         state_info = self._get_state_info(current_state)
         transitions = state_info.get("transitions", [])
+        print(f"[STATE_CHECK] Found {len(transitions)} transitions for {current_state}")
 
         # 각 전이 조건 확인
         for transition in transitions:
+            print(f"[STATE_CHECK] Checking transition: {transition.get('trigger_type')} -> {transition.get('next_state')}")
             if self._evaluate_transition_condition(username, transition, affection_increased, user_message):
                 next_state = transition.get("next_state")
                 transition_narration = transition.get("transition_narration")
