@@ -219,6 +219,18 @@ class ChatbotService:
         self.exam_issues = {}  # {username: {"question": "국어 푸는데 시간이 부족해서...", "expected_advice": "모르는 문제는 넘어가"}}
         print("[ChatbotService] 시험 직후 문제점 초기화 완료")
         
+        # 14. 재수생 고민 상태 저장
+        self.student_concerns = {}  # {username: {"concern": "고민 내용", "keywords": ["키워드1", "키워드2"], "category": "카테고리"}}
+        print("[ChatbotService] 재수생 고민 상태 초기화 완료")
+        
+        # 15. 사설모의고사 이후 "어땠냐" 물어볼 차례인지 저장
+        self.awaiting_exam_feedback = {}  # {username: True/False}
+        print("[ChatbotService] 사설모의고사 피드백 대기 상태 초기화 완료")
+        
+        # 16. 사설모의고사 진행 주차 저장 (1주에 1번만 볼 수 있도록)
+        self.private_exam_weeks = {}  # {username: week_num (주차 번호)}
+        print("[ChatbotService] 사설모의고사 진행 주차 초기화 완료")
+        
         print("[ChatbotService] 초기화 완료")
     
     
@@ -396,6 +408,28 @@ class ChatbotService:
         """
         return 100 + (stamina - 30)
     
+    def _calculate_mental_efficiency(self, mental: int) -> float:
+        """
+        멘탈에 따른 상승효율 계산
+        공식: 효율(%) = 100 + (멘탈 - 50)
+        예시:
+        - 멘탈 50: 100%
+        - 멘탈 51: 101%
+        - 멘탈 49: 99%
+        - 멘탈 30: 80%
+        - 멘탈 100: 150%
+        """
+        return 100 + (mental - 50)
+    
+    def _is_low_grade(self, ability: float) -> bool:
+        """
+        능력치가 7~9등급인지 확인
+        능력치 -> 백분위 -> 등급 변환하여 7, 8, 9등급인지 확인
+        """
+        percentile = self._calculate_percentile(ability)
+        grade = self._calculate_grade_from_percentile(percentile)
+        return grade in [7, 8, 9]
+    
     def _get_game_state(self, username: str) -> str:
         """
         사용자의 현재 게임 상태 반환 (없으면 "ice_break")
@@ -422,9 +456,19 @@ class ChatbotService:
         """
         current_state = self._get_game_state(username)
         
+        # daily_routine 상태에서는 호감도가 낮아져도 이전 상태로 전이되지 않음
+        if current_state == "daily_routine":
+            return False
+        
         # 아이스 브레이크 → 멘토링: 호감도 10 이상 달성 시
         if current_state == "ice_break" and new_affection >= 10:
             self._set_game_state(username, "mentoring")
+            return True
+        
+        # 멘토링 → ice_break: 호감도 10 미만으로 떨어질 때 (daily_routine이 아닌 경우만)
+        if current_state == "mentoring" and new_affection < 10:
+            # daily_routine 상태가 아닐 때만 ice_break로 전이
+            self._set_game_state(username, "ice_break")
             return True
         
         # 멘토링 → 일상 루프는 [1.7]에서 선택과목 완료 시 직접 처리되므로 여기서는 제거
@@ -925,6 +969,122 @@ class ChatbotService:
         """
         return self.exam_issues.get(username, None)
     
+    def _get_student_concern_combinations(self) -> list:
+        """
+        재수생 고민 조합 반환
+        """
+        return [
+            # 학업 및 성적에 대한 불안감
+            {
+                "concern": "공부를 하는데도 성적이 오르지 않으면 어떡하지? 작년과 똑같은 실수를 반복할까 봐 두렵다.",
+                "keywords": ["성적", "오르지", "반복", "실수", "두려", "노력", "안정", "단계", "과정", "꾸준", "신뢰", "노하우", "방법"],
+                "category": "성적 향상 불안"
+            },
+            {
+                "concern": "매달 치르는 모의고사 성적에 일희일비하게 되며, 긴 수험 생활로 인한 번아웃이나 슬럼프를 겪기 쉽다.",
+                "keywords": ["번아웃", "슬럼프", "모의고사", "일희일비", "휴식", "여유", "쉬어", "리프레시", "휴가", "조금 쉬어"],
+                "category": "슬럼프와 번아웃"
+            },
+            {
+                "concern": "지금 내가 하는 공부 방법이 맞는지, 이 학원이나 인강이 나에게 정말 도움이 되는지 끊임없이 의심하고 불안해한다.",
+                "keywords": ["공부 방법", "학원", "인강", "의심", "불안", "자신", "현재", "지금", "신뢰", "믿고", "맞는", "확신"],
+                "category": "공부 방법 불신"
+            },
+            {
+                "concern": "실전에서 제 실력을 발휘하지 못할까 봐 느끼는 극심한 긴장감과 압박감이 있다.",
+                "keywords": ["실전", "긴장", "압박", "발휘", "연습", "모의고사", "시험장", "체득", "익숙", "준비", "연습량"],
+                "category": "수능 당일 공포"
+            },
+            # 심리적 압박과 자존감
+            {
+                "concern": "이번이 마지막 기회라는 생각에 스스로를 몰아붙이며 심리적 압박이 극대화된다.",
+                "keywords": ["마지막", "압박", "몰아붙", "여유", "마음", "긴장", "편안", "자연스럽", "부담", "무리", "자신"],
+                "category": "극심한 압박감"
+            },
+            {
+                "concern": "이미 대학에 합격해 캠퍼스 생활을 즐기는 친구들을 보며 소외감, 박탈감, 조바심을 느낀다.",
+                "keywords": ["친구", "소외감", "박탈감", "조바심", "비교", "나 자신", "속도", "개인", "타인", "시선", "집중"],
+                "category": "비교와 박탈감"
+            },
+            {
+                "concern": "스스로를 실패자나 뒤처진 사람으로 여기며 자존감이 크게 낮아지고 우울감을 느끼기 쉽다.",
+                "keywords": ["실패자", "뒤처진", "자존감", "우울", "가치", "존재", "긍정", "새로운", "기회", "각자의", "타이밍"],
+                "category": "자존감 하락"
+            },
+            {
+                "concern": "혼자 공부하는 시간이 길어지면서 사회와 단절된 듯한 고립감이나 외로움을 많이 느낀다.",
+                "keywords": ["고립감", "외로움", "단절", "사람", "관계", "친구", "가족", "대화", "소통", "만나", "연락", "시간"],
+                "category": "고립감"
+            },
+            # 대인관계 및 사회적 시선
+            {
+                "concern": "부모님의 경제적 지원과 기대를 받으면서 '이번에도 실패하면 안 된다'는 부담감과 죄송한 마음을 동시에 가진다.",
+                "keywords": ["부모님", "경제", "지원", "부담", "죄송", "기대", "진심", "노력", "미래", "기쁘", "지원받", "감사"],
+                "category": "부모님에 대한 죄송함"
+            },
+            {
+                "concern": "대학생이 된 친구들과 공감대 형성이 어려워지고, 연락을 피하게 되면서 자연스럽게 관계가 멀어진다.",
+                "keywords": ["친구", "공감대", "연락", "관계", "멀어", "이해", "지지", "긴 우정", "오래", "바쁜", "각자의"],
+                "category": "친구 관계 소원함"
+            },
+            {
+                "concern": "'왜 재수해?', '어느 대학 목표야?' 등 주변 사람들의 관심이나 질문이 큰 스트레스로 다가온다.",
+                "keywords": ["재수", "대학", "목표", "질문", "시선", "남의", "지금", "집중", "과정", "무시", "신경"],
+                "category": "외부 시선"
+            },
+            # 미래와 진로에 대한 불확실성
+            {
+                "concern": "만약 이번에도 실패하면 어떡하지? 또 실패할까 봐 두렵다.",
+                "keywords": ["실패", "두렵", "미래", "다음", "대안", "계획", "힘", "노력", "기회", "포기하지", "좋은", "결과"],
+                "category": "또 실패하면 공포"
+            },
+            {
+                "concern": "재수에 실패할 경우 삼수, 사수까지 이어질 수 있다는 두려움이 있다.",
+                "keywords": ["삼수", "사수", "두려", "기간", "시간", "지금", "열심히", "이번", "신중", "계획", "노력"],
+                "category": "N수로의 연장"
+            },
+            {
+                "concern": "또래보다 1~2년 늦어지는 것이 인생 전체에서 뒤처지는 것은 아닌지 걱정한다.",
+                "keywords": ["늦어", "뒤처", "인생", "또래", "개인", "속도", "나만의", "타이밍", "기회", "다른", "시간"],
+                "category": "인생 뒤처짐 걱정"
+            },
+            # 경제적·신체적 부담
+            {
+                "concern": "학원비, 교재비, 생활비 등 만만치 않은 경제적 비용이 부모님과 본인 모두에게 큰 부담이 된다.",
+                "keywords": ["경제", "비용", "학원비", "교재비", "생활비", "부담", "알뜰히", "효율", "가치", "투자"],
+                "category": "재수 비용"
+            },
+            {
+                "concern": "장시간 앉아서 공부해야 하므로 체력이 급격히 떨어지고 건강 관리에 어려움을 겪는다.",
+                "keywords": ["체력", "건강", "운동", "몸", "스트레칭", "활동", "관리", "숙면", "규칙", "생활", "밥"],
+                "category": "체력 저하"
+            }
+        ]
+    
+    def _set_student_concern(self, username: str, concern: dict):
+        """
+        재수생 고민 설정
+        """
+        self.student_concerns[username] = concern
+    
+    def _get_student_concern(self, username: str) -> dict:
+        """
+        재수생 고민 반환
+        """
+        return self.student_concerns.get(username, None)
+    
+    def _set_awaiting_exam_feedback(self, username: str, awaiting: bool):
+        """
+        사설모의고사 피드백 대기 상태 설정
+        """
+        self.awaiting_exam_feedback[username] = awaiting
+    
+    def _get_awaiting_exam_feedback(self, username: str) -> bool:
+        """
+        사설모의고사 피드백 대기 상태 반환
+        """
+        return self.awaiting_exam_feedback.get(username, False)
+    
     def _add_days_to_date(self, date_str: str, days: int) -> str:
         """
         날짜에 일수 추가 (YYYY-MM-DD 형식)
@@ -937,7 +1097,7 @@ class ChatbotService:
     def _apply_schedule_to_abilities(self, username: str):
         """
         시간표에 따라 능력치 증가
-        시간당 +1 증가 (체력에 따른 효율 적용)
+        시간당 +1 증가 (체력과 멘탈에 따른 효율 적용)
         """
         schedule = self._get_schedule(username)
         if not schedule:
@@ -945,16 +1105,25 @@ class ChatbotService:
         
         abilities = self._get_abilities(username)
         stamina = self._get_stamina(username)
-        efficiency = self._calculate_stamina_efficiency(stamina) / 100.0  # 효율을 배율로 변환 (1.0 = 100%)
+        mental = self._get_mental(username)
+        
+        # 체력 효율
+        stamina_efficiency = self._calculate_stamina_efficiency(stamina) / 100.0
+        # 멘탈 효율
+        mental_efficiency = self._calculate_mental_efficiency(mental) / 100.0
+        
+        # 총 효율 = 체력 효율 * 멘탈 효율 (두 효율을 곱하여 적용)
+        total_efficiency = stamina_efficiency * mental_efficiency
         
         for subject, hours in schedule.items():
             if subject in abilities:
-                # 체력에 따른 효율 적용: 시간 * 효율
-                increased = hours * efficiency
+                # 체력과 멘탈에 따른 효율 적용: 시간 * 총효율
+                increased = hours * total_efficiency
                 # 소수점 첫째자리로 반올림
                 abilities[subject] = round(min(2500, abilities[subject] + increased), 1)  # 최대 2500
         
         self._set_abilities(username, abilities)
+        print(f"[SCHEDULE] 체력 효율: {stamina_efficiency:.2f}x, 멘탈 효율: {mental_efficiency:.2f}x, 총 효율: {total_efficiency:.2f}x")
     
     def _calculate_percentile(self, ability: int) -> float:
         """
@@ -1430,6 +1599,10 @@ class ChatbotService:
             current_affection = self._get_affection(username)
             current_state = self._get_game_state(username)
             
+            # 기본 변수 초기화
+            reply = None
+            narration = None
+            
             # [1] 초기 메시지(인사)
             if user_message.strip().lower() == 'init':
                 try:
@@ -1446,6 +1619,10 @@ class ChatbotService:
                     self._set_exam_disappointment(username, False)
                     # 시험 문제점 초기화
                     self.exam_issues[username] = None
+                    # 재수생 고민 초기화
+                    self.student_concerns[username] = None
+                    # 사설모의고사 피드백 대기 상태 초기화
+                    self.awaiting_exam_feedback[username] = False
                     # 호감도 확인 (초기값 5)
                     current_affection = self._get_affection(username)
                     # 나레이션 생성
@@ -1521,6 +1698,8 @@ class ChatbotService:
                 self._set_game_date(username, "2023-11-17")
                 self._set_exam_disappointment(username, False)
                 self.exam_issues[username] = None
+                self.student_concerns[username] = None
+                self.awaiting_exam_feedback[username] = False
                 
                 try:
                     narration = self._get_narration("game_start")
@@ -1846,12 +2025,12 @@ class ChatbotService:
                 injection_cfg = self.config.get("narration", {}).get("prompt_injection_detection", {})
                 block_message = injection_cfg.get("block_message", "죄송해요, 그런 말은 할 수 없어요. 게임을 정상적으로 플레이해주세요.")
                 return {
-                    'reply': block_message,
+                    'reply': "",  # 빈 메시지로 나레이션만 표시
                     'image': None,
                     'affection': current_affection,
                     'game_state': current_state,
                     'selected_subjects': self._get_selected_subjects(username),
-                    'narration': None,
+                    'narration': "프롬프트 수정 감지! 정상적으로 이용해주세요",
                     'abilities': self._get_abilities(username),
                     'schedule': self._get_schedule(username),
                     'current_date': self._get_game_date(username),
@@ -1966,6 +2145,16 @@ class ChatbotService:
                         is_private_exam_request = False
                         # 아래에서 일반 대화로 처리됨
                         print(f"[PRIVATE_EXAM] {username}이(가) 사설모의고사를 요청했으나 시간표가 설정되지 않아 불가능합니다.")
+                    
+                    # 1주에 1번만 볼 수 있도록 체크
+                    if is_private_exam_request:
+                        current_week = self.current_weeks.get(username, 0)
+                        last_private_exam_week = self.private_exam_weeks.get(username, -1)
+                        
+                        if last_private_exam_week >= current_week:
+                            # 이미 이번 주에 사설모의고사를 봤음
+                            is_private_exam_request = False
+                            print(f"[PRIVATE_EXAM] {username}이(가) 사설모의고사를 요청했으나 이번 주에 이미 봤습니다 (주차: {current_week})")
                 
                 if is_private_exam_request:
                     import random
@@ -2003,14 +2192,19 @@ class ChatbotService:
                             has_bad_grade = True
                             break
                     
+                    # 사설모의고사는 바로 자책 상태 설정하지 않고, 다음 대화에서 "어땠냐" 물어보면 그때 문제점 저장
+                    # exam_disappointment는 다음 대화에서 설정
                     if has_bad_grade:
-                        self._set_exam_disappointment(username, True)
-                        
-                        # 랜덤으로 문제점 선택
-                        issue_combinations = self._get_exam_issue_combinations()
-                        selected_issue = random.choice(issue_combinations)
-                        self._set_exam_issue(username, selected_issue)
-                        print(f"[EXAM_DISAPPOINTMENT] {username}의 사설모의고사 성적이 나빠서 자책 상태로 설정됨 (문제점: {selected_issue['question']})")
+                        # 다음 대화에서 피드백을 받을 차례임을 표시
+                        self._set_awaiting_exam_feedback(username, True)
+                        print(f"[PRIVATE_EXAM] {username}의 사설모의고사 성적이 나빠서 다음 대화에서 피드백을 받을 준비됨")
+                    else:
+                        self._set_awaiting_exam_feedback(username, False)
+                    
+                    # 사설모의고사 진행 주차 저장
+                    current_week = self.current_weeks.get(username, 0)
+                    self.private_exam_weeks[username] = current_week
+                    print(f"[PRIVATE_EXAM] 사설모의고사 진행 주차 기록: {current_week}")
                 
                 parsed_schedule = self._parse_schedule_from_message(user_message, username)
                 if parsed_schedule:
@@ -2020,6 +2214,40 @@ class ChatbotService:
                         schedule_updated = True
                         current_schedule = parsed_schedule  # 업데이트된 스케줄 사용
                         print(f"[SCHEDULE] {username}의 시간표가 설정되었습니다: {parsed_schedule}")
+                        
+                        # 정기 모의고사 후 시간표 설정 시 성적 발표 + 문제점 표시
+                        awaiting_exam_feedback = self._get_awaiting_exam_feedback(username)
+                        if awaiting_exam_feedback and not reply:
+                            # 정기 모의고사 문제점이 설정되어 있는지 확인
+                            current_exam_issue = self._get_exam_issue(username)
+                            if current_exam_issue:
+                                print(f"[REGULAR_EXAM] 시간표 설정 후 정기 모의고사 문제점 표시 중...")
+                                
+                                # 성적 발표 나레이션 추가
+                                regular_exam_scores = self._get_regular_exam_scores(username) if hasattr(self, '_get_regular_exam_scores') else None
+                                if regular_exam_scores:
+                                    exam_month = self._get_regular_exam_month(username) if hasattr(self, '_get_regular_exam_month') else None
+                                    if exam_month:
+                                        exam_name = "수능" if exam_month.endswith("-11") else f"{exam_month[-2:]}월 모의고사"
+                                        exam_scores_text = f"\n\n{exam_name} 성적이 발표되었습니다:\n"
+                                        
+                                        subjects = ["국어", "수학", "영어", "탐구1", "탐구2"]
+                                        score_lines = []
+                                        for subject in subjects:
+                                            if subject in regular_exam_scores:
+                                                score_data = regular_exam_scores[subject]
+                                                score_lines.append(f"- {subject}: {score_data['grade']}등급 (백분위 {score_data['percentile']}%)")
+                                        
+                                        exam_scores_text += "\n".join(score_lines)
+                                        
+                                        # narration이 None일 수 있으므로 빈 문자열로 초기화
+                                        if narration is None:
+                                            narration = ""
+                                        narration += exam_scores_text
+                                
+                                # 문제점 표시
+                                reply = current_exam_issue.get("question", "")
+                                print(f"[REGULAR_EXAM] 재수생이 문제점을 얘기함: {reply}")
                     else:
                         print(f"[SCHEDULE] 총 시간이 14시간을 초과합니다: {total_hours}시간")
                 
@@ -2056,6 +2284,10 @@ class ChatbotService:
                     # 대화 횟수 초기화
                     self._reset_conversation_count(username)
                     
+                    # 시간표 초기화 (다음 주에 다시 시간표를 짜야 함)
+                    self._set_schedule(username, {})
+                    print(f"[SCHEDULE] {username}의 시간표가 초기화되었습니다. 다음 주에 시간표를 다시 설정해야 합니다.")
+                    
                     # 날짜 7일 증가
                     current_date = self._get_game_date(username)
                     new_date = self._add_days_to_date(current_date, 7)
@@ -2079,33 +2311,84 @@ class ChatbotService:
                                 has_bad_grade = True
                                 break
                         
+                        # 정기 모의고사도 사설모의고사와 동일하게 바로 문제점 선택
                         if has_bad_grade:
-                            self._set_exam_disappointment(username, True)
+                            # 다음 대화에서 피드백을 받을 차례임을 표시
+                            self._set_awaiting_exam_feedback(username, True)
+                            print(f"[EXAM_DISAPPOINTMENT] {username}의 정기 모의고사 성적이 나빠서 문제점 선택 중...")
                             
-                            # 랜덤으로 문제점 선택
                             import random
+                            
+                            # 각 과목별로 등급이 낮은 과목(7등급 이상)을 찾아서 문제점 선택
+                            worst_subject = None
+                            worst_grade = 0
+                            worst_subject_name = None
+                            
+                            for subject_name, score_data in exam_scores.items():
+                                grade = score_data.get("grade", 9)
+                                if grade > worst_grade:
+                                    worst_grade = grade
+                                    worst_subject = subject_name
+                                    worst_subject_name = subject_name
+                            
+                            # 등급별 문제점 목록 가져오기
                             issue_combinations = self._get_exam_issue_combinations()
-                            selected_issue = random.choice(issue_combinations)
-                            self._set_exam_issue(username, selected_issue)
-                            print(f"[EXAM_DISAPPOINTMENT] {username}의 성적이 나빠서 자책 상태로 설정됨 (문제점: {selected_issue['question']})")
-                        
-                        # 나레이션에 성적 정보 추가
-                        exam_name = "수능" if exam_month.endswith("-11") else f"{exam_month[-2:]}월 모의고사"
-                        exam_scores_text = f"\n\n{exam_name} 성적이 발표되었습니다:\n"
-                        
-                        subjects = ["국어", "수학", "영어", "탐구1", "탐구2"]
-                        score_lines = []
-                        for subject in subjects:
-                            if subject in exam_scores:
-                                score_data = exam_scores[subject]
-                                score_lines.append(f"- {subject}: {score_data['grade']}등급 (백분위 {score_data['percentile']}%)")
-                        
-                        exam_scores_text += "\n".join(score_lines)
+                            
+                            # 해당 과목과 관련된 문제점만 필터링
+                            filtered_issues = []
+                            for issue in issue_combinations:
+                                issue_subject = issue.get("subject")
+                                if issue_subject is None or issue_subject == worst_subject:
+                                    filtered_issues.append(issue)
+                            
+                            if not filtered_issues:
+                                filtered_issues = issue_combinations
+                            
+                            selected_issue = random.choice(filtered_issues)
+                            
+                            # {subject} 플레이스홀더를 실제 과목명으로 치환
+                            question_template = selected_issue.get("question", "")
+                            if worst_subject_name and "{subject}" in question_template:
+                                question_text = question_template.replace("{subject}", worst_subject_name)
+                            else:
+                                question_text = question_template
+                            
+                            # 조언 요청 메시지 추가
+                            advice_request = " 조언해주세요." if "조언해주세요" not in question_text else ""
+                            final_question = question_text + advice_request
+                            
+                            # 문제점 정보에 실제 질문 텍스트와 과목명 추가
+                            selected_issue_copy = selected_issue.copy()
+                            selected_issue_copy["question"] = final_question
+                            if worst_subject_name:
+                                selected_issue_copy["subject"] = worst_subject_name
+                            
+                            # 자책 상태 및 문제점 설정
+                            self._set_exam_disappointment(username, True)
+                            self._set_exam_issue(username, selected_issue_copy)
+                            
+                            # 재수생 고민으로 설정 (is_exam_feedback 플래그 추가)
+                            exam_concern = {
+                                "concern": final_question,
+                                "keywords": [],
+                                "category": "exam_feedback",
+                                "is_exam_feedback": True,
+                                "subject": worst_subject_name
+                            }
+                            self._set_student_concern(username, exam_concern)
+                            
+                            # 정기 모의고사 성적과 문제점 정보를 저장하여 다음 대화에서 사용
+                            if hasattr(self, 'regular_exam_scores'):
+                                self._set_regular_exam_scores(username, exam_scores)
+                                self._set_regular_exam_month(username, exam_month)
+                            
+                            print(f"[REGULAR_EXAM] 정기 모의고사 문제점 선택 완료 ({worst_subject_name}, {worst_grade}등급): {final_question}")
+                        else:
+                            self._set_awaiting_exam_feedback(username, False)
                     
-                    # 나레이션 메시지
+                    # 나레이션 메시지 (시간표 설정 요청 먼저, 성적 발표는 시간표 설정 후)
                     narration = f"{current_week}주차가 완료되었습니다. 설정한 공부 시간만큼 실력이 향상되었어요!"
-                    if exam_scores_text:
-                        narration += exam_scores_text
+                    narration += "\n\n다음 주를 위해 새로운 학습 시간표를 설정해주세요. (총 14시간)"
             
             # [2] RAG 검색
             try:
@@ -2124,12 +2407,7 @@ class ChatbotService:
             current_schedule_for_prompt = self._get_schedule(username)
             schedule_set = bool(current_schedule_for_prompt)
             
-            # 시험 직후 자책 상태 확인
-            is_disappointed = self._get_exam_disappointment(username)
-            
-            # 시험 직후 문제점 확인
-            current_exam_issue = self._get_exam_issue(username)
-            
+            # 프롬프트 생성 (exam_disappointment는 더 이상 사용하지 않으므로 False 전달)
             prompt = self._build_prompt(
                 user_message=user_message,
                 context=context,
@@ -2139,8 +2417,8 @@ class ChatbotService:
                 selected_subjects=selected_subjects if new_state == "mentoring" else [],
                 subject_selected=subject_selected_in_this_turn,
                 schedule_set=schedule_set,
-                exam_disappointment=is_disappointed,
-                exam_issue=current_exam_issue
+                exam_disappointment=False,  # 더 이상 사용하지 않음
+                exam_issue=None  # 더 이상 사용하지 않음
             )
             
             # 선택과목 목록 요청 시 프롬프트에 추가
@@ -2173,8 +2451,191 @@ class ChatbotService:
                         if score_lines:
                             exam_scores_text += "\n".join(score_lines)
                             narration += exam_scores_text
-            if not week_passed:
-                # [4] LLM 응답 생성
+            
+            # 사설모의고사/정기 모의고사 이후 조언 피드백 처리 (LLM 응답 생성보다 먼저 실행)
+            # 주의: 현재 턴에서 사설모의고사를 치르고 문제점을 말한 경우는 제외해야 함 (다음 턴에서 조언 판단)
+            advice_processed = False
+            awaiting_feedback = self._get_awaiting_exam_feedback(username)
+            
+            # 정기 모의고사인지 확인
+            regular_exam_scores = self._get_regular_exam_scores(username) if hasattr(self, '_get_regular_exam_scores') else None
+            is_regular_exam = regular_exam_scores is not None
+            
+            # 현재 시간표 상태 확인
+            current_schedule_for_check = self._get_schedule(username)
+            schedule_set_for_advice = bool(current_schedule_for_check)
+            
+            print(f"[DEBUG] 조언 피드백 체크: awaiting_feedback={awaiting_feedback}, private_exam_taken={private_exam_taken}, is_regular_exam={is_regular_exam}, schedule_set={schedule_set_for_advice}")
+            
+            # 정기 모의고사인 경우 시간표가 설정되어 있지 않으면 조언 피드백 처리하지 않음
+            if awaiting_feedback and not private_exam_taken:
+                if is_regular_exam and not schedule_set_for_advice:
+                    # 정기 모의고사인데 시간표가 없으면 조언 피드백 처리하지 않음
+                    print(f"[DEBUG] 정기 모의고사인데 시간표가 없어서 조언 피드백 처리 안 함. 시간표 설정을 먼저 요청.")
+                    advice_processed = False
+                else:
+                    # 재수생이 이미 고민을 말한 경우는 조언 피드백 처리 (현재 턴에서 사설모의고사를 치르지 않은 경우만)
+                    current_concern = self._get_student_concern(username)
+                    print(f"[DEBUG] 조언 피드백 체크: current_concern={current_concern}, is_exam_feedback={current_concern.get('is_exam_feedback') if current_concern else None}")
+                    if current_concern and current_concern.get("is_exam_feedback"):
+                        # LLM으로 조언 적절성 판단 (플레이어가 처음 한 말만 조언으로 처리)
+                        # 상태를 먼저 초기화하여 이후 메시지는 조언으로 처리되지 않도록 함
+                        self._set_awaiting_exam_feedback(username, False)
+                        
+                        exam_type = "정기 모의고사" if is_regular_exam else "사설모의고사"
+                        advice_judgment_prompt = f"""다음은 재수생 서가윤이 {exam_type}에서 겪은 문제와 플레이어의 조언입니다.
+
+재수생의 문제: {current_concern.get('concern', '')}
+
+플레이어의 조언: {user_message}
+
+위 조언이 재수생의 문제를 해결하는 데 도움이 되는지 판단하세요.
+- 도움이 되면: "적절"
+- 도움이 안 되면: "부적절"
+
+답변은 "적절" 또는 "부적절"만 하세요."""
+                        
+                        judgment_narration = None
+                        if self.client:
+                            try:
+                                judgment_response = self.client.chat.completions.create(
+                                    model="gpt-4o-mini",
+                                    messages=[
+                                        {"role": "system", "content": "당신은 학습 조언 평가 전문가입니다. 재수생의 문제점에 대한 조언이 적절한지 판단해주세요."},
+                                        {"role": "user", "content": advice_judgment_prompt}
+                                    ],
+                                    temperature=0.3,
+                                    max_tokens=10
+                                )
+                                
+                                if judgment_response and judgment_response.choices:
+                                    judgment = judgment_response.choices[0].message.content.strip()
+                                    is_advice_appropriate = "적절" in judgment
+                                    
+                                    if is_advice_appropriate:
+                                        # 조언 적절: 호감도 +2, 멘탈 +5, 해당 과목 +10
+                                        current_affection_for_advice = self._get_affection(username)
+                                        new_affection_for_advice = min(100, current_affection_for_advice + 2)
+                                        self._set_affection(username, new_affection_for_advice)
+                                        new_affection = new_affection_for_advice
+                                        
+                                        current_mental_for_advice = self._get_mental(username)
+                                        new_mental_for_advice = min(100, current_mental_for_advice + 5)
+                                        self._set_mental(username, new_mental_for_advice)
+                                        
+                                        # 해당 과목 능력치 +10
+                                        current_issue = self._get_exam_issue(username)
+                                        subject_name = None
+                                        if current_issue and current_issue.get("subject"):
+                                            subject_name = current_issue["subject"]
+                                        elif current_concern and current_concern.get("subject"):
+                                            subject_name = current_concern["subject"]
+                                        
+                                        if subject_name:
+                                            abilities = self._get_abilities(username)
+                                            if subject_name in abilities:
+                                                old_ability = abilities[subject_name]
+                                                abilities[subject_name] = min(2500, abilities[subject_name] + 10)
+                                                self._set_abilities(username, abilities)
+                                                print(f"[ADVICE][SKILL] {subject_name} 능력치 {old_ability:.1f}→{abilities[subject_name]:.1f} (+10)")
+                                        
+                                        # 나레이션 생성 (능력치 변화 정보 포함)
+                                        subject_info = f", {subject_name} +10" if subject_name else ""
+                                        judgment_narration = f"적절한 조언입니다! 호감도 +2, 멘탈 +5{subject_info}"
+                                        
+                                        # 상태 초기화
+                                        self._set_student_concern(username, None)
+                                        self._set_exam_disappointment(username, False)
+                                        self._set_exam_issue(username, None)
+                                        
+                                        print(f"[EXAM_FEEDBACK][SUCCESS] LLM 판단: 조언 적절! 호감도 {current_affection_for_advice}→{new_affection_for_advice} (+2), 멘탈 {current_mental_for_advice}→{new_mental_for_advice} (+5)")
+                                    else:
+                                        # 조언 부적절: 호감도 -2, 멘탈 -5
+                                        current_affection_for_advice = self._get_affection(username)
+                                        new_affection_for_advice = max(0, current_affection_for_advice - 2)
+                                        self._set_affection(username, new_affection_for_advice)
+                                        new_affection = new_affection_for_advice
+                                        
+                                        current_mental_for_advice = self._get_mental(username)
+                                        new_mental_for_advice = max(0, current_mental_for_advice - 5)
+                                        self._set_mental(username, new_mental_for_advice)
+                                        
+                                        # 나레이션 생성 (능력치 변화 정보 포함)
+                                        judgment_narration = "적절하지 못한 조언입니다. 호감도 -2, 멘탈 -5"
+                                        
+                                        # 상태 초기화
+                                        self._set_student_concern(username, None)
+                                        self._set_exam_disappointment(username, False)
+                                        self._set_exam_issue(username, None)
+                                        
+                                        print(f"[EXAM_FEEDBACK][FAILURE] LLM 판단: 조언 부적절... 호감도 {current_affection_for_advice}→{new_affection_for_advice} (-2), 멘탈 {current_mental_for_advice}→{new_mental_for_advice} (-5)")
+                            except Exception as e:
+                                print(f"[ERROR] 조언 판단 생성 실패: {e}")
+                                # 실패 시 기본값: 부적절로 처리
+                                current_affection_for_advice = self._get_affection(username)
+                                new_affection_for_advice = max(0, current_affection_for_advice - 2)
+                                self._set_affection(username, new_affection_for_advice)
+                                new_affection = new_affection_for_advice
+                                
+                                current_mental_for_advice = self._get_mental(username)
+                                new_mental_for_advice = max(0, current_mental_for_advice - 5)
+                                self._set_mental(username, new_mental_for_advice)
+                                
+                                judgment_narration = "적절하지 못한 조언입니다. 호감도 -2, 멘탈 -5"
+                                
+                                self._set_student_concern(username, None)
+                                self._set_exam_disappointment(username, False)
+                                self._set_exam_issue(username, None)
+                    
+                    # 나레이션 추가 (서가윤의 말보다 앞에 표시되도록)
+                    if judgment_narration:
+                        if narration:
+                            narration = judgment_narration + "\n\n" + narration
+                        else:
+                            narration = judgment_narration
+                    
+                    # 조언 판단 후 서가윤의 반응 생성
+                    advice_processed = True
+                    if self.client:
+                        try:
+                            is_appropriate = "적절한 조언입니다" in judgment_narration if judgment_narration else False
+                            reaction_prompt = f"""재수생 서가윤이 플레이어의 조언을 듣고 반응합니다.
+
+플레이어의 조언: {user_message}
+재수생이 겪은 문제: {current_concern.get('concern', '')}
+
+조언이 적절했는지: {"적절함" if is_appropriate else "부적절함"}
+현재 호감도: {new_affection}
+
+서가윤의 반응을 생성하세요:
+- 조언이 적절했을 때: "감사합니다", "알겠습니다", "다음엔 그렇게 해볼게요" 등의 긍정적인 반응
+- 조언이 부적절했을 때: "음...", "그렇군요", "알겠습니다" 등의 중립적이거나 약간 아쉬운 반응
+
+짧고 자연스럽게 한 문장으로 반응하세요. 존댓말을 사용하세요."""
+                            
+                            reaction_response = self.client.chat.completions.create(
+                                model="gpt-4o-mini",
+                                messages=[
+                                    {"role": "system", "content": "당신은 재수생 서가윤입니다. 플레이어의 조언에 대해 자연스럽게 반응하세요."},
+                                    {"role": "user", "content": reaction_prompt}
+                                ],
+                                temperature=0.7,
+                                max_tokens=100
+                            )
+                            
+                            if reaction_response and reaction_response.choices and len(reaction_response.choices) > 0:
+                                reply = reaction_response.choices[0].message.content
+                                print(f"[ADVICE_REACTION] 서가윤의 조언 반응 생성 완료: {reply}")
+                            else:
+                                reply = "감사합니다..." if is_appropriate else "음... 알겠습니다."
+                        except Exception as e:
+                            print(f"[ERROR] 조언 반응 생성 실패: {e}")
+                            reply = "감사합니다..." if "적절한 조언입니다" in judgment_narration else "음... 알겠습니다."
+                    else:
+                        reply = "감사합니다..." if "적절한 조언입니다" in judgment_narration else "음... 알겠습니다."
+            
+            if not advice_processed and not week_passed and not private_exam_taken and reply is None:
+                # [4] LLM 응답 생성 (조언이 처리되지 않은 경우만)
                 print(f"\n{'='*50}")
                 print(f"[USER] {username}: {user_message}")
                 print(f"[GAME_STATE] {current_state}" + (f" → {new_state}" if state_changed else ""))
@@ -2248,71 +2709,65 @@ class ChatbotService:
                         self._set_stamina(username, new_stamina)
                         print(f"[STAMINA] 봇의 운동 조언으로 인해 {username}의 체력이 {current_stamina}에서 {new_stamina}로 증가했습니다. (+2)")
             
-            # 시험 직후 자책 상태에서 플레이어의 조언 감지 및 호감도/멘탈 증가
-            if is_disappointed:
-                # 현재 문제점에 대한 기대 조언 확인
-                current_issue = self._get_exam_issue(username)
-                expected_advice_keywords = []
-                if current_issue and current_issue.get("expected_advice"):
-                    expected_advice_keywords = current_issue["expected_advice"]
+            # daily_routine 상태에서 재수생 고민 처리 (사설모의고사 직후는 제외)
+            if current_state == "daily_routine" and not private_exam_taken:
+                # 현재 고민 상태 확인
+                current_concern = self._get_student_concern(username)
                 
-                # 조언 키워드 감지 (문제점에 맞는 조언만 인정)
-                user_msg_lower = user_message.lower()
-                is_advice_given = False
-                if expected_advice_keywords:
-                    # 특정 문제점에 맞는 조언이 주어졌는지 확인
-                    is_advice_given = any(keyword in user_msg_lower for keyword in expected_advice_keywords)
+                # 고민이 이미 있는 경우, 조언 감지 및 처리
+                if current_concern:
+                    user_msg_lower = user_message.lower()
+                    # 조언 키워드 감지
+                    concern_keywords = current_concern.get("keywords", [])
+                    is_concern_advice_given = any(keyword in user_msg_lower for keyword in concern_keywords)
+                    
+                    if is_concern_advice_given:
+                        # 조언 성공: 호감도 +1, 멘탈 +3
+                        current_affection_for_concern = self._get_affection(username)
+                        new_affection_for_concern = min(100, current_affection_for_concern + 1)
+                        self._set_affection(username, new_affection_for_concern)
+                        
+                        current_mental_for_concern = self._get_mental(username)
+                        new_mental_for_concern = min(100, current_mental_for_concern + 3)
+                        self._set_mental(username, new_mental_for_concern)
+                        
+                        # 고민 해소
+                        self._set_student_concern(username, None)
+                        
+                        print(f"[CONCERN][SUCCESS] 재수생 고민 조언 성공! 호감도 {current_affection_for_concern}→{new_affection_for_concern} (+1), 멘탈 {current_mental_for_concern}→{new_mental_for_concern} (+3)")
+                        # new_affection 반영
+                        if new_affection != new_affection_for_concern:
+                            new_affection = self._get_affection(username)
+                    else:
+                        # 조언 실패: 호감도 -1
+                        current_affection_for_concern = self._get_affection(username)
+                        new_affection_for_concern = max(0, current_affection_for_concern - 1)
+                        self._set_affection(username, new_affection_for_concern)
+                        
+                        # 고민 해소
+                        self._set_student_concern(username, None)
+                        
+                        print(f"[CONCERN][FAILURE] 재수생 고민 조언 실패... 호감도 {current_affection_for_concern}→{new_affection_for_concern} (-1)")
+                        # new_affection 반영
+                        if new_affection != new_affection_for_concern:
+                            new_affection = self._get_affection(username)
+                # 고민이 없는 경우, "고민 있냐" 키워드로 고민 요청
                 else:
-                    # 문제점이 없으면 일반 조언 키워드 확인
-                    general_advice_keywords = [
-                        "넘어가", "넘어가야", "스킵", "건너뛰", "건너뛰어야",
-                        "시간 분배", "시간 관리", "시간이 부족", "타임 매니지먼트",
-                        "다음 문제", "그냥 넘어가", "포기", "선택과 집중",
-                        "빨리 풀", "빠르게 풀", "시간을 단축", "속도를 올려",
-                        "쉬운 문제", "어려운 문제", "순서", "전략"
-                    ]
-                    is_advice_given = any(keyword in user_msg_lower for keyword in general_advice_keywords)
-                
-                if is_advice_given:
-                    # 조언 성공: 호감도 +2, 멘탈 +1, 해당 과목 스탯 +10
-                    current_affection_for_advice = self._get_affection(username)
-                    new_affection = min(100, current_affection_for_advice + 2)
-                    self._set_affection(username, new_affection)
+                    concern_request_keywords = ["고민", "걱정", "불안", "어려워", "힘들어", "두려워"]
+                    user_msg_lower = user_message.lower()
+                    is_concern_request = any(keyword in user_msg_lower for keyword in concern_request_keywords)
                     
-                    current_mental = self._get_mental(username)
-                    new_mental = min(100, current_mental + 1)
-                    self._set_mental(username, new_mental)
-                    
-                    # 해당 과목 능력치 +10
-                    if current_issue and current_issue.get("subject"):
-                        subject_name = current_issue["subject"]
-                        abilities = self._get_abilities(username)
-                        if subject_name in abilities:
-                            old_ability = abilities[subject_name]
-                            abilities[subject_name] = min(2500, abilities[subject_name] + 10)
-                            self._set_abilities(username, abilities)
-                            print(f"[ADVICE][SKILL] {subject_name} 능력치 {old_ability}→{abilities[subject_name]} (+10)")
-                    
-                    # 자책 상태 및 문제점 초기화
-                    self._set_exam_disappointment(username, False)
-                    self.exam_issues[username] = None
-                    
-                    print(f"[ADVICE][SUCCESS] 플레이어의 조언 성공! {username}의 호감도 {current_affection_for_advice}→{new_affection} (+2), 멘탈 {current_mental}→{new_mental} (+1), 자책 상태 해제됨.")
-                    # new_affection을 최종 응답에 반영
-                    new_affection = self._get_affection(username)
-                else:
-                    # 조언 실패: 호감도 -2, 멘탈 -5 (자책은 계속)
-                    current_affection_for_advice = self._get_affection(username)
-                    new_affection = max(0, current_affection_for_advice - 2)
-                    self._set_affection(username, new_affection)
-                    
-                    current_mental = self._get_mental(username)
-                    new_mental = max(0, current_mental - 5)
-                    self._set_mental(username, new_mental)
-                    
-                    print(f"[ADVICE][FAILURE] 플레이어의 조언 실패... {username}의 호감도 {current_affection_for_advice}→{new_affection} (-2), 멘탈 {current_mental}→{new_mental} (-5)")
-                    # new_affection을 최종 응답에 반영
-                    new_affection = self._get_affection(username)
+                    if is_concern_request:
+                        # 랜덤으로 고민 선택
+                        import random
+                        concern_combinations = self._get_student_concern_combinations()
+                        selected_concern = random.choice(concern_combinations)
+                        self._set_student_concern(username, selected_concern)
+                        
+                        # 재수생이 고민을 얘기하는 응답으로 변경
+                        reply = selected_concern.get("concern", "")
+                        print(f"[CONCERN] 재수생 고민 생성: {selected_concern.get('category', 'Unknown')}")
+            
             
             # 선택과목 선택 시 확인 메시지
             if subject_selected_in_this_turn:
@@ -2335,15 +2790,15 @@ class ChatbotService:
                 narration = "선택과목이 모두 선택되었습니다! 이제 14시간으로 스케줄을 짜보세요."
                 print(f"[NARRATION] 선택과목 완료 메시지: {narration}")
             
-            # 시간표 업데이트 시 확인 메시지
-            if schedule_updated and not week_passed:
+            # 시간표 업데이트 시 확인 메시지 (사설모의고사 직후는 제외)
+            if schedule_updated and not week_passed and not private_exam_taken:
                 schedule = self._get_schedule(username)
                 schedule_text = ", ".join([f"{k} {v}시간" for k, v in schedule.items()])
                 total = sum(schedule.values())
                 reply += f"\n\n(시간표가 설정되었습니다: {schedule_text} (총 {total}시간))"
             
-            # 대화 횟수 안내 (daily_routine 상태이고 시간표가 설정된 경우)
-            if new_state == "daily_routine" and not week_passed:
+            # 대화 횟수 안내 (daily_routine 상태이고 시간표가 설정된 경우, 단 사설모의고사 직후는 제외)
+            if new_state == "daily_routine" and not week_passed and not private_exam_taken:
                 conv_count = self._get_conversation_count(username)
                 schedule = self._get_schedule(username)
                 if schedule:
@@ -2351,17 +2806,20 @@ class ChatbotService:
                     if remaining > 0:
                         reply += f"\n\n(대화 {remaining}번 후 1주일이 지나며 능력치가 증가합니다.)"
             
-            print(f"[BOT] {reply}")
+            if reply is not None:
+                print(f"[BOT] {reply}")
+            else:
+                print(f"[BOT] (응답 없음)")
             print(f"{'='*50}\n")
             
             # [5] 메모리 저장(선택)
-            if self.memory:
+            if self.memory and reply is not None:
                 self.memory.save_context(
                     {"input": user_message},
                     {"output": reply}
                 )
             
-            # [6] 사설모의고사 성적표 나레이션 추가
+            # [6] 사설모의고사 성적표 나레이션 추가 (직후 문제점도 표시)
             if private_exam_taken and private_exam_scores:
                 exam_scores_text = "\n\n사설모의고사 성적이 발표되었습니다:\n"
                 subjects = ["국어", "수학", "영어", "탐구1", "탐구2"]
@@ -2375,10 +2833,80 @@ class ChatbotService:
                     narration = exam_scores_text + "\n\n" + narration  # 나레이션이 먼저 오도록
                 else:
                     narration = exam_scores_text
-                # 사설모의고사는 나레이션이 먼저 표시되어야 하므로 reply를 빈 문자열로
-                reply = ""
+                
+                # 사설모의고사 직후 성적이 나쁘면 바로 문제점 표시
+                awaiting_feedback = self._get_awaiting_exam_feedback(username)
+                if awaiting_feedback and not reply:  # reply가 설정되지 않았을 때만
+                    print(f"[PRIVATE_EXAM] 사설모의고사 직후 문제점 표시 중...")
+                    import random
+                    
+                    # 각 과목별로 등급이 낮은 과목 찾기
+                    worst_subject = None
+                    worst_grade = 0
+                    worst_subject_name = None
+                    
+                    for subject_name, score_data in private_exam_scores.items():
+                        grade = score_data.get("grade", 9)
+                        if grade > worst_grade:
+                            worst_grade = grade
+                            worst_subject = subject_name
+                            worst_subject_name = subject_name
+                    
+                    # 등급별 문제점 목록 가져오기
+                    issue_combinations = self._get_exam_issue_combinations()
+                    
+                    # 해당 과목과 관련된 문제점만 필터링
+                    filtered_issues = []
+                    for issue in issue_combinations:
+                        issue_subject = issue.get("subject")
+                        if issue_subject is None or issue_subject == worst_subject:
+                            filtered_issues.append(issue)
+                    
+                    if not filtered_issues:
+                        filtered_issues = issue_combinations
+                    
+                    selected_issue = random.choice(filtered_issues)
+                    
+                    # {subject} 플레이스홀더를 실제 과목명으로 치환
+                    question_template = selected_issue.get("question", "")
+                    if worst_subject_name and "{subject}" in question_template:
+                        question_text = question_template.replace("{subject}", worst_subject_name)
+                    else:
+                        question_text = question_template
+                    
+                    # 조언 요청 메시지 추가
+                    advice_request = " 조언해주세요." if "조언해주세요" not in question_text else ""
+                    final_question = question_text + advice_request
+                    
+                    # 문제점 정보에 실제 질문 텍스트와 과목명 추가
+                    selected_issue_copy = selected_issue.copy()
+                    selected_issue_copy["question"] = final_question
+                    if worst_subject_name:
+                        selected_issue_copy["subject"] = worst_subject_name
+                    
+                    # 자책 상태 및 문제점 설정
+                    self._set_exam_disappointment(username, True)
+                    self._set_exam_issue(username, selected_issue_copy)
+                    
+                    # 재수생 고민으로 설정
+                    exam_concern = {
+                        "concern": final_question,
+                        "keywords": [],
+                        "category": "exam_feedback",
+                        "is_exam_feedback": True,
+                        "subject": worst_subject_name
+                    }
+                    self._set_student_concern(username, exam_concern)
+                    
+                    # 재수생이 문제점을 얘기하는 응답으로 설정
+                    reply = final_question
+                    print(f"[PRIVATE_EXAM] 재수생이 문제점을 얘기함 ({worst_subject_name}, {worst_grade}등급): {final_question}")
             
             # [7] 응답 반환 (호감도, 게임 상태, 선택과목, 나레이션, 능력치, 시간표, 날짜, 체력, 멘탈, 사설모의고사 성적표 포함)
+            # reply가 None이면 빈 문자열로 처리
+            if reply is None:
+                reply = ""
+            
             result = {
                 'reply': reply,
                 'image': None,
