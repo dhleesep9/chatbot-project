@@ -141,6 +141,11 @@ class ChatbotService:
         self.debug_commands = self._load_debug_commands()
         print(f"[ChatbotService] debug commands loaded: {len(self.debug_commands.get('commands', []))} commands")
 
+        # 1.7. Trigger Registry 초기화 (자동으로 모든 트리거 로드)
+        from services.triggers.trigger_registry import TriggerRegistry
+        self.trigger_registry = TriggerRegistry()
+        print(f"[ChatbotService] trigger registry loaded: {self.trigger_registry.list_triggers()}")
+
         # 2. OpenAI Client 초기화
         try:
             import openai
@@ -658,7 +663,7 @@ class ChatbotService:
     
     def _evaluate_transition_condition(self, username: str, transition: dict, affection_increased: int, user_message: str = "") -> bool:
         """
-        전이 조건 평가 (state machine 기반)
+        전이 조건 평가 (트리거 레지스트리 기반)
 
         Args:
             username: 사용자 이름
@@ -670,70 +675,17 @@ class ChatbotService:
             조건 만족 여부
         """
         trigger_type = transition.get("trigger_type")
-        conditions = transition.get("conditions", {})
 
-        if trigger_type == "affection_increase":
-            # 호감도 증가량 트리거 (start → icebreak)
-            min_increase = conditions.get("affection_increase_min", 1)
-            return affection_increased >= min_increase
+        # 트리거 실행 컨텍스트 구성
+        context = {
+            'username': username,
+            'user_message': user_message,
+            'affection_increased': affection_increased,
+            'service': self  # 트리거가 서비스 메서드에 접근할 수 있도록
+        }
 
-        elif trigger_type == "affection_threshold":
-            # 호감도 절대값 트리거 (icebreak → daily_routine)
-            min_affection = conditions.get("affection_min", 10)
-            current_affection = self._get_affection(username)
-            return current_affection >= min_affection
-
-        elif trigger_type == "affection_and_subjects":
-            # 호감도 달성 + 탐구과목 선택 트리거 (복합 조건)
-            min_affection = conditions.get("affection_min", 10)
-            subjects_count = conditions.get("subjects_count", 2)
-
-            current_affection = self._get_affection(username)
-            selected_subjects = self._get_selected_subjects(username)
-
-            affection_met = current_affection >= min_affection
-            subjects_met = len(selected_subjects) >= subjects_count
-
-            return affection_met and subjects_met
-
-        elif trigger_type == "user_input":
-            # 유저 입력 포함 트리거
-            input_equals = conditions.get("input_equals", "")
-            if not input_equals:
-                return False
-
-            # 대소문자 구분 없이 포함 여부 체크
-            user_message_lower = user_message.lower()
-            input_equals_lower = input_equals.lower()
-
-            is_contained = input_equals_lower in user_message_lower
-
-            if is_contained:
-                print(f"[TRIGGER] user_input 트리거 발동: '{input_equals}' in '{user_message}'")
-
-            return is_contained
-
-        elif trigger_type == "subject_selection":
-            # 탐구과목 선택 트리거
-            from services.subject_selection import parse_subjects_from_message, validate_subject_count
-
-            required_count = conditions.get("required_count", 2)
-
-            # 메시지에서 과목 추출
-            found_subjects = parse_subjects_from_message(user_message)
-
-            # 필요한 개수만큼 선택되었는지 확인
-            if validate_subject_count(found_subjects, required_count):
-                # 선택된 과목을 저장
-                self._set_selected_subjects(username, found_subjects)
-                print(f"[TRIGGER] subject_selection 트리거 발동: {found_subjects}")
-                return True
-
-            return False
-
-        # 알 수 없는 트리거 타입
-        print(f"[WARN] Unknown trigger_type: {trigger_type}")
-        return False
+        # 트리거 레지스트리를 통해 동적으로 트리거 실행
+        return self.trigger_registry.evaluate_trigger(trigger_type, transition, context)
 
     def _check_state_transition(self, username: str, new_affection: int, affection_increased: int = 0, user_message: str = "") -> tuple:
         """
