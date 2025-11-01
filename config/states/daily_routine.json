@@ -2,7 +2,35 @@
   "name": "일상루틴단계",
   "description": "학습 시간표를 관리하고 주차별로 공부하는 단계",
   "from_states": ["icebreak"],
-  "to_states": [],
-  "narration": null,
-  "transitions": []
+  "to_states": ["Astate", "Bstate", "Cstate"],
+  "narration": "일상 루틴 단계입니다. A, B, C 중 하나를 입력하여 다음 행동을 선택하세요.",
+  "transitions": [
+    {
+      "name": "A 입력",
+      "trigger_type": "user_input",
+      "conditions": {
+        "input_equals": "A"
+      },
+      "next_state": "Astate",
+      "transition_narration": "A 상태로 이동합니다."
+    },
+    {
+      "name": "B 입력",
+      "trigger_type": "user_input",
+      "conditions": {
+        "input_equals": "B"
+      },
+      "next_state": "Bstate",
+      "transition_narration": "B 상태로 이동합니다."
+    },
+    {
+      "name": "C 입력",
+      "trigger_type": "user_input",
+      "conditions": {
+        "input_equals": "C"
+      },
+      "next_state": "Cstate",
+      "transition_narration": "C 상태로 이동합니다."
+    }
+  ]
 }

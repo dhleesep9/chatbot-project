@@ -1,0 +1,8 @@
+{
+  "name": "C상태",
+  "description": "C 입력을 받아 CCC를 출력하는 상태",
+  "from_states": ["daily_routine"],
+  "to_states": [],
+  "narration": "CCC",
+  "transitions": []
+}

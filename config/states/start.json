@@ -7,11 +7,11 @@
   "transitions": [
     {
       "name": "첫 대화 완료",
-      "trigger_type": "affection_increase",
+      "trigger_type": "affection_increase", 
       "conditions": {
-        "affection_increase_min": 1
+        "affection_increase_min": 1 
       },
-      "next_state": "icebreak",
+      "next_state": "icebreak", 
       "transition_narration": "서가윤이 조금 더 마음을 열기 시작했습니다. 이제 본격적인 대화를 나눌 수 있어요."
     }
   ]

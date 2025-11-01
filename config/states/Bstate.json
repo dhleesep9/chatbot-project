@@ -1,0 +1,8 @@
+{
+  "name": "B상태",
+  "description": "B 입력을 받아 BBB를 출력하는 상태",
+  "from_states": ["daily_routine"],
+  "to_states": [],
+  "narration": "BBB",
+  "transitions": []
+}

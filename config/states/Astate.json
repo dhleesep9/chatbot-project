@@ -1,0 +1,8 @@
+{
+  "name": "A상태",
+  "description": "A 입력을 받아 AAA를 출력하는 상태",
+  "from_states": ["daily_routine"],
+  "to_states": [],
+  "narration": "AAA",
+  "transitions": []
+}
