@@ -137,6 +137,10 @@ class ChatbotService:
         self.states = self._load_states()
         print(f"[ChatbotService] states loaded: {list(self.states.keys())}")
 
+        # 1.6. Debug Commands 로드 (별도 JSON 파일)
+        self.debug_commands = self._load_debug_commands()
+        print(f"[ChatbotService] debug commands loaded: {len(self.debug_commands.get('commands', []))} commands")
+
         # 2. OpenAI Client 초기화
         try:
             import openai
@@ -248,13 +252,182 @@ class ChatbotService:
 
         return states
 
+    def _load_debug_commands(self):
+        """
+        디버그 명령어 설정 파일 로드
+        """
+        debug_commands_file = BASE_DIR / "config/debug_commands.json"
+        try:
+            with open(debug_commands_file, encoding="utf-8") as f:
+                debug_commands = json.load(f)
+                print(f"[DEBUG_LOADER] debug_commands.json 로드 성공")
+                return debug_commands
+        except FileNotFoundError:
+            print(f"[WARN] Debug commands 파일 없음: {debug_commands_file}")
+            return {"enabled": False, "commands": []}
+        except Exception as e:
+            print(f"[ERROR] Debug commands 파일 로드 실패: {e}")
+            return {"enabled": False, "commands": []}
+
     def _get_state_info(self, state_name: str) -> dict:
         """
         State 정보 반환
         """
         return self.states.get(state_name, {})
-    
-    
+
+    def _handle_debug_command(self, user_message: str, username: str, current_state: str, current_affection: int) -> dict:
+        """
+        디버그 명령어 처리 (config/debug_commands.json 기반)
+
+        Returns:
+            dict: 응답 딕셔너리 또는 None (매칭되는 명령어가 없을 경우)
+        """
+        if not self.debug_commands.get("enabled", False):
+            return None
+
+        user_message_clean = user_message.strip()
+
+        for command in self.debug_commands.get("commands", []):
+            if not command.get("enabled", True):
+                continue
+
+            if user_message_clean == command.get("trigger"):
+                # required_state 확인
+                required_state = command.get("required_state")
+                if required_state and current_state != required_state:
+                    error_message = command.get("error_message", "이 명령어는 특정 상태에서만 사용할 수 있습니다.")
+                    return {
+                        'reply': error_message,
+                        'image': None,
+                        'affection': current_affection,
+                        'game_state': current_state,
+                        'selected_subjects': self._get_selected_subjects(username),
+                        'narration': None,
+                        'abilities': self._get_abilities(username),
+                        'schedule': self._get_schedule(username),
+                        'current_date': self._get_game_date(username),
+                        'stamina': self._get_stamina(username)
+                    }
+
+                # action 실행
+                action = command.get("action")
+                parameters = command.get("parameters", {})
+
+                if action == "skip_weeks":
+                    return self._debug_skip_weeks(username, current_affection, current_state, parameters, command)
+                elif action == "increase_affection":
+                    return self._debug_increase_affection(username, current_affection, current_state, parameters, command)
+                elif action == "set_max_abilities":
+                    return self._debug_set_max_abilities(username, current_affection, current_state, parameters, command)
+
+        return None
+
+    def _debug_skip_weeks(self, username: str, current_affection: int, current_state: str, parameters: dict, command: dict) -> dict:
+        """1주스킵, 4주스킵 명령어 처리"""
+        weeks = parameters.get("weeks", 1)
+        current_schedule = self._get_schedule(username)
+
+        # weeks만큼 반복
+        narration_parts = []
+        for week_num in range(weeks):
+            if current_schedule:
+                self._apply_schedule_to_abilities(username)
+
+            self._increment_week(username)
+            current_week = self._get_current_week(username)
+            self._reset_conversation_count(username)
+
+            current_date = self._get_game_date(username)
+            new_date = self._add_days_to_date(current_date, 7)
+            self._set_game_date(username, new_date)
+
+            # 시험 체크
+            exam_month = self._check_exam_in_period(current_date, new_date)
+            if exam_month:
+                exam_scores = self._calculate_exam_scores(username, exam_month)
+                exam_name = "수능" if exam_month.endswith("-11") else f"{exam_month[-2:]}월 모의고사"
+                narration_parts.append(f"{exam_name} 성적이 발표되었습니다.")
+
+        # 마지막 주 번호와 날짜
+        final_week = self._get_current_week(username)
+        final_date = self._get_game_date(username)
+
+        # 성공 메시지
+        success_message = command.get("success_message", "").replace("{week}", str(final_week))
+
+        # 시험 결과 추가
+        if narration_parts:
+            success_message += "\n\n" + "\n".join(narration_parts)
+
+        # 호감도에 따른 공부하러 가는 메시지 생성
+        study_message = self._get_study_message_by_affection(current_affection)
+
+        return {
+            'reply': study_message,
+            'image': None,
+            'affection': current_affection,
+            'game_state': current_state,
+            'selected_subjects': self._get_selected_subjects(username),
+            'narration': success_message,
+            'abilities': self._get_abilities(username),
+            'schedule': self._get_schedule(username),
+            'current_date': final_date,
+            'stamina': self._get_stamina(username)
+        }
+
+    def _debug_increase_affection(self, username: str, current_affection: int, current_state: str, parameters: dict, command: dict) -> dict:
+        """호감도5올리기 명령어 처리"""
+        amount = parameters.get("amount", 5)
+        new_affection = min(100, current_affection + amount)
+        self._set_affection(username, new_affection)
+        print(f"[DEBUG] 호감도 증가: {current_affection} -> {new_affection}")
+
+        success_message = command.get("success_message", "")
+        success_message = success_message.replace("{old_affection}", str(current_affection))
+        success_message = success_message.replace("{new_affection}", str(new_affection))
+
+        return {
+            'reply': success_message,
+            'image': None,
+            'affection': new_affection,
+            'game_state': current_state,
+            'selected_subjects': self._get_selected_subjects(username),
+            'narration': None,
+            'abilities': self._get_abilities(username),
+            'schedule': self._get_schedule(username),
+            'current_date': self._get_game_date(username),
+            'stamina': self._get_stamina(username)
+        }
+
+    def _debug_set_max_abilities(self, username: str, current_affection: int, current_state: str, parameters: dict, command: dict) -> dict:
+        """만점 명령어 처리"""
+        value = parameters.get("value", 2500)
+        max_abilities = {
+            "국어": value,
+            "수학": value,
+            "영어": value,
+            "탐구1": value,
+            "탐구2": value
+        }
+        self._set_abilities(username, max_abilities)
+        print(f"[DEBUG] 모든 능력치를 {value}으로 설정했습니다.")
+
+        success_message = command.get("success_message", "")
+
+        return {
+            'reply': success_message,
+            'image': None,
+            'affection': current_affection,
+            'game_state': current_state,
+            'selected_subjects': self._get_selected_subjects(username),
+            'narration': None,
+            'abilities': max_abilities,
+            'schedule': self._get_schedule(username),
+            'current_date': self._get_game_date(username),
+            'stamina': self._get_stamina(username)
+        }
+
+
     def _init_chromadb(self):
         """
         ChromaDB 초기화 및 rag_collection 반환
@@ -1474,264 +1647,9 @@ class ChatbotService:
                 }
             
             # [1.2] 디버깅 전용 히든 명령어 처리
-            user_message_clean = user_message.strip()
-            
-            # "1주스킵" 명령어: 1주일 자동 스킵
-            if user_message_clean == "1주스킵":
-                if current_state == "daily_routine":
-                    current_schedule = self._get_schedule(username)
-                    if current_schedule:
-                        # 시간표에 따라 능력치 증가
-                        self._apply_schedule_to_abilities(username)
-                        print(f"[DEBUG] 1주 스킵: 능력치 증가 완료")
-                    
-                    # 주 증가
-                    self._increment_week(username)
-                    current_week = self._get_current_week(username)
-                    
-                    # 대화 횟수 초기화
-                    self._reset_conversation_count(username)
-                    
-                    # 날짜 7일 증가
-                    current_date = self._get_game_date(username)
-                    new_date = self._add_days_to_date(current_date, 7)
-                    self._set_game_date(username, new_date)
-                    
-                    # 1주 기간 동안 시험이 있었는지 확인
-                    exam_month = self._check_exam_in_period(current_date, new_date)
-                    exam_scores = None
-                    exam_scores_text = ""
-                    
-                    if exam_month:
-                        exam_scores = self._calculate_exam_scores(username, exam_month)
-                        exam_name = "수능" if exam_month.endswith("-11") else f"{exam_month[-2:]}월 모의고사"
-                        exam_scores_text = f"\n\n{exam_name} 성적이 발표되었습니다:\n"
-                        subjects = ["국어", "수학", "영어", "탐구1", "탐구2"]
-                        score_lines = []
-                        for subject in subjects:
-                            if subject in exam_scores:
-                                score_data = exam_scores[subject]
-                                score_lines.append(f"- {subject}: {score_data['grade']}등급 (백분위 {score_data['percentile']}%)")
-                        exam_scores_text += "\n".join(score_lines)
-                    
-                    # 호감도에 따른 공부하러 가는 메시지 생성
-                    study_message = self._get_study_message_by_affection(current_affection)
-                    
-                    narration = f"{current_week}주차가 완료되었습니다. 설정한 공부 시간만큼 실력이 향상되었어요!"
-                    if exam_scores_text:
-                        narration += exam_scores_text
-                    
-                    return {
-                        'reply': study_message,
-                        'image': None,
-                        'affection': current_affection,
-                        'game_state': current_state,
-                        'selected_subjects': self._get_selected_subjects(username),
-                        'narration': narration,
-                        'abilities': self._get_abilities(username),
-                        'schedule': self._get_schedule(username),
-                        'current_date': new_date,
-                        'stamina': self._get_stamina(username)
-                    }
-                else:
-                    return {
-                        'reply': "daily_routine 상태에서만 사용할 수 있습니다.",
-                        'image': None,
-                        'affection': current_affection,
-                        'game_state': current_state,
-                        'selected_subjects': self._get_selected_subjects(username),
-                        'narration': None,
-                        'abilities': self._get_abilities(username),
-                        'schedule': self._get_schedule(username),
-                        'current_date': self._get_game_date(username),
-                        'stamina': self._get_stamina(username)
-                    }
-            
-            # "4주스킵" 명령어: 4주일 자동 스킵
-            if user_message_clean == "4주스킵":
-                if current_state == "daily_routine":
-                    current_schedule = self._get_schedule(username)
-                    
-                    # 4주 동안 반복
-                    narration_parts = []
-                    for week_num in range(4):
-                        if current_schedule:
-                            self._apply_schedule_to_abilities(username)
-                        
-                        self._increment_week(username)
-                        current_week = self._get_current_week(username)
-                        self._reset_conversation_count(username)
-                        
-                        current_date = self._get_game_date(username)
-                        new_date = self._add_days_to_date(current_date, 7)
-                        self._set_game_date(username, new_date)
-                        
-                        # 시험 체크
-                        exam_month = self._check_exam_in_period(current_date, new_date)
-                        if exam_month:
-                            exam_scores = self._calculate_exam_scores(username, exam_month)
-                            exam_name = "수능" if exam_month.endswith("-11") else f"{exam_month[-2:]}월 모의고사"
-                            narration_parts.append(f"{exam_name} 성적이 발표되었습니다.")
-                    
-                    narration = f"4주가 완료되었습니다. 설정한 공부 시간만큼 실력이 향상되었어요!"
-                    if narration_parts:
-                        narration += "\n\n" + "\n".join(narration_parts)
-                    
-                    # 호감도에 따른 공부하러 가는 메시지 생성
-                    study_message = self._get_study_message_by_affection(current_affection)
-                    
-                    return {
-                        'reply': study_message,
-                        'image': None,
-                        'affection': current_affection,
-                        'game_state': current_state,
-                        'selected_subjects': self._get_selected_subjects(username),
-                        'narration': narration,
-                        'abilities': self._get_abilities(username),
-                        'schedule': self._get_schedule(username),
-                        'current_date': self._get_game_date(username),
-                        'stamina': self._get_stamina(username)
-                    }
-                else:
-                    return {
-                        'reply': "daily_routine 상태에서만 사용할 수 있습니다.",
-                        'image': None,
-                        'affection': current_affection,
-                        'game_state': current_state,
-                        'selected_subjects': self._get_selected_subjects(username),
-                        'narration': None,
-                        'abilities': self._get_abilities(username),
-                        'schedule': self._get_schedule(username),
-                        'current_date': self._get_game_date(username),
-                        'stamina': self._get_stamina(username)
-                    }
-            
-            # "호감도5올리기" 명령어: 호감도 5 증가
-            if user_message_clean == "호감도5올리기":
-                try:
-                    new_affection = min(100, current_affection + 5)
-                    self._set_affection(username, new_affection)
-                    print(f"[DEBUG] 호감도 증가: {current_affection} -> {new_affection}")
-                    
-                    # 안전하게 모든 값 가져오기
-                    try:
-                        selected_subjects = self._get_selected_subjects(username)
-                    except:
-                        selected_subjects = []
-                    
-                    try:
-                        abilities = self._get_abilities(username)
-                    except:
-                        abilities = {"국어": 0, "수학": 0, "영어": 0, "탐구1": 0, "탐구2": 0}
-                    
-                    try:
-                        schedule = self._get_schedule(username)
-                    except:
-                        schedule = {}
-                    
-                    try:
-                        current_date = self._get_game_date(username)
-                    except:
-                        current_date = "2023-11-17"
-                    
-                    try:
-                        stamina = self._get_stamina(username)
-                    except:
-                        stamina = 30
-                    
-                    return {
-                        'reply': f"호감도가 {current_affection}에서 {new_affection}으로 증가했습니다! (디버그 모드)",
-                        'image': None,
-                        'affection': new_affection,
-                        'game_state': current_state,
-                        'selected_subjects': selected_subjects,
-                        'narration': None,
-                        'abilities': abilities,
-                        'schedule': schedule,
-                        'current_date': current_date,
-                        'stamina': stamina
-                    }
-                except Exception as e:
-                    print(f"[ERROR] 호감도5올리기 명령어 처리 실패: {e}")
-                    import traceback
-                    traceback.print_exc()
-                    # 기본 응답 반환
-                    return {
-                        'reply': f"호감도가 증가했습니다! (디버그 모드)",
-                        'image': None,
-                        'affection': min(100, current_affection + 5),
-                        'game_state': current_state,
-                        'selected_subjects': [],
-                        'narration': None,
-                        'abilities': {"국어": 0, "수학": 0, "영어": 0, "탐구1": 0, "탐구2": 0},
-                        'schedule': {},
-                        'current_date': "2023-11-17",
-                        'stamina': 30
-                    }
-            
-            # "만점" 명령어: 모든 능력치를 2500으로 설정
-            if user_message_clean == "만점":
-                try:
-                    max_abilities = {
-                        "국어": 2500,
-                        "수학": 2500,
-                        "영어": 2500,
-                        "탐구1": 2500,
-                        "탐구2": 2500
-                    }
-                    self._set_abilities(username, max_abilities)
-                    print(f"[DEBUG] 모든 능력치를 2500으로 설정했습니다.")
-                    
-                    # 안전하게 모든 값 가져오기
-                    try:
-                        selected_subjects = self._get_selected_subjects(username)
-                    except:
-                        selected_subjects = []
-                    
-                    try:
-                        schedule = self._get_schedule(username)
-                    except:
-                        schedule = {}
-                    
-                    try:
-                        current_date = self._get_game_date(username)
-                    except:
-                        current_date = "2023-11-17"
-                    
-                    try:
-                        stamina = self._get_stamina(username)
-                    except:
-                        stamina = 30
-                    
-                    return {
-                        'reply': "모든 능력치가 2500으로 설정되었습니다! (디버그 모드)",
-                        'image': None,
-                        'affection': current_affection,
-                        'game_state': current_state,
-                        'selected_subjects': selected_subjects,
-                        'narration': None,
-                        'abilities': max_abilities,
-                        'schedule': schedule,
-                        'current_date': current_date,
-                        'stamina': stamina
-                    }
-                except Exception as e:
-                    print(f"[ERROR] 만점 명령어 처리 실패: {e}")
-                    import traceback
-                    traceback.print_exc()
-                    # 기본 응답 반환
-                    return {
-                        'reply': "능력치가 설정되었습니다! (디버그 모드)",
-                        'image': None,
-                        'affection': current_affection,
-                        'game_state': current_state,
-                        'selected_subjects': [],
-                        'narration': None,
-                        'abilities': {"국어": 2500, "수학": 2500, "영어": 2500, "탐구1": 2500, "탐구2": 2500},
-                        'schedule': {},
-                        'current_date': "2023-11-17",
-                        'stamina': 30
-                    }
+            debug_response = self._handle_debug_command(user_message, username, current_state, current_affection)
+            if debug_response:
+                return debug_response
             
             # [1.3] 프롬프트 공격 감지
             if self._check_prompt_injection(user_message):
