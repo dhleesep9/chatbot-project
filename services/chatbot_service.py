@@ -230,7 +230,7 @@ class ChatbotService:
         별도 JSON 파일들에서 state 정보 로드
         """
         states = {}
-        state_machine = self.config.get("narration", {}).get("state_machine", {})
+        state_machine = self.config.get("state_machine", {})
         states_directory = state_machine.get("states_directory", "config/states")
         available_states = state_machine.get("available_states", [])
 
@@ -1021,8 +1021,7 @@ class ChatbotService:
         프롬프트 공격(주입) 감지
         반환값: True면 공격으로 감지됨
         """
-        narration_cfg = self.config.get("narration", {})
-        injection_cfg = narration_cfg.get("prompt_injection_detection", {})
+        injection_cfg = self.config.get("prompt_injection_detection", {})
         
         if not injection_cfg.get("enabled", True):
             return False
@@ -1410,9 +1409,10 @@ class ChatbotService:
                     self._set_game_date(username, "2023-11-17")
                     # 호감도 확인 (초기값 5)
                     current_affection = self._get_affection(username)
-                    # 나레이션 생성
+                    # 나레이션 생성 (start state의 narration 사용)
                     try:
-                        narration = self._get_narration("game_start")
+                        start_state_info = self._get_state_info("start")
+                        narration = start_state_info.get("narration")
                     except Exception as e:
                         print(f"[WARN] 나레이션 생성 실패: {e}")
                         narration = None
@@ -1478,9 +1478,11 @@ class ChatbotService:
                 self._reset_conversation_count(username)
                 self.current_weeks[username] = 0
                 self._set_game_date(username, "2023-11-17")
-                
+
+                # 나레이션 생성 (start state의 narration 사용)
                 try:
-                    narration = self._get_narration("game_start")
+                    start_state_info = self._get_state_info("start")
+                    narration = start_state_info.get("narration")
                 except Exception as e:
                     print(f"[WARN] 나레이션 생성 실패: {e}")
                     narration = None
@@ -1759,7 +1761,7 @@ class ChatbotService:
             
             # [1.3] 프롬프트 공격 감지
             if self._check_prompt_injection(user_message):
-                injection_cfg = self.config.get("narration", {}).get("prompt_injection_detection", {})
+                injection_cfg = self.config.get("prompt_injection_detection", {})
                 block_message = injection_cfg.get("block_message", "죄송해요, 그런 말은 할 수 없어요. 게임을 정상적으로 플레이해주세요.")
                 return {
                     'reply': block_message,
