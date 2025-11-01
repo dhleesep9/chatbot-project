@@ -1239,14 +1239,15 @@ class ChatbotService:
     
     def _get_affection_tone(self, affection: int) -> str:
         """
-        호감도 구간에 따른 말투 지시사항 반환 (config에서 읽어옴)
+        호감도 구간에 따른 말투 지시사항 반환 (chatbot_config.json에서만 읽어옴)
         """
         affection_config = self.config.get("affection_tone", {})
-        
-        # config가 없으면 기본값 사용
+
+        # config가 없으면 경고하고 빈 문자열 반환
         if not affection_config:
-            return self._get_default_affection_tone(affection)
-        
+            print("[WARN] chatbot_config.json에 affection_tone 설정이 없습니다.")
+            return ""
+
         # 호감도 구간에 따라 config에서 읽어오기
         tone_config = None
         if affection <= 10:
@@ -1259,12 +1260,13 @@ class ChatbotService:
             tone_config = affection_config.get("high", {})
         else:  # 70~100
             tone_config = affection_config.get("very_high", {})
-        
+
         # tone 필드가 배열이면 조인, 문자열이면 그대로 반환
         tone = tone_config.get("tone", None)
         if tone is None:
-            return self._get_default_affection_tone(affection)
-        
+            print(f"[WARN] 호감도 구간 설정이 없습니다. (affection: {affection})")
+            return ""
+
         # 배열인 경우 \n으로 조인
         if isinstance(tone, list):
             return "\n".join(tone)
@@ -1272,59 +1274,9 @@ class ChatbotService:
         elif isinstance(tone, str):
             return tone
         else:
-            return self._get_default_affection_tone(affection)
-    
-    def _get_default_affection_tone(self, affection: int) -> str:
-        """
-        기본 호감도 말투 (config가 없을 때 사용)
-        """
-        if affection <= 10:
-            return """
-[호감도: 매우 낮음 (0~10)]
-- 매우 조심스럽고 방어적인 말투를 사용하세요.
-- '그건 저도 알아요...', '그런데 거기선...' 같은 방어적인 표현을 자주 사용하세요.
-- 선생님을 완전히 낯선 사람처럼 대하세요.
-- 짧고 신중하게 대답하며, 자세한 설명을 하지 마세요.
-- 거리를 최대한 두며 불신감을 보이세요.
-"""
-        elif affection <= 30:
-            return """
-[호감도: 낮음 (10~30)]
-- 여전히 조심스럽고 방어적인 말투를 사용하세요.
-- 하지만 '그럼... 좀 해볼게요'처럼 약간의 개방 신호를 보이세요.
-- 선생님에게 여전히 거리를 두지만, 가끔 의지하고 싶어하는 모습을 보이세요.
-- 짧게 대답하되, 약간 길게 설명할 수도 있어요.
-- 불신과 신뢰 사이에서 갈등하는 모습을 보이세요.
-"""
-        elif affection <= 50:
-            return """
-[호감도: 보통 (30~50)]
-- 조금씩 신뢰를 보이는 말투로 변화하세요.
-- '그럼 한번 해볼게요...', '선생님 말씀 듣고 해봤는데...' 같은 표현을 사용하세요.
-- 여전히 조심스럽지만, 조금 더 편하게 대화하세요.
-- 감정 기복이 있지만 좋을 때는 웃는 모습을 보이세요.
-- 선생님에게 의지하고 싶어하는 마음을 표현하세요.
-"""
-        elif affection <= 70:
-            return """
-[호감도: 높음 (50~70)]
-- 신뢰가 쌓인 말투로 변화하세요.
-- '선생님 덕분에...', '이제 좀 자신감이 생겼어요' 같은 표현을 사용하세요.
-- 더 편하게 대화하며, 자신의 감정을 솔직하게 표현하세요.
-- 선생님을 믿고 의지하는 모습을 보이세요.
-- 밈이나 웃는 표현을 자주 사용하세요.
-"""
-        else:  # 70~100
-            return """
-[호감도: 매우 높음 (70~100)]
-- 완전히 신뢰하는 말투로 변화하세요.
-- '선생님 정말 고마워요!', '선생님 덕분에 이렇게까지 올 수 있었어요!' 같은 표현을 사용하세요.
-- 매우 편하고 친근하게 대화하세요.
-- 선생님에게 감사하고 의지하는 마음을 자주 표현하세요.
-- 자신감이 생긴 모습을 보이되, 여전히 겸손하게 대하세요.
-- 웃는 표현과 긍정적인 말투를 자주 사용하세요.
-"""
-    
+            print(f"[WARN] tone 필드 형식이 올바르지 않습니다. (affection: {affection})")
+            return ""
+
     def _analyze_sentiment_with_llm(self, user_message: str) -> int:
         """
         LLM을 사용하여 사용자 메시지의 긍정/부정 정도를 분석하고 호감도 변화량 반환
