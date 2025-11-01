@@ -71,6 +71,11 @@ async function sendMessage(isInitial = false) {
       updateStaminaDisplay(data.stamina);
     }
 
+    // 멘탈 업데이트
+    if (data.mental !== undefined) {
+      updateMentalDisplay(data.mental);
+    }
+
     // 시간표 업데이트
     if (data.schedule !== undefined) {
       updateScheduleDisplay(data.schedule, data.game_state || "daily_routine");
@@ -151,7 +156,9 @@ function updateAbilitiesDisplay(abilities) {
   abilityNames.forEach((name) => {
     const abilityElem = document.getElementById(`ability-${name}`);
     if (abilityElem && abilities[name] !== undefined) {
-      abilityElem.textContent = abilities[name];
+      // 능력치를 정수로 표시
+      const abilityValue = Math.floor(abilities[name]);
+      abilityElem.textContent = abilityValue;
     }
   });
 }
@@ -189,6 +196,22 @@ function updateStaminaDisplay(stamina) {
   const efficiency = 100 + (stamina - 30);
   if (staminaEfficiency) {
     staminaEfficiency.textContent = `(효율: ${efficiency}%)`;
+  }
+}
+
+// 멘탈 표시 업데이트
+function updateMentalDisplay(mental) {
+  const mentalValue = document.getElementById("mental-value");
+  const mentalEfficiency = document.getElementById("mental-efficiency");
+
+  if (mentalValue) {
+    mentalValue.textContent = mental;
+  }
+
+  // 멘탈에 따른 효율 계산: 효율(%) = 100 + (멘탈 - 40)
+  const efficiency = 100 + (mental - 40);
+  if (mentalEfficiency) {
+    mentalEfficiency.textContent = `(효율: ${efficiency}%)`;
   }
 }
 
@@ -260,6 +283,7 @@ function saveGameState(data) {
       abilities: data.abilities,
       affection: data.affection,
       stamina: data.stamina,
+      mental: data.mental,
       schedule: data.schedule,
       current_date: data.current_date,
       game_state: data.game_state,
@@ -314,6 +338,11 @@ function loadGameState() {
       // 체력 복원
       if (gameState.stamina !== undefined) {
         updateStaminaDisplay(gameState.stamina);
+      }
+
+      // 멘탈 복원
+      if (gameState.mental !== undefined) {
+        updateMentalDisplay(gameState.mental);
       }
 
       // 시간표 복원

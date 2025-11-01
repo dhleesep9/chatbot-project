@@ -208,6 +208,14 @@ class ChatbotService:
         self.staminas = {}  # {username: stamina_value}
         print("[ChatbotService] 체력 시스템 초기화 완료")
 
+        # 9.5. 멘탈 저장 (기본값 40)
+        self.mentals = {}  # {username: mental_value}
+        print("[ChatbotService] 멘탈 시스템 초기화 완료")
+
+        # 9.6. 사설모의고사 취약점 정보 저장 (피드백용)
+        self.mock_exam_weakness = {}  # {username: {"subject": str, "message": str}}
+        print("[ChatbotService] 사설모의고사 취약점 저장 시스템 초기화 완료")
+
         # 9. 대화 횟수 추적 (daily_routine 상태에서만)
         self.conversation_counts = {}  # {username: count}
         print("[ChatbotService] 대화 횟수 시스템 초기화 완료")
@@ -311,7 +319,8 @@ class ChatbotService:
                         'abilities': self._get_abilities(username),
                         'schedule': self._get_schedule(username),
                         'current_date': self._get_game_date(username),
-                        'stamina': self._get_stamina(username)
+                        'stamina': self._get_stamina(username),
+                        'mental': self._get_mental(username)
                     }
 
                 # action 실행
@@ -345,6 +354,12 @@ class ChatbotService:
             current_date = self._get_game_date(username)
             new_date = self._add_days_to_date(current_date, 7)
             self._set_game_date(username, new_date)
+            
+            # 1주 경과 시 체력 -1
+            current_stamina = self._get_stamina(username)
+            new_stamina = max(0, current_stamina - 1)
+            self._set_stamina(username, new_stamina)
+            print(f"[STAMINA] {username}의 체력이 {current_stamina}에서 {new_stamina}로 변경되었습니다. (1주 경과로 -1)")
 
             # 시험 체크
             exam_month = self._check_exam_in_period(current_date, new_date)
@@ -377,7 +392,8 @@ class ChatbotService:
             'abilities': self._get_abilities(username),
             'schedule': self._get_schedule(username),
             'current_date': final_date,
-            'stamina': self._get_stamina(username)
+            'stamina': self._get_stamina(username),
+            'mental': self._get_mental(username)
         }
 
     def _debug_increase_affection(self, username: str, current_affection: int, current_state: str, parameters: dict, command: dict) -> dict:
@@ -401,7 +417,8 @@ class ChatbotService:
             'abilities': self._get_abilities(username),
             'schedule': self._get_schedule(username),
             'current_date': self._get_game_date(username),
-            'stamina': self._get_stamina(username)
+            'stamina': self._get_stamina(username),
+            'mental': self._get_mental(username)
         }
 
     def _debug_set_max_abilities(self, username: str, current_affection: int, current_state: str, parameters: dict, command: dict) -> dict:
@@ -429,7 +446,8 @@ class ChatbotService:
             'abilities': max_abilities,
             'schedule': self._get_schedule(username),
             'current_date': self._get_game_date(username),
-            'stamina': self._get_stamina(username)
+            'stamina': self._get_stamina(username),
+            'mental': self._get_mental(username)
         }
 
 
@@ -550,7 +568,8 @@ class ChatbotService:
                 "conversation_count": self._get_conversation_count(username),
                 "current_week": self._get_current_week(username),
                 "game_date": self._get_game_date(username),
-                "stamina": self._get_stamina(username)
+                "stamina": self._get_stamina(username),
+                "mental": self._get_mental(username)
             }
 
             user_file = BASE_DIR / f"data/users/{username}.json"
@@ -587,6 +606,7 @@ class ChatbotService:
             self.current_weeks[username] = user_data.get("current_week", 0)
             self.game_dates[username] = user_data.get("game_date", "2023-11-17")
             self.staminas[username] = user_data.get("stamina", 30)
+            self.mentals[username] = user_data.get("mental", 40)
 
             print(f"[STORAGE] {username} 데이터 로드 완료")
         except Exception as e:
@@ -629,6 +649,19 @@ class ChatbotService:
         self.staminas[username] = max(0, stamina)  # 체력은 0 이상
         self._save_user_data(username)  # 변경사항 저장
     
+    def _get_mental(self, username: str) -> int:
+        """
+        사용자의 현재 멘탈 반환 (없으면 기본값 40)
+        """
+        return self.mentals.get(username, 40)
+    
+    def _set_mental(self, username: str, mental: int):
+        """
+        사용자의 멘탈 설정 (0~100 범위)
+        """
+        self.mentals[username] = max(0, min(100, mental))  # 멘탈은 0~100
+        self._save_user_data(username)  # 변경사항 저장
+    
     def _calculate_stamina_efficiency(self, stamina: int) -> float:
         """
         체력에 따른 능력치 증가 효율 계산
@@ -641,6 +674,30 @@ class ChatbotService:
         - 체력 100: 170%
         """
         return 100 + (stamina - 30)
+    
+    def _calculate_mental_efficiency(self, mental: int) -> float:
+        """
+        멘탈에 따른 능력치 증가 효율 계산
+        공식: 효율(%) = 100 + (멘탈 - 40)
+        예시:
+        - 멘탈 40: 100%
+        - 멘탈 50: 110%
+        - 멘탈 30: 90%
+        - 멘탈 100: 160%
+        """
+        return 100 + (mental - 40)
+    
+    def _calculate_combined_efficiency(self, stamina: int, mental: int) -> float:
+        """
+        체력과 멘탈의 곱연산으로 최종 효율 계산
+        공식: (체력 효율 * 멘탈 효율) / 100
+        예시:
+        - 체력 31(101%), 멘탈 50(110%): 101 * 110 / 100 = 111.1%
+        - 체력 30(100%), 멘탈 40(100%): 100 * 100 / 100 = 100%
+        """
+        stamina_eff = self._calculate_stamina_efficiency(stamina)
+        mental_eff = self._calculate_mental_efficiency(mental)
+        return (stamina_eff * mental_eff) / 100.0
     
     def _get_game_state(self, username: str) -> str:
         """
@@ -678,6 +735,11 @@ class ChatbotService:
             조건 만족 여부
         """
         trigger_type = transition.get("trigger_type")
+        
+        # 트리거가 등록되어 있는지 확인
+        if not self.trigger_registry.has_trigger(trigger_type):
+            print(f"[WARN] Trigger type '{trigger_type}' not found in registry. Available triggers: {self.trigger_registry.list_triggers()}")
+            return False
 
         # 트리거 실행 컨텍스트 구성
         context = {
@@ -686,9 +748,14 @@ class ChatbotService:
             'affection_increased': affection_increased,
             'service': self  # 트리거가 서비스 메서드에 접근할 수 있도록
         }
+        
+        print(f"[TRIGGER_EVAL] Evaluating trigger '{trigger_type}' with user_message: '{user_message}'")
 
         # 트리거 레지스트리를 통해 동적으로 트리거 실행
-        return self.trigger_registry.evaluate_trigger(trigger_type, transition, context)
+        result = self.trigger_registry.evaluate_trigger(trigger_type, transition, context)
+        print(f"[TRIGGER_EVAL] Trigger '{trigger_type}' result: {result}")
+        
+        return result
 
     def _check_state_transition(self, username: str, new_affection: int, affection_increased: int = 0, user_message: str = "") -> tuple:
         """
@@ -713,9 +780,14 @@ class ChatbotService:
 
         # 각 전이 조건 확인
         for transition in transitions:
-            print(f"[STATE_CHECK] Checking transition: {transition.get('trigger_type')} -> {transition.get('next_state')}")
-            if self._evaluate_transition_condition(username, transition, affection_increased, user_message):
-                next_state = transition.get("next_state")
+            trigger_type = transition.get('trigger_type')
+            next_state = transition.get('next_state')
+            print(f"[STATE_CHECK] Checking transition: {trigger_type} -> {next_state}")
+            
+            result = self._evaluate_transition_condition(username, transition, affection_increased, user_message)
+            print(f"[STATE_CHECK] Transition evaluation result: {result} for trigger_type '{trigger_type}'")
+            
+            if result:
                 transition_narration = transition.get("transition_narration")
 
                 # 상태 전이 실행
@@ -1068,15 +1140,80 @@ class ChatbotService:
         
         abilities = self._get_abilities(username)
         stamina = self._get_stamina(username)
-        efficiency = self._calculate_stamina_efficiency(stamina) / 100.0  # 효율을 배율로 변환 (1.0 = 100%)
+        mental = self._get_mental(username)
+        efficiency = self._calculate_combined_efficiency(stamina, mental) / 100.0  # 효율을 배율로 변환 (1.0 = 100%)
         
         for subject, hours in schedule.items():
             if subject in abilities:
-                # 체력에 따른 효율 적용: 시간 * 효율
+                # 체력과 멘탈의 곱연산 효율 적용: 시간 * 효율
                 increased = hours * efficiency
                 abilities[subject] = min(2500, abilities[subject] + increased)  # 최대 2500
         
         self._set_abilities(username, abilities)
+    
+    def _advance_one_week(self, username: str) -> dict:
+        """
+        1주일을 진행시키는 통합 메서드
+        시간표에 따라 능력치를 증가시키고, 날짜와 주차를 업데이트합니다.
+        
+        Returns:
+            dict: 시험 결과 정보 (시험이 있었으면 포함)
+        """
+        current_schedule = self._get_schedule(username)
+        current_date = self._get_game_date(username)
+        
+        # 시간표에 따라 능력치 증가
+        if current_schedule:
+            self._apply_schedule_to_abilities(username)
+            print(f"[WEEK] {username}의 1주일이 경과했습니다. 능력치가 증가했습니다.")
+            print(f"[ABILITIES] 현재 능력치: {self._get_abilities(username)}")
+        
+        # 주차 증가
+        self._increment_week(username)
+        current_week = self._get_current_week(username)
+        
+        # 1주 경과 시 체력 -1
+        current_stamina = self._get_stamina(username)
+        new_stamina = max(0, current_stamina - 1)
+        self._set_stamina(username, new_stamina)
+        print(f"[STAMINA] {username}의 체력이 {current_stamina}에서 {new_stamina}로 변경되었습니다. (1주 경과로 -1)")
+        
+        # 날짜 7일 증가
+        new_date = self._add_days_to_date(current_date, 7)
+        self._set_game_date(username, new_date)
+        
+        # 대화 횟수 초기화 (1주 경과 후 리셋)
+        self._reset_conversation_count(username)
+        
+        # 시험 체크
+        exam_month = self._check_exam_in_period(current_date, new_date)
+        exam_result = None
+        
+        if exam_month:
+            # 시험 성적 계산
+            exam_scores = self._calculate_exam_scores(username, exam_month)
+            exam_name = "수능" if exam_month.endswith("-11") else f"{exam_month[-2:]}월 모의고사"
+            
+            subjects = ["국어", "수학", "영어", "탐구1", "탐구2"]
+            exam_scores_text = f"{exam_name} 성적이 발표되었습니다:\n"
+            score_lines = []
+            for subject in subjects:
+                if subject in exam_scores:
+                    score_data = exam_scores[subject]
+                    score_lines.append(f"- {subject}: {score_data['grade']}등급 (백분위 {score_data['percentile']}%)")
+            
+            exam_scores_text += "\n".join(score_lines)
+            exam_result = {
+                "name": exam_name,
+                "scores": exam_scores,
+                "text": exam_scores_text
+            }
+        
+        return {
+            "week": current_week,
+            "date": new_date,
+            "exam": exam_result
+        }
     
     def _calculate_percentile(self, ability: int) -> float:
         """
@@ -1224,6 +1361,195 @@ class ChatbotService:
         
         print(f"[EXAM] {username}의 {exam_month} 시험 성적 계산: {scores}")
         return scores
+    
+    def _calculate_mock_exam_scores(self, username: str) -> dict:
+        """
+        사설모의고사 성적 계산 (능력치 기반)
+        """
+        abilities = self._get_abilities(username)
+        scores = {}
+        
+        for subject, ability in abilities.items():
+            percentile = self._calculate_percentile(ability)
+            grade = self._calculate_grade_from_percentile(percentile)
+            scores[subject] = {
+                "grade": grade,
+                "percentile": round(percentile, 1)
+            }
+        
+        print(f"[MOCK_EXAM] {username}의 사설모의고사 성적 계산: {scores}")
+        return scores
+    
+    def _identify_weak_subject(self, exam_scores: dict) -> str:
+        """
+        시험 점수에서 가장 취약한 과목 식별 (등급이 가장 낮은 과목)
+        """
+        if not exam_scores:
+            return "수학"  # 기본값
+        
+        # 등급이 가장 높은(숫자가 큰) 과목을 취약 과목으로 선택
+        weak_subject = max(exam_scores.items(), key=lambda x: x[1]['grade'])
+        return weak_subject[0]
+    
+    def _generate_weakness_message(self, subject: str, score_data: dict) -> str:
+        """
+        취약 과목에 대한 취약점 메시지 생성 (과목별 다양한 예시)
+        """
+        weakness_examples = {
+            "국어": [
+                "국어에서 선택과목 시간에 시간을 다 써버려서 비문학 지문을 제대로 읽지 못했어요...",
+                "국어에서 문학 작품 해석이 너무 어려웠어요. 작가의 의도를 파악하지 못했어요.",
+                "국어 비문학 지문이 너무 길어서 읽는 속도가 느렸어요. 시간이 부족했어요.",
+                "국어에서 고전 문학 부분을 제대로 이해하지 못했어요. 한자어가 많아서 어려웠어요.",
+                "국어 화법 작문에서는 시간이 부족해서 대충 썼어요. 구조화된 글쓰기가 어려웠어요."
+            ],
+            "수학": [
+                "수학에서 미적분 문제를 풀다가 시간이 너무 많이 걸렸어요...",
+                "수학 기하 문제에서 도형을 그려도 풀이 방법이 생각이 안 났어요.",
+                "수학에서 확률과 통계 부분을 완전히 틀렸어요. 경우의 수를 세는 게 헷갈렸어요.",
+                "수학에서 삼각함수 문제가 너무 어려웠어요. 공식을 외웠는데 적용이 안 됐어요.",
+                "수학 계산 실수가 너무 많았어요. 과정은 맞는데 답이 틀렸어요."
+            ],
+            "영어": [
+                "영어에서 독해 지문을 읽고 문제를 풀 때 시간이 부족했어요...",
+                "영어 어휘 문제에서 모르는 단어가 너무 많아서 문맥으로 유추했는데 틀렸어요.",
+                "영어 문법 문제를 풀 때 시제를 헷갈려서 틀렸어요.",
+                "영어에서 빈칸 채우기 문제가 어려웠어요. 문맥을 파악하지 못했어요.",
+                "영어 작문 문제에서 표현이 자연스럽지 않아서 점수를 많이 깎였어요."
+            ],
+            "탐구1": [
+                "탐구1에서 개념 문제는 알겠는데, 응용 문제가 너무 어려웠어요...",
+                "탐구1에서 실험 문제를 풀 때 실험 과정을 제대로 이해하지 못했어요.",
+                "탐구1에서 그래프 분석 문제가 헷갈렸어요. 데이터를 읽는 게 어려웠어요.",
+                "탐구1에서 서술형 문제에서 답은 맞는데 표현이 부족해서 점수를 못 받았어요.",
+                "탐구1에서 선택지가 비슷비슷해서 구분하기가 어려웠어요."
+            ],
+            "탐구2": [
+                "탐구2에서 시간 분배가 안 되어서 마지막 문제들을 대충 풀었어요...",
+                "탐구2에서 개념 연결 문제가 너무 어려웠어요. 서로 다른 개념을 연결하는 게 힘들었어요.",
+                "탐구2에서 계산 문제에서 단위 변환을 실수했어요.",
+                "탐구2에서 문제 해석이 어려웠어요. 문제가 뭘 요구하는지 모르겠었어요.",
+                "탐구2에서 기출 문제는 풀었는데, 새로 나온 유형은 전혀 몰랐어요."
+            ]
+        }
+        
+        import random
+        examples = weakness_examples.get(subject, weakness_examples["수학"])
+        return random.choice(examples)
+    
+    def _check_if_advice_given(self, user_message: str) -> bool:
+        """
+        사용자 메시지에 조언이 포함되어 있는지 확인
+        """
+        advice_keywords = ["이렇게", "이런", "조언", "팁", "방법", "해보", "시도", "추천", "제안", "도움", "알려", "가르쳐"]
+        user_lower = user_message.lower()
+        
+        for keyword in advice_keywords:
+            if keyword in user_lower:
+                return True
+        
+        # 메시지가 충분히 길면 조언으로 간주
+        if len(user_message.strip()) > 10:
+            return True
+        
+        return False
+    
+    def _judge_advice_quality(self, username: str, advice: str, weak_subject: str, weakness_message: str) -> bool:
+        """
+        LLM을 사용하여 플레이어의 조언이 적절한지 판단
+        chatbot_config.json에서 프롬프트 설정을 로드합니다.
+        """
+        try:
+            if not self.client:
+                # LLM이 없으면 기본적으로 적절하다고 판단 (절반 확률)
+                import random
+                return random.choice([True, False])
+            
+            # chatbot_config.json에서 판단 설정 로드
+            judgment_config = self.config.get("mock_exam_advice_judgment", {})
+            system_prompt = judgment_config.get(
+                "system_prompt", 
+                "당신은 교육 전문가입니다. 조언의 적절성을 판단하세요."
+            )
+            user_prompt_template = judgment_config.get(
+                "user_prompt_template",
+                "플레이어(멘토)가 다음과 같은 조언을 했습니다:\n{advice}\n\n이 조언이 긍정적인 말투를 사용했는지만 판단해주세요. 취약점 해결 여부나 조언의 적절성은 전혀 고려하지 마세요.\n\n조언이 긍정적인 말투(격려, 칭찬, 위로, 다정한 표현 등)를 사용했다면 무조건 \"YES\", 부정적이거나 비판적인 말투를 사용했다면 \"NO\"만 답변해주세요."
+            )
+            temperature = judgment_config.get("temperature", 0.3)
+            max_tokens = judgment_config.get("max_tokens", 10)
+            positive_keywords = judgment_config.get("positive_keywords", ["YES", "적절", "좋", "도움", "유용", "효과적", "격려", "긍정"])
+            negative_keywords = judgment_config.get("negative_keywords", ["NO", "부적절", "나쁨", "무도움", "비효과적", "비판", "부정"])
+            
+            # 프롬프트 템플릿에 변수 치환 (advice만 사용)
+            # 템플릿에 있는 변수만 format
+            try:
+                # advice 변수만 있는지 확인하고 format
+                if "{advice}" in user_prompt_template:
+                    judgment_prompt = user_prompt_template.format(advice=advice)
+                elif "{weak_subject}" in user_prompt_template or "{weakness_message}" in user_prompt_template:
+                    # 이전 형식 지원 (하위 호환성)
+                    judgment_prompt = user_prompt_template.format(
+                        weak_subject=weak_subject,
+                        weakness_message=weakness_message,
+                        advice=advice
+                    )
+                else:
+                    # 변수가 없으면 그대로 사용하고 advice만 추가
+                    judgment_prompt = user_prompt_template + f"\n\n조언: {advice}"
+            except KeyError as e:
+                # 변수 치환 실패 시 advice만 추가
+                print(f"[WARN] Prompt template format error: {e}. Using advice directly.")
+                judgment_prompt = user_prompt_template.replace("{advice}", advice) if "{advice}" in user_prompt_template else f"{user_prompt_template}\n\n조언: {advice}"
+
+            response = self.client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": judgment_prompt}
+                ],
+                temperature=temperature,
+                max_tokens=max_tokens
+            )
+            
+            judgment = response.choices[0].message.content.strip().upper()
+            
+            print(f"[ADVICE_JUDGE] LLM 원본 응답: {response.choices[0].message.content.strip()}")
+            
+            # 키워드 기반 판단
+            judgment_upper = judgment.upper()
+            has_positive = any(keyword.upper() in judgment_upper for keyword in positive_keywords)
+            has_negative = any(keyword.upper() in judgment_upper for keyword in negative_keywords)
+            
+            print(f"[ADVICE_JUDGE] Positive keywords found: {has_positive}, Negative keywords found: {has_negative}")
+            print(f"[ADVICE_JUDGE] Judgment upper: {judgment_upper}")
+            
+            if has_positive:
+                is_good = True
+                print(f"[ADVICE_JUDGE] 긍정 키워드 발견 - YES로 판단")
+            elif has_negative:
+                is_good = False
+                print(f"[ADVICE_JUDGE] 부정 키워드 발견 - NO로 판단")
+            else:
+                # 키워드가 없으면 응답 내용을 다시 확인
+                # "YES" 또는 "NO"가 직접 포함되어 있는지 확인
+                if "YES" in judgment_upper or "예" in judgment or "좋" in judgment or "긍정" in judgment:
+                    is_good = True
+                    print(f"[ADVICE_JUDGE] 직접 확인 - YES로 판단")
+                elif "NO" in judgment_upper or "아니" in judgment or "부정" in judgment or "나쁨" in judgment:
+                    is_good = False
+                    print(f"[ADVICE_JUDGE] 직접 확인 - NO로 판단")
+                else:
+                    # 키워드가 없으면 기본적으로 적절하다고 판단 (긍정적 말투면 보상)
+                    is_good = True
+                    print(f"[ADVICE_JUDGE] 키워드 없음 - 기본값 YES로 판단")
+            
+            print(f"[ADVICE_JUDGE] 최종 판단 결과: {is_good} (judgment: '{judgment}')")
+            return is_good
+            
+        except Exception as e:
+            print(f"[ERROR] 조언 판단 실패: {e}")
+            # 오류 시 기본적으로 적절하다고 판단
+            return True
     
     def _check_prompt_injection(self, user_message: str) -> bool:
         """
@@ -1506,10 +1832,10 @@ class ChatbotService:
                 prompt_parts.append("[선택된 탐구과목: 없음]")
                 prompt_parts.append("(아직 탐구과목을 선택하지 않았습니다. 자연스럽게 선택과목을 선택하도록 유도하세요.)")
 
-        # 시간표 설정 안내 (daily_routine 단계)
+        # 시간표 설정 안내 (daily_routine 단계에서는 14시간 제한 정보를 주지 않음)
         if game_state == "daily_routine":
             if not schedule_set:
-                prompt_parts.append("[중요] 아직 주간 학습 시간표가 설정되지 않았습니다. 플레이어에게 14시간을 자유롭게 분배하여 시간표를 설정하도록 안내하세요. 예: '수학4시간 국어4시간 영어4시간 탐구1 1시간 탐구2 1시간'")
+                prompt_parts.append("[중요] 아직 주간 학습 시간표가 설정되지 않았습니다. 플레이어에게 '학습 시간표 관리'를 통해 시간표를 설정하도록 자연스럽게 안내하세요. 14시간 제한이나 구체적인 시간표 형식은 언급하지 마세요.")
 
         # 프롬프트 조립
         sys_prompt = "\n\n".join(prompt_parts)
@@ -1694,6 +2020,29 @@ class ChatbotService:
             if state_changed and transition_narration:
                 narration = transition_narration
             
+            # 학습시간표 관리 상태로 전이될 때 특별한 메시지 생성
+            study_schedule_transition_reply = None
+            if state_changed and new_state == "study_schedule":
+                study_schedule_transition_reply = "14시간 안에 어떻게 분배를 해야할까요?"
+            
+            # [1.6.5] "멘토링 종료" 트리거 처리 (어떤 상태에서든 가능)
+            week_advanced = False
+            week_advance_narration = None
+            if "멘토링 종료" in user_message:
+                week_result = self._advance_one_week(username)
+                week_advanced = True
+                week_advance_narration = f"{week_result['week']}주차가 완료되었습니다."
+                if week_result['exam']:
+                    week_advance_narration += f"\n\n{week_result['exam']['text']}"
+                print(f"[TIME] {username}이(가) '멘토링 종료'를 입력하여 시간을 1주 진행했습니다.")
+            
+            # "멘토링 종료" 처리 시 나레이션 추가 (상태 전이 나레이션보다 우선)
+            if week_advanced and week_advance_narration:
+                if narration:
+                    narration = f"{narration}\n\n{week_advance_narration}"
+                else:
+                    narration = week_advance_narration
+            
             # [1.7] 선택과목 선택 처리 (icebreak 단계에서만)
             selected_subjects = self._get_selected_subjects(username)
             subject_selected_in_this_turn = False
@@ -1752,10 +2101,150 @@ class ChatbotService:
                     subjects_list = self._get_subject_list_text()
                     # 프롬프트에 선택과목 목록 추가될 수 있도록 처리
             
-            # [1.8] 시간표 처리 (일상 루프 단계에서만)
+            # [1.7.5] 사설모의고사 응시 처리
+            mock_exam_processed = False
+            mock_exam_scores = None
+            weak_subject = None
+            weakness_message = None
+            mock_exam_weakness_reply = None  # 취약점 메시지를 reply에 포함시키기 위한 변수
+            
+            if new_state == "mock_exam" and current_state != "mock_exam":
+                # 사설모의고사 응시 - 성적표 생성
+                mock_exam_scores = self._calculate_mock_exam_scores(username)
+                weak_subject = self._identify_weak_subject(mock_exam_scores)
+                weakness_message = self._generate_weakness_message(weak_subject, mock_exam_scores.get(weak_subject, {}))
+                
+                # 성적표 나레이션 생성 (취약점 메시지는 나레이션에 포함하지 않음)
+                score_lines = []
+                for subject, score_data in mock_exam_scores.items():
+                    score_lines.append(f"- {subject}: {score_data['grade']}등급 (백분위 {score_data['percentile']}%)")
+                
+                mock_exam_narration = "사설모의고사 성적표가 발표되었습니다:\n" + "\n".join(score_lines)
+                
+                if not narration:
+                    narration = mock_exam_narration
+                else:
+                    narration = f"{narration}\n\n{mock_exam_narration}"
+                
+                # 취약점 메시지는 reply에 포함시킬 플래그 설정 (나중에 reply에 추가)
+                mock_exam_weakness_reply = weakness_message
+                
+                # 취약점 정보 저장 (피드백에서 사용)
+                self.mock_exam_weakness[username] = {
+                    "subject": weak_subject,
+                    "message": weakness_message
+                }
+                
+                # 상태를 mock_exam_feedback으로 전이
+                self._set_game_state(username, "mock_exam_feedback")
+                new_state = "mock_exam_feedback"
+                mock_exam_processed = True
+                print(f"[MOCK_EXAM] {username}의 사설모의고사 성적표 생성 완료. 취약 과목: {weak_subject}")
+            
+            # [1.7.6] 사설모의고사 피드백 처리 (조언 판단)
+            if new_state == "mock_exam_feedback":
+                # 저장된 취약점 정보 가져오기
+                weakness_info = self.mock_exam_weakness.get(username, {})
+                current_weak_subject = weakness_info.get("subject")
+                current_weakness_message = weakness_info.get("message")
+                
+                if current_weak_subject and current_weakness_message:
+                    # 취약점이 언급되었고, 플레이어가 조언을 주었는지 확인
+                    advice_given = self._check_if_advice_given(user_message)
+                    
+                    if advice_given:
+                        # LLM으로 조언 적절성 판단
+                        is_advice_good = self._judge_advice_quality(username, user_message, current_weak_subject, current_weakness_message)
+                        
+                        if is_advice_good:
+                            # 조언이 적절함: 호감도 +2, 멘탈 +5, 해당과목 +10
+                            new_affection = min(100, new_affection + 2)
+                            self._set_affection(username, new_affection)
+                            
+                            current_mental = self._get_mental(username)
+                            new_mental = min(100, current_mental + 5)
+                            self._set_mental(username, new_mental)
+                            
+                            abilities = self._get_abilities(username)
+                            if current_weak_subject in abilities:
+                                abilities[current_weak_subject] = min(2500, abilities[current_weak_subject] + 10)
+                                self._set_abilities(username, abilities)
+                            
+                            if not narration:
+                                narration = f"좋은 조언이었어요! {current_weak_subject} 능력치가 10, 호감도 +2, 멘탈 +5 증가했습니다."
+                            else:
+                                narration = f"{narration}\n\n좋은 조언이었어요! 호감도 +2, 멘탈 +5, {current_weak_subject} 능력치 +10"
+                            
+                            # 취약점 정보 초기화 (한 번만 보상)
+                            if username in self.mock_exam_weakness:
+                                del self.mock_exam_weakness[username]
+                            
+                            # 피드백 완료 후 일상루틴으로 전이
+                            self._set_game_state(username, "daily_routine")
+                            new_state = "daily_routine"
+                            if narration:
+                                narration = f"{narration}\n\n일상 루틴으로 돌아갑니다."
+                            else:
+                                narration = "일상 루틴으로 돌아갑니다."
+                            
+                            print(f"[MOCK_EXAM] 조언 적절함 - 호감도 +2, 멘탈 +5, {current_weak_subject} +10, daily_routine으로 전이")
+                        else:
+                            # 조언이 부적절함: 호감도 -2, 멘탈 -2
+                            new_affection = max(0, new_affection - 2)
+                            self._set_affection(username, new_affection)
+                            
+                            current_mental = self._get_mental(username)
+                            new_mental = max(0, current_mental - 2)
+                            self._set_mental(username, new_mental)
+                            
+                            if not narration:
+                                narration = "조언이 잘못되었어요. 호감도와 멘탈이 감소했습니다."
+                            else:
+                                narration = f"{narration}\n\n조언이 잘못되었어요. 호감도 -2, 멘탈 -2"
+                            
+                            # 취약점 정보 초기화 (한 번만 페널티)
+                            if username in self.mock_exam_weakness:
+                                del self.mock_exam_weakness[username]
+                            
+                            # 피드백 완료 후 일상루틴으로 전이
+                            self._set_game_state(username, "daily_routine")
+                            new_state = "daily_routine"
+                            if narration:
+                                narration = f"{narration}\n\n일상 루틴으로 돌아갑니다."
+                            else:
+                                narration = "일상 루틴으로 돌아갑니다."
+                            
+                            print(f"[MOCK_EXAM] 조언 부적절함 - 호감도 -2, 멘탈 -2, daily_routine으로 전이")
+            
+            # [1.7.7] 일상루틴 단계에서 운동/휴식 조언 처리
+            stamina_recovered = False
+            if new_state == "daily_routine":
+                # 사용자 메시지에서 운동/휴식 관련 조언 확인
+                exercise_keywords = ["운동", "운동하", "체력 회복", "활동", "스트레칭"]
+                rest_keywords = ["휴식", "쉬", "휴식하", "쉬어", "편히", "안정"]
+                
+                user_message_lower = user_message.lower()
+                has_exercise_advice = any(keyword in user_message_lower for keyword in exercise_keywords)
+                has_rest_advice = any(keyword in user_message_lower for keyword in rest_keywords)
+                
+                if has_exercise_advice or has_rest_advice:
+                    current_stamina = self._get_stamina(username)
+                    new_stamina = min(100, current_stamina + 3)  # 최대 100
+                    self._set_stamina(username, new_stamina)
+                    stamina_recovered = True
+                    
+                    advice_type = "운동" if has_exercise_advice else "휴식"
+                    if not narration:
+                        narration = f"{advice_type} 조언을 따라 체력이 3 회복되었습니다. (현재 체력: {new_stamina})"
+                    else:
+                        narration = f"{narration}\n\n{advice_type} 조언을 따라 체력이 3 회복되었습니다. (현재 체력: {new_stamina})"
+                    
+                    print(f"[STAMINA_RECOVER] {username}의 체력이 {current_stamina}에서 {new_stamina}로 회복되었습니다. ({advice_type} 조언)")
+            
+            # [1.8] 시간표 처리 (일상 루프 단계 및 학습 시간표 관리 상태에서)
             schedule_updated = False
             week_passed = False
-            if new_state == "daily_routine":
+            if new_state == "daily_routine" or new_state == "study_schedule":
                 # 현재 시간표 가져오기 (처리 전)
                 current_schedule = self._get_schedule(username)
                 
@@ -1767,6 +2256,15 @@ class ChatbotService:
                         schedule_updated = True
                         current_schedule = parsed_schedule  # 업데이트된 스케줄 사용
                         print(f"[SCHEDULE] {username}의 시간표가 설정되었습니다: {parsed_schedule}")
+                        
+                        # 학습 시간표 관리 상태에서 시간표를 설정하면 일상 루틴으로 복귀
+                        # current_state도 확인 (상태 전이가 아직 완료되지 않았을 수 있음)
+                        if current_state == "study_schedule" or new_state == "study_schedule":
+                            self._set_game_state(username, "daily_routine")
+                            new_state = "daily_routine"
+                            if not narration:
+                                narration = "시간표 설정을 완료했습니다. 일상 루틴으로 돌아갑니다."
+                            print(f"[STATE_TRANSITION] 시간표 설정 완료로 인해 daily_routine 상태로 복귀했습니다.")
                     else:
                         print(f"[SCHEDULE] 총 시간이 14시간을 초과합니다: {total_hours}시간")
                 
@@ -1788,13 +2286,11 @@ class ChatbotService:
                             print(f"[WEEK] {username}의 1주일이 경과했습니다. 능력치가 증가했습니다.")
                             print(f"[ABILITIES] 현재 능력치: {self._get_abilities(username)}")
                         
-                        # 체력 변동 (30에서 ±1씩 랜덤 변동)
-                        import random
+                        # 1주 경과 시 체력 -1
                         current_stamina = self._get_stamina(username)
-                        stamina_change = random.choice([-1, 1])  # -1 또는 +1
-                        new_stamina = max(0, current_stamina + stamina_change)
+                        new_stamina = max(0, current_stamina - 1)
                         self._set_stamina(username, new_stamina)
-                        print(f"[STAMINA] {username}의 체력이 {current_stamina}에서 {new_stamina}로 변경되었습니다.")
+                        print(f"[STAMINA] {username}의 체력이 {current_stamina}에서 {new_stamina}로 변경되었습니다. (1주 경과로 -1)")
                         
                         # 대화 횟수 초기화
                         self._reset_conversation_count(username)
@@ -1829,7 +2325,7 @@ class ChatbotService:
                             exam_scores_text += "\n".join(score_lines)
                         
                         # 나레이션 메시지
-                        narration = f"{current_week}주차가 완료되었습니다. 설정한 공부 시간만큼 실력이 향상되었어요!"
+                        narration = f"{current_week}주차가 완료되었습니다. 다시 일상 루틴 단계입니다. 다음 중 하나를 입력하여 다음 행동을 선택하세요. '학습시간표 관리','사설모의고사 응시','멘토링 종료'"
                         if exam_scores_text:
                             narration += exam_scores_text
             
@@ -1866,11 +2362,19 @@ class ChatbotService:
                 subjects_list = self._get_subject_list_text()
                 prompt += f"\n\n[선택과목 목록]\n{subjects_list}\n\n사용자가 위 목록 중에서 선택과목을 고를 수 있도록 안내하세요. (최대 2개)"
             
+            # reply 변수 초기화
+            reply = None
+            
             # [3.5] 대화 5번 후 자동 처리 (LLM 호출 전)
             if week_passed:
                 # 호감도에 따른 공부하러 가는 메시지 생성
                 auto_study_message = self._get_study_message_by_affection(new_affection)
                 reply = auto_study_message
+                
+                # 주차 완료 메시지에도 상태 접두사 추가
+                state_info = self._get_state_info(new_state)
+                state_name = state_info.get("name", new_state)
+                reply = f"[{state_name}] {reply}"
                 # 나레이션도 추가
                 if narration is None:
                     current_week = self._get_current_week(username)
@@ -1907,6 +2411,10 @@ class ChatbotService:
                 if not self.client:
                     print("[WARN] OpenAI Client가 초기화되지 않았습니다. 기본 응답을 반환합니다.")
                     reply = "죄송해요, 현재 AI 서비스에 연결할 수 없어요. 잠시 후 다시 시도해주세요."
+                    # 기본 메시지에도 상태 접두사 추가
+                    state_info = self._get_state_info(new_state)
+                    state_name = state_info.get("name", new_state)
+                    reply = f"[{state_name}] {reply}"
                 else:
                     try:
                         # 시스템 프롬프트 생성 (캐릭터 설정, 역할 지침, 대화 예시 포함)
@@ -1925,10 +2433,18 @@ class ChatbotService:
                         if not response or not response.choices or len(response.choices) == 0:
                             print("[WARN] LLM 응답이 비어있습니다.")
                             reply = "죄송해요, 응답을 생성할 수 없어요. 다시 시도해주세요."
+                            # 에러 메시지에도 상태 접두사 추가
+                            state_info = self._get_state_info(new_state)
+                            state_name = state_info.get("name", new_state)
+                            reply = f"[{state_name}] {reply}"
                         else:
                             reply = response.choices[0].message.content
                             if not reply or not reply.strip():
                                 reply = "죄송해요, 응답을 생성할 수 없어요. 다시 시도해주세요."
+                                # 빈 응답 에러 메시지에도 상태 접두사 추가
+                                state_info = self._get_state_info(new_state)
+                                state_name = state_info.get("name", new_state)
+                                reply = f"[{state_name}] {reply}"
                             else:
                                 # 응답 앞에 [state명] 추가
                                 state_info = self._get_state_info(new_state)
@@ -1939,6 +2455,23 @@ class ChatbotService:
                         import traceback
                         traceback.print_exc()
                         reply = "죄송해요, 일시적인 오류가 발생했어요. 다시 시도해주세요."
+                        # 에러 메시지에도 상태 접두사 추가
+                        if reply:
+                            state_info = self._get_state_info(new_state)
+                            state_name = state_info.get("name", new_state)
+                            reply = f"[{state_name}] {reply}"
+            
+            # 학습시간표 관리 상태로 전이될 때 특별한 메시지 처리
+            if study_schedule_transition_reply:
+                state_info = self._get_state_info(new_state)
+                state_name = state_info.get("name", new_state)
+                reply = f"[{state_name}] {study_schedule_transition_reply}"
+            
+            # reply가 없으면 기본 메시지 추가 (상태 접두사 포함)
+            if not reply:
+                state_info = self._get_state_info(new_state)
+                state_name = state_info.get("name", new_state)
+                reply = f"[{state_name}] 안녕하세요."
             
             # 상태 전환 시 나레이션은 별도로 반환 (프론트엔드에서 처리)
             # reply에는 추가 메시지 없음 (나레이션으로 처리)
@@ -1962,6 +2495,25 @@ class ChatbotService:
             # 선택과목 완료 시 나레이션은 이미 state machine에서 설정됨
             # (subjects_completed는 더 이상 필요하지 않음 - state machine이 처리)
             
+            # 사설모의고사 취약점 메시지를 reply에 추가 (접두사 유지)
+            if mock_exam_weakness_reply:
+                # reply가 이미 있으면 추가, 없으면 취약점 메시지로 시작
+                if reply:
+                    # reply에 이미 접두사가 있을 수 있으므로, 접두사가 있으면 유지
+                    if reply.startswith("[") and "]" in reply:
+                        # 접두사와 본문 분리
+                        prefix_end = reply.find("]") + 1
+                        prefix = reply[:prefix_end]
+                        body = reply[prefix_end:].strip()
+                        reply = f"{prefix} {mock_exam_weakness_reply}\n\n{body}"
+                    else:
+                        reply = f"{mock_exam_weakness_reply}\n\n{reply}"
+                else:
+                    # reply가 없으면 취약점 메시지에 접두사 추가
+                    state_info = self._get_state_info(new_state)
+                    state_name = state_info.get("name", new_state)
+                    reply = f"[{state_name}] {mock_exam_weakness_reply}"
+            
             # 시간표 업데이트 시 확인 메시지
             if schedule_updated and not week_passed:
                 schedule = self._get_schedule(username)
@@ -1977,6 +2529,12 @@ class ChatbotService:
                     remaining = 5 - conv_count
                     if remaining > 0:
                         reply += f"\n\n(대화 {remaining}번 후 1주일이 지나며 능력치가 증가합니다.)"
+            
+            # 최종 안전장치: reply에 접두사가 없으면 추가 (study_schedule 등 모든 상태에서)
+            if reply and not (reply.startswith("[") and reply.find("]") > 0 and reply.find("]") < 50):
+                state_info = self._get_state_info(new_state)
+                state_name = state_info.get("name", new_state)
+                reply = f"[{state_name}] {reply}"
             
             print(f"[BOT] {reply}")
             print(f"{'='*50}\n")
@@ -1999,7 +2557,8 @@ class ChatbotService:
                 'abilities': self._get_abilities(username),
                 'schedule': self._get_schedule(username),
                 'current_date': self._get_game_date(username),
-                'stamina': self._get_stamina(username)
+                'stamina': self._get_stamina(username),
+                'mental': self._get_mental(username)
             }
         except Exception as e:
             import traceback

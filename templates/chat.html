@@ -415,26 +415,53 @@
         font-weight: bold;
         color: #764ba2;
       }
+      /* 체력 및 멘탈 컨테이너 */
+      .stats-container {
+        display: flex;
+        gap: 8px;
+        width: 100%;
+        margin-bottom: 12px;
+        box-sizing: border-box;
+      }
       /* 체력 표시 */
       .stamina-display {
         position: relative;
-        width: 100%;
-        padding: 12px 16px;
+        flex: 1;
+        padding: 10px 12px;
         background: rgba(255, 255, 255, 0.98);
         border: 2px solid #f39c12;
         border-radius: 12px;
-        margin-bottom: 12px;
         box-shadow: 0 2px 8px rgba(243, 156, 18, 0.15);
         transition: box-shadow 0.3s ease;
         box-sizing: border-box;
         overflow: hidden;
         word-wrap: break-word;
+        min-width: 0;
       }
       .stamina-display:hover {
         box-shadow: 0 6px 20px rgba(243, 156, 18, 0.3);
       }
-      .stamina-label {
-        font-size: 0.9rem;
+      /* 멘탈 표시 */
+      .mental-display {
+        position: relative;
+        flex: 1;
+        padding: 10px 12px;
+        background: rgba(255, 255, 255, 0.98);
+        border: 2px solid #9b59b6;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(155, 89, 182, 0.15);
+        transition: box-shadow 0.3s ease;
+        box-sizing: border-box;
+        overflow: hidden;
+        word-wrap: break-word;
+        min-width: 0;
+      }
+      .mental-display:hover {
+        box-shadow: 0 6px 20px rgba(155, 89, 182, 0.3);
+      }
+      .stamina-label,
+      .mental-label {
+        font-size: 0.85rem;
         color: #666;
         margin-bottom: 4px;
         cursor: move;
@@ -442,33 +469,45 @@
         -webkit-user-select: none;
         -moz-user-select: none;
         -ms-user-select: none;
-        padding: 4px 8px;
+        padding: 2px 6px;
         border-radius: 6px;
         transition: background 0.2s;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+        text-align: center;
       }
       .stamina-label:hover {
         background: rgba(243, 156, 18, 0.1);
       }
-      .stamina-label:active {
+      .mental-label:hover {
+        background: rgba(155, 89, 182, 0.1);
+      }
+      .stamina-label:active,
+      .mental-label:active {
         cursor: grabbing;
       }
-      .stamina-value {
-        font-size: 1.5rem;
+      .stamina-value,
+      .mental-value {
+        font-size: 1.3rem;
         font-weight: bold;
         color: #f39c12;
         word-wrap: break-word;
         overflow-wrap: break-word;
+        text-align: center;
       }
-      .stamina-efficiency {
-        font-size: 0.85rem;
+      .mental-value {
+        color: #9b59b6;
+      }
+      .stamina-efficiency,
+      .mental-efficiency {
+        font-size: 0.75rem;
         color: #888;
         margin-top: 4px;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+        text-align: center;
       }
       /* 능력치 표시 */
       .abilities-display {
@@ -783,11 +822,22 @@
           <div class="affection-label">호감도</div>
           <div class="affection-value" id="affection-value">5</div>
         </div>
-        <!-- 체력 표시 -->
-        <div class="stamina-display" id="stamina-display">
-          <div class="stamina-label">체력</div>
-          <div class="stamina-value" id="stamina-value">30</div>
-          <div class="stamina-efficiency" id="stamina-efficiency">(효율: 100%)</div>
+        <!-- 체력 및 멘탈 표시 (나란히) -->
+        <div class="stats-container">
+          <div class="stamina-display" id="stamina-display">
+            <div class="stamina-label">체력</div>
+            <div class="stamina-value" id="stamina-value">30</div>
+            <div class="stamina-efficiency" id="stamina-efficiency">
+              (효율: 100%)
+            </div>
+          </div>
+          <div class="mental-display" id="mental-display">
+            <div class="mental-label">멘탈</div>
+            <div class="mental-value" id="mental-value">40</div>
+            <div class="mental-efficiency" id="mental-efficiency">
+              (효율: 100%)
+            </div>
+          </div>
         </div>
         <!-- 능력치 표시 -->
         <div class="abilities-display" id="abilities-display">
