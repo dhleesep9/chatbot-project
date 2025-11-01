@@ -426,7 +426,7 @@ class ChatbotService:
         else:
             print(f"[WARN] 잘못된 게임 상태: {state}. 유효한 상태: {valid_states}")
     
-    def _evaluate_transition_condition(self, username: str, transition: dict, affection_increased: int) -> bool:
+    def _evaluate_transition_condition(self, username: str, transition: dict, affection_increased: int, user_message: str = "") -> bool:
         """
         전이 조건 평가 (state machine 기반)
 
@@ -434,6 +434,7 @@ class ChatbotService:
             username: 사용자 이름
             transition: 전이 정보 딕셔너리
             affection_increased: 이번 턴 호감도 증가량
+            user_message: 사용자 입력 메시지
 
         Returns:
             조건 만족 여부
@@ -465,11 +466,28 @@ class ChatbotService:
 
             return affection_met and subjects_met
 
+        elif trigger_type == "user_input":
+            # 유저 입력 포함 트리거
+            input_equals = conditions.get("input_equals", "")
+            if not input_equals:
+                return False
+
+            # 대소문자 구분 없이 포함 여부 체크
+            user_message_lower = user_message.lower()
+            input_equals_lower = input_equals.lower()
+
+            is_contained = input_equals_lower in user_message_lower
+
+            if is_contained:
+                print(f"[TRIGGER] user_input 트리거 발동: '{input_equals}' in '{user_message}'")
+
+            return is_contained
+
         # 알 수 없는 트리거 타입
         print(f"[WARN] Unknown trigger_type: {trigger_type}")
         return False
 
-    def _check_state_transition(self, username: str, new_affection: int, affection_increased: int = 0) -> tuple:
+    def _check_state_transition(self, username: str, new_affection: int, affection_increased: int = 0, user_message: str = "") -> tuple:
         """
         상태 전환 조건 체크 및 전환 (state machine 기반)
 
@@ -477,6 +495,7 @@ class ChatbotService:
             username: 사용자 이름
             new_affection: 새로운 호감도
             affection_increased: 이번 턴 호감도 증가량
+            user_message: 사용자 입력 메시지
 
         Returns:
             (전환 발생 여부, 전환 나레이션)
@@ -489,15 +508,28 @@ class ChatbotService:
 
         # 각 전이 조건 확인
         for transition in transitions:
-            if self._evaluate_transition_condition(username, transition, affection_increased):
+            if self._evaluate_transition_condition(username, transition, affection_increased, user_message):
                 next_state = transition.get("next_state")
-                narration = transition.get("transition_narration")
+                transition_narration = transition.get("transition_narration")
 
                 # 상태 전이 실행
                 self._set_game_state(username, next_state)
                 print(f"[STATE_TRANSITION] {current_state} → {next_state}")
 
-                return (True, narration)
+                # state의 narration도 함께 반환
+                next_state_info = self._get_state_info(next_state)
+                state_narration = next_state_info.get("narration")
+
+                # transition_narration과 state_narration 합치기
+                combined_narration = None
+                if transition_narration and state_narration:
+                    combined_narration = f"{transition_narration}\n\n{state_narration}"
+                elif transition_narration:
+                    combined_narration = transition_narration
+                elif state_narration:
+                    combined_narration = state_narration
+
+                return (True, combined_narration)
 
         return (False, None)
     
@@ -1763,7 +1795,8 @@ class ChatbotService:
             state_changed, transition_narration = self._check_state_transition(
                 username,
                 new_affection,
-                affection_change  # 이번 턴 호감도 증가량 전달
+                affection_change,  # 이번 턴 호감도 증가량 전달
+                user_message  # 유저 입력 메시지 전달 (user_input 트리거용)
             )
             new_state = self._get_game_state(username)
 
@@ -1807,7 +1840,8 @@ class ChatbotService:
                                 subjects_state_changed, subjects_transition_narration = self._check_state_transition(
                                     username,
                                     new_affection,
-                                    affection_change  # 호감도 증가량 전달
+                                    affection_change,  # 호감도 증가량 전달
+                                    user_message  # 유저 입력 메시지 전달 (user_input 트리거용)
                                 )
 
                                 if subjects_state_changed:
