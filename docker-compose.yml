@@ -1,0 +1,47 @@
+version: "3.8"
+
+services:
+  chatbot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: chatbot-app
+    ports:
+      - "5001:5000"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - FLASK_ENV=development
+      - FLASK_DEBUG=True
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-key-please-change}
+    volumes:
+      # 개발 시 코드 변경사항 실시간 반영
+      - ./app.py:/app/app.py
+      - ./services:/app/services
+      - ./templates:/app/templates
+      - ./static:/app/static
+      - ./config:/app/config
+      # ChromaDB 데이터 영속성 보장
+      - chatbot-data:/app/static/data/chatbot
+    restart: unless-stopped
+    networks:
+      - chatbot-network
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')",
+        ]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  chatbot-data:
+    driver: local
+
+networks:
+  chatbot-network:
+    driver: bridge

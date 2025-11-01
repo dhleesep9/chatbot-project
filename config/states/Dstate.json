@@ -1,0 +1,17 @@
+{
+  "name": "D상태",
+  "description": "D 입력을 받아 DDD를 출력하는 상태",
+  "from_states": ["Astate"],
+  "to_states": [],
+  "narration": "DDD",
+  "context": "[게임 상태: D상태]\n- D 행동을 선택한 상태입니다.\n- 이 상태를 유지하며 대화를 계속합니다.",
+  "transitions": [
+    {
+      "name": "A 입력",
+      "trigger_type": "user_input",
+      "conditions": {
+        "input_equals": "A"
+      },
+      "next_state": "Astate",
+      "transition_narration": "A 상태로 이동합니다."
+    }]}

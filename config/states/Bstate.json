@@ -1,0 +1,9 @@
+{
+  "name": "B상태",
+  "description": "B 입력을 받아 BBB를 출력하는 상태",
+  "from_states": ["daily_routine"],
+  "to_states": [],
+  "narration": "BBB",
+  "context": "[게임 상태: B상태]\n- B 행동을 선택한 상태입니다.\n- 이 상태를 유지하며 대화를 계속합니다.",
+  "transitions": []
+}

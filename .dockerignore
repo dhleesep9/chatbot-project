@@ -1,0 +1,54 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.cursor/
+
+# 환경변수 (보안)
+.env
+*.env
+!.env.example
+
+# 로그
+*.log
+
+# ChromaDB (Docker volume으로 관리)
+*chardb_embedding/
+*imagedb_embedding/
+
+# Jupyter
+*.ipynb
+.ipynb_checkpoints
+
+# macOS
+.DS_Store
+
+# 문서 (선택사항)
+README*.md
+
+# 테스트
+tests/
+*.test.py
+
+# 임시 파일
+*.tmp
+*.bak

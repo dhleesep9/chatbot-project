@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{ bot.name }} - 상세 정보</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        font-family: "IBM Plex Sans KR", sans-serif;
+        background: rgba(0, 0, 0, 0.3);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+      }
+      .modal-container {
+        max-width: 500px;
+        width: 90%;
+        margin: 20px auto;
+        background: #fff;
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+      }
+      .modal-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+
+        padding: 15px 20px;
+      }
+      .modal-header h2 {
+        margin: 0;
+        flex: 1;
+        text-align: center;
+        font-size: 1.5rem;
+        color: #333;
+      }
+      .close-btn {
+        background: none;
+        border: none;
+        font-size: 1.5rem;
+        cursor: pointer;
+        color: #666;
+      }
+      .modal-content {
+        padding: 30px;
+      }
+      .bot-image {
+        width: 100%;
+        max-width: 300px;
+        height: auto;
+        border-radius: 12px;
+        display: block;
+        margin: 0 auto 20px;
+      }
+      .bot-info {
+        text-align: center;
+      }
+      .bot-info h1 {
+        margin: 0 0 15px 0;
+        font-size: 2rem;
+        color: #333;
+      }
+      .bot-info p {
+        margin: 15px 0;
+        font-size: 1rem;
+        color: #666;
+        line-height: 1.6;
+      }
+      .tags {
+        margin: 15px 0;
+      }
+      .tag {
+        display: inline-block;
+        background: #e0e0e0;
+        color: #555;
+        padding: 6px 12px;
+        border-radius: 15px;
+        margin: 4px;
+        font-size: 0.9rem;
+      }
+      .username-area {
+        margin: 20px 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+      }
+      .username-area label {
+        font-size: 1rem;
+        color: #333;
+      }
+      .username-area input {
+        padding: 8px 12px;
+        font-size: 1rem;
+        border: 2px solid #ddd;
+        border-radius: 8px;
+        width: 50%;
+        transition: border 0.2s;
+      }
+      .username-area input:focus {
+        outline: none;
+        border-color: #764ba2;
+      }
+      .start-chat {
+        display: block;
+        margin: 20px 0;
+        padding: 12px 20px;
+        background: #764ba2;
+        color: #fff;
+        text-decoration: none;
+        border-radius: 8px;
+        font-size: 1.1rem;
+        text-align: center;
+        cursor: pointer;
+        transition: transform 0.2s;
+      }
+      .start-chat:hover {
+        transform: translateY(-2px);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="modal-container">
+      <div class="modal-header">
+        <h2>{{ bot.name }}</h2>
+        <button
+          class="close-btn"
+          onclick="window.location.href='{{ url_for('index') }}'"
+        >
+          &times;
+        </button>
+      </div>
+
+      <div class="modal-content">
+        <img
+          src="./static/images/hateslop/logo_black_genai.png"
+          alt="{{ bot.name }}"
+          class="bot-image"
+        />
+
+        <div class="bot-info">
+          <h1>{{ bot.name }}</h1>
+
+          <div class="tags">
+            {% for tag in bot.tags %}
+            <span class="tag">{{ tag }}</span>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="username-area">
+          <label for="username">이름:</label>
+          <input type="text" id="username" placeholder="이름을 입력하세요" />
+        </div>
+
+        <a href="#" class="start-chat" id="start-chat-btn">채팅 시작하기</a>
+      </div>
+    </div>
+
+    <script>
+      const startChatBtn = document.getElementById("start-chat-btn");
+      const usernameInput = document.getElementById("username");
+
+      startChatBtn.addEventListener("click", function (event) {
+        event.preventDefault();
+        const username = usernameInput.value.trim() || "사용자";
+        window.location.href = `/chat?username=${encodeURIComponent(username)}`;
+      });
+
+      usernameInput.addEventListener("keypress", function (event) {
+        if (event.key === "Enter") {
+          startChatBtn.click();
+        }
+      });
+    </script>
+  </body>
+</html>

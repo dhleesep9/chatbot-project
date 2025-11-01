@@ -1,0 +1,87 @@
+{
+  "name": "일상루틴단계",
+  "description": "학습 시간표를 관리하고 주차별로 공부하는 단계",
+  "from_states": [
+    "selection",
+    "study_schedule",
+    "mock_exam_feedback",
+    "official_mock_exam_feedback",
+    "6exam",
+    "6exam_feedback"
+  ],
+  "to_states": [
+    "Astate",
+    "Bstate",
+    "Cstate",
+    "study_schedule",
+    "mock_exam",
+    "6exam"
+  ],
+  "narration": "일상 루틴 단계입니다. 다음 중 하나를 입력하여 다음 행동을 선택하세요. '학습시간표 관리','사설모의고사 응시','멘토링 종료'",
+  "context": "[게임 상태: 일상 루프 단계]\n- 이제 재수생의 하루 루틴을 관리하는 단계입니다.\n- 대화를 5번 하면 자동으로 1주일이 지나며 설정된 시간표에 따라 능력치가 증가합니다.",
+  "transitions": [
+    {
+      "name": "A 입력",
+      "trigger_type": "user_input",
+      "conditions": {
+        "input_equals": "A"
+      },
+      "next_state": "Astate",
+      "transition_narration": "A 상태로 이동합니다."
+    },
+    {
+      "name": "B 입력",
+      "trigger_type": "user_input",
+      "conditions": {
+        "input_equals": "B"
+      },
+      "next_state": "Bstate",
+      "transition_narration": "B 상태로 이동합니다."
+    },
+    {
+      "name": "C 입력",
+      "trigger_type": "user_input",
+      "conditions": {
+        "input_equals": "C"
+      },
+      "next_state": "Cstate",
+      "transition_narration": "C 상태로 이동합니다."
+    },
+    {
+      "name": "학습 시간표 관리",
+      "trigger_type": "study_schedule",
+      "conditions": {
+        "input_contains": "학습시간표관리"
+      },
+      "next_state": "study_schedule",
+      "transition_narration": "학습 시간표 관리 모드로 들어갑니다."
+    },
+    {
+      "name": "사설모의고사 응시",
+      "trigger_type": "mock_exam",
+      "conditions": {
+        "input_contains": "사설모의고사 응시"
+      },
+      "next_state": "mock_exam",
+      "transition_narration": "사설모의고사를 응시합니다."
+    },
+    {
+      "name": "6월 모의고사 응시",
+      "trigger_type": "june_exam",
+      "conditions": {
+        "input_contains": "6월 모의고사"
+      },
+      "next_state": "6exam",
+      "transition_narration": "6월 모의고사를 응시합니다."
+    },
+    {
+      "name": "고백 이벤트",
+      "trigger_type": "confession_event",
+      "conditions": {
+        "date_check": "2024-08-16"
+      },
+      "next_state": "confession",
+      "transition_narration": ""
+    }
+  ]
+}
