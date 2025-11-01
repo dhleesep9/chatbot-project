@@ -529,7 +529,64 @@ class ChatbotService:
         사용자의 호감도 설정 (0~100 범위로 제한)
         """
         self.affections[username] = max(0, min(100, affection))
-    
+        self._save_user_data(username)  # 변경사항 저장
+
+    def _save_user_data(self, username: str):
+        """
+        사용자 게임 데이터를 JSON 파일로 저장
+        """
+        try:
+            user_data = {
+                "affection": self._get_affection(username),
+                "game_state": self._get_game_state(username),
+                "abilities": self._get_abilities(username),
+                "selected_subjects": self._get_selected_subjects(username),
+                "schedule": self._get_schedule(username),
+                "conversation_count": self._get_conversation_count(username),
+                "current_week": self._get_current_week(username),
+                "game_date": self._get_game_date(username),
+                "stamina": self._get_stamina(username)
+            }
+
+            user_file = BASE_DIR / f"data/users/{username}.json"
+            user_file.parent.mkdir(parents=True, exist_ok=True)
+
+            with open(user_file, "w", encoding="utf-8") as f:
+                json.dump(user_data, f, ensure_ascii=False, indent=2)
+
+            print(f"[STORAGE] {username} 데이터 저장 완료")
+        except Exception as e:
+            print(f"[ERROR] {username} 데이터 저장 실패: {e}")
+
+    def _load_user_data(self, username: str):
+        """
+        사용자 게임 데이터를 JSON 파일에서 로드
+        """
+        try:
+            user_file = BASE_DIR / f"data/users/{username}.json"
+
+            if not user_file.exists():
+                print(f"[STORAGE] {username} 저장 파일 없음 (새 유저)")
+                return
+
+            with open(user_file, "r", encoding="utf-8") as f:
+                user_data = json.load(f)
+
+            # 데이터 로드
+            self.affections[username] = user_data.get("affection", 5)
+            self.game_states[username] = user_data.get("game_state", "start")
+            self.abilities[username] = user_data.get("abilities", {"국어": 0, "수학": 0, "영어": 0, "탐구1": 0, "탐구2": 0})
+            self.selected_subjects[username] = user_data.get("selected_subjects", [])
+            self.schedules[username] = user_data.get("schedule", {})
+            self.conversation_counts[username] = user_data.get("conversation_count", 0)
+            self.current_weeks[username] = user_data.get("current_week", 0)
+            self.game_dates[username] = user_data.get("game_date", "2023-11-17")
+            self.staminas[username] = user_data.get("stamina", 30)
+
+            print(f"[STORAGE] {username} 데이터 로드 완료")
+        except Exception as e:
+            print(f"[ERROR] {username} 데이터 로드 실패: {e}")
+
     def _get_abilities(self, username: str) -> dict:
         """
         사용자의 현재 능력치 반환 (없으면 기본값)
@@ -655,6 +712,24 @@ class ChatbotService:
                 print(f"[TRIGGER] user_input 트리거 발동: '{input_equals}' in '{user_message}'")
 
             return is_contained
+
+        elif trigger_type == "subject_selection":
+            # 탐구과목 선택 트리거
+            from services.subject_selection import parse_subjects_from_message, validate_subject_count
+
+            required_count = conditions.get("required_count", 2)
+
+            # 메시지에서 과목 추출
+            found_subjects = parse_subjects_from_message(user_message)
+
+            # 필요한 개수만큼 선택되었는지 확인
+            if validate_subject_count(found_subjects, required_count):
+                # 선택된 과목을 저장
+                self._set_selected_subjects(username, found_subjects)
+                print(f"[TRIGGER] subject_selection 트리거 발동: {found_subjects}")
+                return True
+
+            return False
 
         # 알 수 없는 트리거 타입
         print(f"[WARN] Unknown trigger_type: {trigger_type}")
@@ -1276,6 +1351,7 @@ class ChatbotService:
         else:
             print(f"[WARN] tone 필드 형식이 올바르지 않습니다. (affection: {affection})")
             return ""
+        self._save_user_data(username)  # 변경사항 저장
 
     def _analyze_sentiment_with_llm(self, user_message: str) -> int:
         """
@@ -1490,7 +1566,10 @@ class ChatbotService:
         호감도 시스템 및 게임 상태 시스템 포함
         """
         try:
-            # [0] 현재 상태 가져오기
+            # [0] 영구 저장소에서 사용자 데이터 로드
+            self._load_user_data(username)
+
+            # [0.1] 현재 상태 가져오기
             current_affection = self._get_affection(username)
             current_state = self._get_game_state(username)
             

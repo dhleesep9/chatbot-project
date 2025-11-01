@@ -69,7 +69,7 @@
   "state_machine": {
     "initial_state": "start",
     "states_directory": "config/states",
-    "available_states": ["start", "icebreak", "daily_routine", "Astate", "Bstate", "Cstate","Dstate","selection"]
+    "available_states": ["start", "icebreak", "selection", "daily_routine", "Astate", "Bstate", "Cstate", "Dstate"]
   },
   "prompt_injection_detection": {
     "enabled": true,
