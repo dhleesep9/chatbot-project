@@ -1205,44 +1205,18 @@ class ChatbotService:
     
     def _get_state_context(self, game_state: str) -> str:
         """
-        게임 상태에 따른 컨텍스트 프롬프트 반환
+        게임 상태에 따른 컨텍스트 프롬프트 반환 (state JSON에서 로드)
         """
-        if game_state == "start":
-            return """
-[게임 상태: 시작 단계]
-- 게임이 막 시작되었습니다. 서가윤을 처음 만나는 순간입니다.
-- 사용자는 멘토이고, 당신은 재수생 서가윤입니다.
-- 매우 조심스럽고 낯선 사람을 대하듯 행동하세요.
-- 짧고 신중하게 대답하며, 자세한 설명을 하지 마세요.
-- 거리를 두며 경계하는 태도를 보이세요.
-"""
-        elif game_state == "icebreak":
-            return """
-[게임 상태: 아이스브레이크 단계]
-- 서가윤이 조금씩 마음을 열기 시작한 단계입니다.
-- 여전히 조심스럽지만, 멘토를 완전히 낯선 사람으로만 대하지는 않습니다.
-- 목표: 호감도를 10까지 올려서 신뢰를 쌓고, 탐구과목을 선택하는 것입니다.
-- 이 단계에서는 대화를 통해 서가윤의 성격, 상황, 불안감 등을 파악하세요.
-- 멘토의 조언에 조금씩 귀를 기울이기 시작하지만, 여전히 불안하고 방어적입니다.
-- 호감도 10 달성 + 탐구과목 2개 선택 완료 시 다음 단계로 넘어갑니다.
-"""
-        elif game_state == "daily_routine":
-            return """
-[게임 상태: 일상 루프 단계]
-- 이제 재수생의 하루 루틴을 관리하는 단계입니다.
-- 플레이어가 14시간을 자유롭게 분배하여 학습 계획을 세울 수 있습니다.
-- 시간표를 정하면 그에 따라 각 과목의 실력이 증가합니다.
-- 시간표 예시: "수학4시간 국어4시간 영어4시간 탐구1 1시간 탐구2 1시간"
-- 총 14시간을 초과할 수 없습니다.
-- 대화를 5번 하면 자동으로 1주일이 지나며 설정된 시간표에 따라 능력치가 증가합니다.
-"""
+        state_info = self._get_state_info(game_state)
+        context = state_info.get("context", "")
+
         # 하위 호환성: 기존 상태명도 지원
-        elif game_state == "ice_break":
-            return self._get_state_context("start")  # ice_break는 start와 동일
-        elif game_state == "mentoring":
-            return self._get_state_context("icebreak")  # mentoring은 icebreak와 동일
-        else:
-            return ""
+        if not context and game_state == "ice_break":
+            return self._get_state_context("start")
+        elif not context and game_state == "mentoring":
+            return self._get_state_context("icebreak")
+
+        return context
     
     def _build_system_prompt(self) -> str:
         """
