@@ -442,12 +442,18 @@ class ChatbotService:
         conditions = transition.get("conditions", {})
 
         if trigger_type == "affection_increase":
-            # 호감도 증가 트리거
+            # 호감도 증가량 트리거 (start → icebreak)
             min_increase = conditions.get("affection_increase_min", 1)
             return affection_increased >= min_increase
 
+        elif trigger_type == "affection_threshold":
+            # 호감도 절대값 트리거 (icebreak → daily_routine)
+            min_affection = conditions.get("affection_min", 10)
+            current_affection = self._get_affection(username)
+            return current_affection >= min_affection
+
         elif trigger_type == "affection_and_subjects":
-            # 호감도 달성 + 탐구과목 선택 트리거
+            # 호감도 달성 + 탐구과목 선택 트리거 (복합 조건)
             min_affection = conditions.get("affection_min", 10)
             subjects_count = conditions.get("subjects_count", 2)
 
@@ -460,6 +466,7 @@ class ChatbotService:
             return affection_met and subjects_met
 
         # 알 수 없는 트리거 타입
+        print(f"[WARN] Unknown trigger_type: {trigger_type}")
         return False
 
     def _check_state_transition(self, username: str, new_affection: int, affection_increased: int = 0) -> tuple:
