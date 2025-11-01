@@ -12,7 +12,7 @@
       "conditions": {
         "affection_min": 10
       },
-      "next_state": "daily_routine",
+      "next_state": "selection",
       "transition_narration": "서가윤이 당신을 완전히 신뢰하기 시작했습니다! 호감도 10을 달성하여 이제 본격적인 일상 관리를 시작할 수 있어요."
     }
   ]

@@ -1348,7 +1348,7 @@ class ChatbotService:
         시스템 프롬프트 생성 (캐릭터 설정, 역할 지침, 대화 예시 포함)
         """
         if not self.config:
-            return "당신은 도움이 되는 AI 챗봇입니다."
+            return "당신은 재수생입니다."
 
         system_parts = []
 

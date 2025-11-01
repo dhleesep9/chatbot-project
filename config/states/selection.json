@@ -1,0 +1,19 @@
+{
+  "name": "탐구과목선택단계",
+  "description": "탐구과목 2개를 선택하는 단계",
+  "from_states": ["icebreak"],
+  "to_states": ["daily_routine"],
+  "narration": "탐구과목 선택 단계입니다. 2개의 과목을 선택해주세요. (예: 화학1, 물리학1)",
+  "context": "[게임 상태: 탐구과목 선택]\n- 멘토와 신뢰가 쌓였습니다.\n- 이제 멘토링을 진행할 탐구과목 2개를 선택해야 합니다.\n- 사용자가 과목 2개를 모두 선택하면 '일상 루틴' 단계로 넘어갑니다.",
+  "transitions": [
+    {
+      "name": "탐구과목 2개 선택 완료",
+      "trigger_type": "user_input",
+      "conditions": {
+        "input_equals": "탐구"
+      },
+      "next_state": "daily_routine",
+      "transition_narration": "탐구과목 선택이 완료되었습니다. 이제 서가윤의 일상 학습 루틴을 관리합니다."
+    }
+  ]
+}
