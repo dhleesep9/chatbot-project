@@ -374,39 +374,99 @@ class ChatbotService:
     
     def _get_game_state(self, username: str) -> str:
         """
-        사용자의 현재 게임 상태 반환 (없으면 "ice_break")
+        사용자의 현재 게임 상태 반환 (없으면 "start")
         """
-        return self.game_states.get(username, "ice_break")
+        return self.game_states.get(username, "start")
     
     def _set_game_state(self, username: str, state: str):
         """
         사용자의 게임 상태 설정
         """
-        valid_states = ["ice_break", "mentoring", "daily_routine"]
+        # state_machine에서 유효한 상태 목록 가져오기
+        state_machine = self.config.get("narration", {}).get("state_machine", {})
+        valid_states = list(state_machine.get("states", {}).keys())
+
+        # 기본값으로 하드코딩된 상태도 허용 (하위 호환성)
+        if not valid_states:
+            valid_states = ["start", "icebreak", "daily_routine"]
+
         if state in valid_states:
             self.game_states[username] = state
             print(f"[GAME_STATE] {username}의 상태가 {state}로 변경되었습니다.")
         else:
-            print(f"[WARN] 잘못된 게임 상태: {state}")
+            print(f"[WARN] 잘못된 게임 상태: {state}. 유효한 상태: {valid_states}")
     
-    def _check_state_transition(self, username: str, new_affection: int) -> bool:
+    def _evaluate_transition_condition(self, username: str, transition: dict, affection_increased: int) -> bool:
         """
-        상태 전환 조건 체크 및 전환
-        반환값: 전환이 일어났는지 여부
-        
-        참고: 선택과목 완료로 인한 상태 전환은 [1.7] 단계에서 직접 처리됩니다.
+        전이 조건 평가 (state machine 기반)
+
+        Args:
+            username: 사용자 이름
+            transition: 전이 정보 딕셔너리
+            affection_increased: 이번 턴 호감도 증가량
+
+        Returns:
+            조건 만족 여부
+        """
+        trigger_type = transition.get("trigger_type")
+        conditions = transition.get("conditions", {})
+
+        if trigger_type == "affection_increase":
+            # 호감도 증가 트리거
+            min_increase = conditions.get("affection_increase_min", 1)
+            return affection_increased >= min_increase
+
+        elif trigger_type == "affection_and_subjects":
+            # 호감도 달성 + 탐구과목 선택 트리거
+            min_affection = conditions.get("affection_min", 10)
+            subjects_count = conditions.get("subjects_count", 2)
+
+            current_affection = self._get_affection(username)
+            selected_subjects = self._get_selected_subjects(username)
+
+            affection_met = current_affection >= min_affection
+            subjects_met = len(selected_subjects) >= subjects_count
+
+            return affection_met and subjects_met
+
+        # 알 수 없는 트리거 타입
+        return False
+
+    def _check_state_transition(self, username: str, new_affection: int, affection_increased: int = 0) -> tuple:
+        """
+        상태 전환 조건 체크 및 전환 (state machine 기반)
+
+        Args:
+            username: 사용자 이름
+            new_affection: 새로운 호감도
+            affection_increased: 이번 턴 호감도 증가량
+
+        Returns:
+            (전환 발생 여부, 전환 나레이션)
         """
         current_state = self._get_game_state(username)
-        
-        # 아이스 브레이크 → 멘토링: 호감도 10 이상 달성 시
-        if current_state == "ice_break" and new_affection >= 10:
-            self._set_game_state(username, "mentoring")
-            return True
-        
-        # 멘토링 → 일상 루프는 [1.7]에서 선택과목 완료 시 직접 처리되므로 여기서는 제거
-        # (선택과목 완료 메시지를 나레이션으로 표시하기 위해)
-        
-        return False
+
+        # state_machine 설정 가져오기
+        state_machine = self.config.get("narration", {}).get("state_machine", {})
+        states = state_machine.get("states", {})
+
+        # 현재 상태 정보 가져오기
+        state_info = states.get(current_state, {})
+        transitions = state_info.get("transitions", [])
+
+        # 각 전이 조건 확인
+        for transition in transitions:
+            if self._evaluate_transition_condition(username, transition, affection_increased):
+                next_state = transition.get("next_state")
+                narration = transition.get("transition_narration")
+
+                # 상태 전이 실행
+                self._set_game_state(username, next_state)
+                print(f"[STATE_TRANSITION] {current_state} → {next_state}")
+
+                return (True, narration)
+
+        return (False, None)
     
     def _get_selected_subjects(self, username: str) -> list:
         """
@@ -1080,25 +1140,24 @@ class ChatbotService:
         """
         게임 상태에 따른 컨텍스트 프롬프트 반환
         """
-        if game_state == "ice_break":
+        if game_state == "start":
             return """
-[게임 상태: 아이스 브레이크 단계]
-- 현재는 캐릭터와 서로를 알아가는 단계입니다.
+[게임 상태: 시작 단계]
+- 게임이 막 시작되었습니다. 서가윤을 처음 만나는 순간입니다.
 - 사용자는 멘토이고, 당신은 재수생 서가윤입니다.
-- 목표: 호감도를 10까지 올려서 신뢰를 쌓는 것입니다.
-- 이 단계에서는 대화를 통해 서가윤의 성격, 상황, 불안감 등을 파악하세요.
-- 아직 완전한 신뢰는 없으니 방어적이고 조심스러운 말투를 유지하세요.
-- 호감도가 10이 되면 다음 단계(멘토링)로 넘어갑니다.
+- 매우 조심스럽고 낯선 사람을 대하듯 행동하세요.
+- 짧고 신중하게 대답하며, 자세한 설명을 하지 마세요.
+- 거리를 두며 경계하는 태도를 보이세요.
 """
-        elif game_state == "mentoring":
+        elif game_state == "icebreak":
             return """
-[게임 상태: 멘토링 단계]
-- 이제 본격적인 멘토링 단계입니다.
-- 호감도 10을 달성하여 서가윤이 선생님(멘토)에게 어느 정도 신뢰를 보이기 시작했습니다.
-- 이 단계에서는 구체적인 학습 방법, 과목 선택, 진로 상담 등 멘토링 활동을 진행할 수 있습니다.
-- 서가윤은 여전히 불안하고 방어적이지만, 선생님의 조언을 듣고 시도해볼 의지가 생겼습니다.
-- 사용자가 선택과목을 아직 선택하지 않았다면, 자연스럽게 선택과목을 선택하도록 유도하세요.
-- 선택과목은 최대 2개까지 선택할 수 있습니다.
+[게임 상태: 아이스브레이크 단계]
+- 서가윤이 조금씩 마음을 열기 시작한 단계입니다.
+- 여전히 조심스럽지만, 멘토를 완전히 낯선 사람으로만 대하지는 않습니다.
+- 목표: 호감도를 10까지 올려서 신뢰를 쌓고, 탐구과목을 선택하는 것입니다.
+- 이 단계에서는 대화를 통해 서가윤의 성격, 상황, 불안감 등을 파악하세요.
+- 멘토의 조언에 조금씩 귀를 기울이기 시작하지만, 여전히 불안하고 방어적입니다.
+- 호감도 10 달성 + 탐구과목 2개 선택 완료 시 다음 단계로 넘어갑니다.
 """
         elif game_state == "daily_routine":
             return """
@@ -1110,6 +1169,11 @@ class ChatbotService:
 - 총 14시간을 초과할 수 없습니다.
 - 대화를 5번 하면 자동으로 1주일이 지나며 설정된 시간표에 따라 능력치가 증가합니다.
 """
+        # 하위 호환성: 기존 상태명도 지원
+        elif game_state == "ice_break":
+            return self._get_state_context("start")  # ice_break는 start와 동일
+        elif game_state == "mentoring":
+            return self._get_state_context("icebreak")  # mentoring은 icebreak와 동일
         else:
             return ""
     
@@ -1228,8 +1292,8 @@ class ChatbotService:
         if state_context.strip():
             prompt_parts.append(state_context.strip())
 
-        # 선택과목 정보 추가 (멘토링 단계)
-        if game_state == "mentoring":
+        # 선택과목 정보 추가 (icebreak 또는 mentoring 단계)
+        if game_state in ["icebreak", "mentoring"]:
             if selected_subjects:
                 subjects_text = ", ".join(selected_subjects)
                 prompt_parts.append(f"[현재 선택된 탐구과목: {subjects_text}]")
@@ -1269,7 +1333,7 @@ class ChatbotService:
                 try:
                     bot_name = self.config.get('name', '챗봇') if self.config else '챗봇'
                     # 게임 상태 초기화
-                    self._set_game_state(username, "ice_break")
+                    self._set_game_state(username, "start")
                     # 대화 횟수 초기화
                     self._reset_conversation_count(username)
                     # 주 초기화
@@ -1302,7 +1366,7 @@ class ChatbotService:
                         'reply': f"게임이 시작되었습니다.",
                         'image': None,
                         'affection': current_affection,
-                        'game_state': "ice_break",
+                        'game_state': "start",
                         'selected_subjects': [],
                         'narration': narration,
                         'abilities': abilities,
@@ -1319,7 +1383,7 @@ class ChatbotService:
                         'reply': "게임이 시작되었습니다.",
                         'image': None,
                         'affection': 5,
-                        'game_state': "ice_break",
+                        'game_state': "start",
                         'selected_subjects': [],
                         'narration': None,
                         'abilities': {"국어": 0, "수학": 0, "영어": 0, "탐구1": 0, "탐구2": 0},
@@ -1331,7 +1395,7 @@ class ChatbotService:
             # [1.1] 게임 상태 초기화 요청 처리
             if user_message.strip() == "__RESET_GAME_STATE__":
                 # 모든 게임 상태 초기화
-                self._set_game_state(username, "ice_break")
+                self._set_game_state(username, "start")
                 self._set_affection(username, 5)
                 self._set_stamina(username, 30)
                 self._set_abilities(username, {
@@ -1356,7 +1420,7 @@ class ChatbotService:
                     'reply': "게임이 완전히 초기화되었습니다. 다시 시작하세요!",
                     'image': None,
                     'affection': 5,
-                    'game_state': "ice_break",
+                    'game_state': "start",
                     'selected_subjects': [],
                     'narration': narration,
                     'abilities': {"국어": 0, "수학": 0, "영어": 0, "탐구1": 0, "탐구2": 0},
@@ -1661,34 +1725,36 @@ class ChatbotService:
             # 호감도 업데이트
             new_affection = max(0, min(100, current_affection + affection_change))
             self._set_affection(username, new_affection)
-            
-            # [1.6] 상태 전환 체크
-            state_changed = self._check_state_transition(username, new_affection)
+
+            # [1.6] 상태 전환 체크 (state machine 기반)
+            state_changed, transition_narration = self._check_state_transition(
+                username,
+                new_affection,
+                affection_change  # 이번 턴 호감도 증가량 전달
+            )
             new_state = self._get_game_state(username)
-            
-            # 상태 전환 시 나레이션 생성
+
+            # 상태 전환 시 나레이션 사용
             narration = None
-            if state_changed:
-                narration = self._get_narration("state_transition", {
-                    "transition_key": f"{current_state}_to_{new_state}"
-                })
+            if state_changed and transition_narration:
+                narration = transition_narration
             
-            # [1.7] 선택과목 선택 처리 (멘토링 단계에서만)
+            # [1.7] 선택과목 선택 처리 (icebreak 단계에서만)
             selected_subjects = self._get_selected_subjects(username)
             subject_selected_in_this_turn = False
             subjects_completed = False  # 선택과목 2개 모두 선택 완료 여부
-            
-            if new_state == "mentoring":
+
+            if new_state in ["icebreak", "mentoring"]:  # icebreak 또는 하위호환성을 위한 mentoring
                 # 사용자 메시지에서 선택과목 추출 (여러 개 가능)
                 parsed_subjects = self._parse_subject_from_message(user_message)
-                
+
                 if parsed_subjects:
                     # 새로 선택할 과목들만 필터링
                     new_subjects = []
                     for subject in parsed_subjects:
                         if subject not in selected_subjects:
                             new_subjects.append(subject)
-                    
+
                     if new_subjects:
                         # 남은 슬롯만큼만 추가 (최대 2개)
                         remaining_slots = 2 - len(selected_subjects)
@@ -1698,30 +1764,32 @@ class ChatbotService:
                             selected_subjects.extend(subjects_to_add)
                             self._set_selected_subjects(username, selected_subjects)
                             subject_selected_in_this_turn = True
-                            
+
                             added_subjects_str = ", ".join(subjects_to_add)
                             print(f"[SUBJECT] {username}이(가) '{added_subjects_str}' 과목을 선택했습니다.")
-                            
+
                             # 선택과목 2개 모두 완료되었는지 확인
                             if len(selected_subjects) >= 2:
-                                subjects_completed = True
-                                # 상태를 daily_routine으로 전환
-                                self._set_game_state(username, "daily_routine")
-                                new_state = "daily_routine"
-                                print(f"[STATE_TRANSITION] 선택과목 선택 완료! 상태가 daily_routine으로 전환되었습니다.")
+                                # state machine을 통해 상태 전이 체크
+                                subjects_state_changed, subjects_transition_narration = self._check_state_transition(
+                                    username,
+                                    new_affection,
+                                    affection_change  # 호감도 증가량 전달
+                                )
+
+                                if subjects_state_changed:
+                                    subjects_completed = True
+                                    new_state = self._get_game_state(username)
+                                    # 기존 narration이 없으면 새 narration 사용
+                                    if not narration and subjects_transition_narration:
+                                        narration = subjects_transition_narration
+                                    print(f"[STATE_TRANSITION] 선택과목 선택 완료! 상태가 {new_state}로 전환되었습니다.")
                         else:
                             print(f"[SUBJECT] 이미 2개의 과목을 선택했습니다.")
                     else:
                         # 이미 선택된 과목들만 언급된 경우
                         mentioned_subjects = ", ".join([s for s in parsed_subjects if s in selected_subjects])
                         print(f"[SUBJECT] 이미 선택한 과목입니다: {mentioned_subjects}")
-                else:
-                    # 선택과목이 이미 2개 모두 선택되어 있고, 아직 상태 전환이 안 된 경우 체크
-                    if len(selected_subjects) >= 2 and new_state == "mentoring":
-                        subjects_completed = True
-                        self._set_game_state(username, "daily_routine")
-                        new_state = "daily_routine"
-                        print(f"[STATE_TRANSITION] 선택과목이 이미 완료되어 상태가 daily_routine으로 전환되었습니다.")
                 
                 # 선택과목 목록 요청 확인
                 if "탐구과목" in user_message or "선택과목" in user_message or "과목 선택" in user_message or "과목 목록" in user_message:
@@ -1838,7 +1906,7 @@ class ChatbotService:
             )
             
             # 선택과목 목록 요청 시 프롬프트에 추가
-            if new_state == "mentoring" and ("탐구과목" in user_message or "선택과목" in user_message or "과목 선택" in user_message or "과목 목록" in user_message):
+            if new_state in ["icebreak", "mentoring"] and ("탐구과목" in user_message or "선택과목" in user_message or "과목 선택" in user_message or "과목 목록" in user_message):
                 subjects_list = self._get_subject_list_text()
                 prompt += f"\n\n[선택과목 목록]\n{subjects_list}\n\n사용자가 위 목록 중에서 선택과목을 고를 수 있도록 안내하세요. (최대 2개)"
             
@@ -1930,10 +1998,8 @@ class ChatbotService:
                     else:
                         reply += f"\n\n(선택과목이 모두 선택되었습니다: {subjects_text})"
             
-            # 선택과목 완료 시 특별 메시지 및 상태 전환
-            if subjects_completed:
-                narration = "선택과목이 모두 선택되었습니다! 이제 14시간으로 스케줄을 짜보세요."
-                print(f"[NARRATION] 선택과목 완료 메시지: {narration}")
+            # 선택과목 완료 시 나레이션은 이미 state machine에서 설정됨
+            # (subjects_completed는 더 이상 필요하지 않음 - state machine이 처리)
             
             # 시간표 업데이트 시 확인 메시지
             if schedule_updated and not week_passed:

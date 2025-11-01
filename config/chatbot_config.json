@@ -73,6 +73,50 @@
       "ice_break_to_mentoring": "서가윤이 조금 더 마음을 열기 시작했습니다. 호감도 10을 달성하여 이제 본격적인 멘토링을 시작할 수 있어요.",
       "mentoring_to_daily_routine": "탐구과목 선택이 완료되었습니다! 이제 재수생의 하루 루틴을 정해주세요. 14시간을 자유롭게 분배하여 학습 계획을 세울 수 있습니다."
     },
+    "state_machine": {
+      "initial_state": "start",
+      "states": {
+        "start": {
+          "name": "시작단계",
+          "description": "게임 시작 직후, 서가윤과 처음 만나는 단계",
+          "narration": "재수생 멘토링 게임이 시작되었습니다! 당신은 멘토입니다. 재수생 서가윤을 관리하여 성공적으로 입학시키세요! 먼저 서가윤과 대화하며 그녀의 특징을 파악해주세요. 대화를 통해 서가윤이 어떤 능력을 가지고 있는지 알 수 있습니다. 특징을 파악했다면 '탐구과목 선택' 명령어로 탐구과목을 정해주세요.",
+          "transitions": [
+            {
+              "name": "첫 대화 완료",
+              "trigger_type": "affection_increase",
+              "conditions": {
+                "affection_increase_min": 1
+              },
+              "next_state": "icebreak",
+              "transition_narration": "서가윤이 조금 더 마음을 열기 시작했습니다. 이제 본격적인 대화를 나눌 수 있어요."
+            }
+          ]
+        },
+        "icebreak": {
+          "name": "아이스브레이크단계",
+          "description": "서가윤과 신뢰를 쌓고 탐구과목을 선택하는 단계",
+          "narration": null,
+          "transitions": [
+            {
+              "name": "탐구과목 선택 완료",
+              "trigger_type": "affection_and_subjects",
+              "conditions": {
+                "affection_min": 10,
+                "subjects_count": 2
+              },
+              "next_state": "daily_routine",
+              "transition_narration": "탐구과목 선택이 완료되었습니다! 이제 재수생의 하루 루틴을 정해주세요. 14시간을 자유롭게 분배하여 학습 계획을 세울 수 있습니다."
+            }
+          ]
+        },
+        "daily_routine": {
+          "name": "일상루틴단계",
+          "description": "학습 시간표를 관리하고 주차별로 공부하는 단계",
+          "narration": null,
+          "transitions": []
+        }
+      }
+    },
     "prompt_injection_detection": {
       "enabled": true,
       "warning_keywords": [
