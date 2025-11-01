@@ -5,5 +5,13 @@
   "to_states": [],
   "narration": "AAA",
   "context": "[게임 상태: A상태]\n- A 행동을 선택한 상태입니다.\n- 이 상태를 유지하며 대화를 계속합니다.",
-  "transitions": []
-}
+  "transitions": [
+    {
+      "name": "D 입력",
+      "trigger_type": "user_input",
+      "conditions": {
+        "input_equals": "D"
+      },
+      "next_state": "Dstate",
+      "transition_narration": "D 상태로 이동합니다."
+    }]}

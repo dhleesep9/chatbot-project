@@ -6,19 +6,19 @@
       "trigger": "1주스킵",
       "description": "1주일 자동 스킵",
       "enabled": true,
-      "required_state": "daily_routine",
+      "required_state": null,
       "action": "skip_weeks",
       "parameters": {
         "weeks": 1
       },
       "success_message": "{week}주차가 완료되었습니다. 설정한 공부 시간만큼 실력이 향상되었어요!",
-      "error_message": "daily_routine 상태에서만 사용할 수 있습니다."
+      "error_message": "."
     },
     {
       "trigger": "4주스킵",
       "description": "4주일 자동 스킵",
       "enabled": true,
-      "required_state": "daily_routine",
+      "required_state": null,
       "action": "skip_weeks",
       "parameters": {
         "weeks": 4
