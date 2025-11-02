@@ -1,0 +1,1019 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{ bot_name }}와 대화하기</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="{{ url_for('static', filename='css/style.css') }}"
+      rel="stylesheet"
+    />
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+      }
+      body {
+        font-family: "IBM Plex Sans KR", sans-serif;
+        background: #f7f7f7;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      .header {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+
+        padding: 15px 20px;
+        box-sizing: border-box;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+      .header-center {
+        flex: 1;
+        text-align: center;
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: #333;
+      }
+      .close-btn {
+        font-size: 1.2rem;
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: #666;
+        padding: 5px 10px;
+      }
+      .reset-btn {
+        font-size: 0.9rem;
+        background: #ff4444;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        padding: 8px 16px;
+        margin-right: 10px;
+        transition: background 0.2s;
+      }
+      .reset-btn:hover {
+        background: #cc0000;
+      }
+      .header-left {
+        display: flex;
+        align-items: center;
+      }
+      .chat-area {
+        width: 100%;
+        max-width: 900px;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        padding: 20px;
+        box-sizing: border-box;
+        position: relative;
+      }
+      #chat-log {
+        flex: 1;
+        border: 1px solid #e0e0e0;
+        border-radius: 12px;
+        padding: 20px;
+        background: white;
+        overflow-y: auto;
+        overflow-x: hidden;
+        margin-bottom: 15px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        /* 드래그 스크롤 및 텍스트 선택 활성화 */
+        cursor: grab;
+        user-select: text;
+        -webkit-user-select: text;
+        -moz-user-select: text;
+        -ms-user-select: text;
+        /* 부드러운 스크롤 */
+        scroll-behavior: smooth;
+        -webkit-overflow-scrolling: touch;
+      }
+      #chat-log:active {
+        cursor: grabbing;
+      }
+      #chat-log::-webkit-scrollbar {
+        width: 8px;
+      }
+      #chat-log::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 10px;
+      }
+      #chat-log::-webkit-scrollbar-thumb {
+        background: #888;
+        border-radius: 10px;
+      }
+      #chat-log::-webkit-scrollbar-thumb:hover {
+        background: #555;
+      }
+      .message {
+        margin-bottom: 15px;
+        padding: 12px;
+        border-radius: 12px;
+        word-wrap: break-word;
+        animation: fadeIn 0.3s;
+        /* 텍스트 선택 활성화 */
+        user-select: text;
+        -webkit-user-select: text;
+        -moz-user-select: text;
+        -ms-user-select: text;
+        cursor: text;
+      }
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      .message.user {
+        text-align: right;
+        color: #0056b3;
+        margin-left: 20%;
+      }
+      .message.bot {
+        background: #f5f5f5;
+        color: #333;
+        margin-right: 20%;
+      }
+      .message.narration {
+        background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+        color: #fff;
+        text-align: center;
+        padding: 15px;
+        margin: 10px 10%;
+        border-radius: 12px;
+        font-weight: 500;
+        box-shadow: 0 2px 8px rgba(118, 75, 162, 0.3);
+        font-size: 0.95rem;
+        line-height: 1.6;
+      }
+      .bot-big-img {
+        display: block;
+        width: 100%;
+        max-width: 300px;
+        height: auto;
+        margin: 10px auto;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      }
+      .chat-input-area {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+      }
+      .chat-input-area input[type="text"] {
+        flex: 1;
+        padding: 12px 16px;
+        border: 2px solid #ddd;
+        border-radius: 25px;
+        font-size: 1rem;
+        transition: border 0.2s;
+      }
+      .chat-input-area input[type="text"]:focus {
+        outline: none;
+        border-color: #764ba2;
+      }
+      .chat-input-area button.send-btn {
+        padding: 12px 24px;
+        border: none;
+
+        color: #fff;
+        border-radius: 25px;
+        font-size: 1rem;
+        cursor: pointer;
+        transition: transform 0.2s;
+      }
+      .chat-input-area button.send-btn:hover {
+        transform: translateY(-2px);
+      }
+      .media-buttons {
+        position: absolute;
+        left: -60px;
+        bottom: 80px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .media-buttons button {
+        width: 45px;
+        height: 45px;
+        background: white;
+        border: 2px solid #ddd;
+        border-radius: 50%;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.3rem;
+      }
+      .media-buttons button:hover {
+        background: #764ba2;
+        border-color: #764ba2;
+        color: white;
+        transform: scale(1.1);
+      }
+      .modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        overflow: auto;
+        background-color: rgba(0, 0, 0, 0.7);
+      }
+      .modal-content {
+        background-color: #fff;
+        margin: 2% auto;
+        padding: 30px;
+        border-radius: 12px;
+        width: 90%;
+        max-width: 1000px;
+        position: relative;
+        animation: slideIn 0.3s;
+      }
+      @keyframes slideIn {
+        from {
+          transform: translateY(-50px);
+          opacity: 0;
+        }
+        to {
+          transform: translateY(0);
+          opacity: 1;
+        }
+      }
+      .modal-close {
+        position: absolute;
+        top: 15px;
+        right: 20px;
+        background: none;
+        border: none;
+        font-size: 2rem;
+        cursor: pointer;
+        color: #999;
+      }
+      .modal-close:hover {
+        color: #333;
+      }
+      .image-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 15px;
+        margin-top: 20px;
+      }
+      .image-grid img {
+        width: 100%;
+        height: auto;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: transform 0.2s;
+      }
+      .image-grid img:hover {
+        transform: scale(1.05);
+      }
+      /* Left side fixed character image inside a tall rectangle frame */
+      .side-image-frame {
+        position: fixed;
+        left: 40px;
+        top: 35%;
+        transform: translateY(-50%);
+        width: 400px;
+        height: auto; /* 카드 높이를 이미지에 딱 맞춤 */
+        max-height: 85vh; /* 화면 넘치지 않도록 상한 */
+        border: 2px solid #eee;
+        border-radius: 12px;
+        background: #fff;
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+        padding: 10px;
+        overflow: visible;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+        z-index: 11; /* UI 요소들보다 낮게 (이미지는 배경 역할) */
+      }
+      .side-image {
+        display: block;
+        width: 100%; /* 카드 가로에 맞춤 */
+        height: auto; /* 비율 유지 */
+        max-height: 70vh; /* 상태 표시 공간 확보 */
+      }
+      /* 서가윤 상태 표시 */
+      .character-status-display {
+        width: 100%;
+        margin-top: 12px;
+        padding: 12px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 8px;
+        text-align: center;
+        box-shadow: 0 2px 8px rgba(118, 75, 162, 0.3);
+      }
+      .status-label {
+        font-size: 0.85rem;
+        color: rgba(255, 255, 255, 0.9);
+        margin-bottom: 6px;
+        font-weight: 500;
+      }
+      .status-value {
+        font-size: 1.3rem;
+        font-weight: bold;
+        color: #fff;
+        margin-bottom: 4px;
+      }
+      .status-description {
+        font-size: 0.75rem;
+        color: rgba(255, 255, 255, 0.8);
+        line-height: 1.4;
+      }
+      /* 상태별 색상 */
+      .character-status-display.status-burnout {
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      }
+      .character-status-display.status-confusion {
+        background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+      }
+      .character-status-display.status-normal {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      }
+      /* UI 레이아웃 컨테이너 (모든 UI 요소를 담는 패널) */
+      .ui-layout-container {
+        position: fixed;
+        right: 40px;
+        top: 80px;
+        width: 400px;
+        max-height: calc(100vh - 120px);
+        background: rgba(255, 255, 255, 0.98);
+        border: 3px solid #764ba2;
+        border-radius: 16px;
+        box-shadow: 0 8px 24px rgba(118, 75, 162, 0.25);
+        z-index: 20;
+        font-family: "IBM Plex Sans KR", sans-serif;
+        overflow-y: auto;
+        overflow-x: hidden;
+        transition: box-shadow 0.2s;
+        cursor: default;
+        box-sizing: border-box; /* border 포함한 너비 계산 */
+      }
+      .ui-layout-container:hover {
+        box-shadow: 0 10px 30px rgba(118, 75, 162, 0.35);
+      }
+      .ui-layout-header {
+        position: sticky;
+        top: 0;
+        background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+        color: white;
+        padding: 12px 16px;
+        font-size: 1.1rem;
+        font-weight: 600;
+        text-align: center;
+        cursor: move;
+        cursor: grab;
+        user-select: none;
+        -webkit-user-select: none;
+        border-radius: 13px 13px 0 0;
+        z-index: 21;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      }
+      .ui-layout-header:active {
+        cursor: grabbing;
+      }
+      .ui-layout-content {
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        box-sizing: border-box; /* 패딩 포함한 너비 계산 */
+        overflow-x: hidden;
+        width: 100%;
+        min-width: 0; /* flex 오버플로우 방지 */
+      }
+      /* 호감도 표시 (레이아웃 내부용) */
+      .affection-display {
+        position: relative;
+        width: 100%;
+        padding: 12px 16px;
+        background: rgba(255, 255, 255, 0.98);
+        border: 2px solid #764ba2;
+        border-radius: 12px;
+        box-shadow: 0 4px 16px rgba(118, 75, 162, 0.2);
+        text-align: center;
+        font-family: "IBM Plex Sans KR", sans-serif;
+        /* 텍스트 선택 활성화 */
+        user-select: text;
+        -webkit-user-select: text;
+        -moz-user-select: text;
+        -ms-user-select: text;
+        cursor: default;
+        box-sizing: border-box; /* border, padding 포함한 너비 계산 */
+      }
+      .affection-display:hover {
+        box-shadow: 0 6px 20px rgba(118, 75, 162, 0.3);
+      }
+      .affection-label {
+        font-size: 0.9rem;
+        color: #666;
+        margin-bottom: 4px;
+        /* 드래그 핸들 스타일 */
+        cursor: move;
+        cursor: grab;
+        user-select: none;
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        padding: 4px;
+        border-radius: 4px;
+        transition: background 0.2s;
+      }
+      .affection-label:hover {
+        background: rgba(118, 75, 162, 0.1);
+      }
+      .affection-label:active {
+        cursor: grabbing;
+      }
+      .affection-value {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: #764ba2;
+      }
+      /* 체력 및 멘탈 컨테이너 */
+      .stats-container {
+        display: flex;
+        gap: 8px;
+        width: 100%;
+        margin-bottom: 12px;
+        box-sizing: border-box;
+      }
+      /* 체력 표시 */
+      .stamina-display {
+        position: relative;
+        flex: 1;
+        padding: 10px 12px;
+        background: rgba(255, 255, 255, 0.98);
+        border: 2px solid #f39c12;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(243, 156, 18, 0.15);
+        transition: box-shadow 0.3s ease;
+        box-sizing: border-box;
+        overflow: hidden;
+        word-wrap: break-word;
+        min-width: 0;
+      }
+      .stamina-display:hover {
+        box-shadow: 0 6px 20px rgba(243, 156, 18, 0.3);
+      }
+      /* 멘탈 표시 */
+      .mental-display {
+        position: relative;
+        flex: 1;
+        padding: 10px 12px;
+        background: rgba(255, 255, 255, 0.98);
+        border: 2px solid #9b59b6;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(155, 89, 182, 0.15);
+        transition: box-shadow 0.3s ease;
+        box-sizing: border-box;
+        overflow: hidden;
+        word-wrap: break-word;
+        min-width: 0;
+      }
+      .mental-display:hover {
+        box-shadow: 0 6px 20px rgba(155, 89, 182, 0.3);
+      }
+      .stamina-label,
+      .mental-label {
+        font-size: 0.85rem;
+        color: #666;
+        margin-bottom: 4px;
+        cursor: move;
+        user-select: none;
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        padding: 2px 6px;
+        border-radius: 6px;
+        transition: background 0.2s;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        text-align: center;
+      }
+      .stamina-label:hover {
+        background: rgba(243, 156, 18, 0.1);
+      }
+      .mental-label:hover {
+        background: rgba(155, 89, 182, 0.1);
+      }
+      .stamina-label:active,
+      .mental-label:active {
+        cursor: grabbing;
+      }
+      .stamina-value,
+      .mental-value {
+        font-size: 1.3rem;
+        font-weight: bold;
+        color: #f39c12;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+        text-align: center;
+      }
+      .mental-value {
+        color: #9b59b6;
+      }
+      .stamina-efficiency,
+      .mental-efficiency {
+        font-size: 0.75rem;
+        color: #888;
+        margin-top: 4px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        text-align: center;
+      }
+      /* 능력치 표시 */
+      .abilities-display {
+        position: relative;
+        width: 100%;
+        padding: 12px 16px;
+        background: rgba(255, 255, 255, 0.98);
+        border: 2px solid #ff6b6b;
+        border-radius: 12px;
+        box-shadow: 0 4px 16px rgba(255, 107, 107, 0.2);
+        font-family: "IBM Plex Sans KR", sans-serif;
+        user-select: text;
+        -webkit-user-select: text;
+        -moz-user-select: text;
+        -ms-user-select: text;
+        cursor: default;
+        box-sizing: border-box;
+      }
+      .abilities-display:hover {
+        box-shadow: 0 6px 20px rgba(255, 107, 107, 0.3);
+      }
+      .abilities-label {
+        font-size: 0.9rem;
+        color: #666;
+        margin-bottom: 8px;
+        text-align: center;
+        font-weight: 600;
+        color: #ff6b6b;
+      }
+      .abilities-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .ability-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 6px 8px;
+        background: rgba(255, 107, 107, 0.05);
+        border-radius: 6px;
+      }
+      .ability-name {
+        font-size: 0.85rem;
+        color: #333;
+        font-weight: 500;
+      }
+      .ability-value {
+        font-size: 1rem;
+        font-weight: bold;
+        color: #ff6b6b;
+      }
+      /* 시간표 표시 스타일 개선 */
+      .schedule-label {
+        font-size: 0.9rem;
+        color: #666;
+        margin-bottom: 12px;
+        text-align: center;
+        font-weight: 600;
+        color: #28a745;
+      }
+      .schedule-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-bottom: 8px;
+      }
+      .schedule-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 6px 8px;
+        background: rgba(40, 167, 69, 0.05);
+        border-radius: 6px;
+      }
+      .schedule-name {
+        font-size: 0.85rem;
+        color: #333;
+        font-weight: 500;
+      }
+      .schedule-hours {
+        font-size: 0.9rem;
+        font-weight: bold;
+        color: #28a745;
+      }
+      .schedule-total {
+        text-align: center;
+        padding-top: 8px;
+        border-top: 1px solid #eee;
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: #28a745;
+      }
+      @media (max-width: 1600px) {
+        .abilities-display {
+          display: none;
+        }
+        .affection-display {
+          display: none;
+        }
+      }
+      /* 시간표 표시 (레이아웃 내부용) */
+      .schedule-display {
+        position: relative;
+        width: 100%;
+        padding: 16px;
+        background: rgba(255, 255, 255, 0.98);
+        border: 2px solid #28a745;
+        border-radius: 12px;
+        box-shadow: 0 4px 16px rgba(40, 167, 69, 0.2);
+        font-family: "IBM Plex Sans KR", sans-serif;
+        display: block; /* 상시 표시 */
+        /* 텍스트 선택 활성화 */
+        user-select: text;
+        -webkit-user-select: text;
+        -moz-user-select: text;
+        -ms-user-select: text;
+        cursor: default;
+        box-sizing: border-box; /* border, padding 포함한 너비 계산 */
+      }
+      .schedule-display:hover {
+        box-shadow: 0 6px 20px rgba(40, 167, 69, 0.3);
+      }
+      /* 달력 표시 (레이아웃 내부용) */
+      .calendar-display {
+        position: relative;
+        width: 100%;
+        padding: 16px;
+        background: rgba(255, 255, 255, 0.98);
+        border: 2px solid #ff6b6b;
+        border-radius: 12px;
+        box-shadow: 0 4px 16px rgba(255, 107, 107, 0.2);
+        font-family: "IBM Plex Sans KR", sans-serif;
+        overflow: visible;
+        box-sizing: border-box; /* border, padding 포함한 너비 계산 */
+      }
+      .calendar-display:hover {
+        box-shadow: 0 6px 20px rgba(255, 107, 107, 0.3);
+      }
+      .calendar-title {
+        font-size: 1rem;
+        font-weight: 600;
+        color: #ff6b6b;
+        margin-bottom: 12px;
+        text-align: center;
+        user-select: none;
+        -webkit-user-select: none;
+        padding: 4px;
+        border-radius: 4px;
+      }
+      .calendar-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+        width: 100%;
+        box-sizing: border-box;
+        min-width: 0; /* flex 오버플로우 방지 */
+      }
+      .calendar-nav-btn {
+        background: #ff6b6b;
+        color: white;
+        border: none;
+        padding: 6px 12px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 0.85rem;
+        transition: background 0.2s;
+        flex-shrink: 0; /* 버튼 크기 유지 */
+        white-space: nowrap; /* 텍스트 줄바꿈 방지 */
+      }
+      .calendar-nav-btn:hover {
+        background: #ff5252;
+      }
+      .calendar-month-year {
+        font-weight: 600;
+        color: #333;
+        font-size: 1rem;
+        flex-shrink: 0; /* 텍스트 크기 유지 */
+        white-space: nowrap; /* 텍스트 줄바꿈 방지 */
+      }
+      .calendar-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 4px;
+        margin-bottom: 12px;
+        width: 100%;
+        box-sizing: border-box;
+        min-width: 0; /* 그리드 오버플로우 방지 */
+      }
+      .calendar-day-header {
+        text-align: center;
+        font-weight: 600;
+        font-size: 0.85rem;
+        color: #666;
+        padding: 8px 4px;
+      }
+      .calendar-day {
+        aspect-ratio: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.85rem;
+        border-radius: 4px;
+        cursor: default;
+        position: relative;
+        padding: 4px;
+      }
+      .calendar-day.other-month {
+        color: #ccc;
+      }
+      .calendar-day.today {
+        background: #ff6b6b;
+        color: white;
+        font-weight: bold;
+      }
+      .calendar-day.event {
+        background: #ffe0e0;
+        font-weight: 600;
+      }
+      .calendar-day.sunday {
+        color: #ff0000;
+      }
+      .calendar-day.saturday {
+        color: #0000ff;
+      }
+      .calendar-day.event.sunday {
+        color: #ff0000;
+      }
+      .calendar-day.event.saturday {
+        color: #0000ff;
+      }
+      .event-tooltip {
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #333;
+        color: white;
+        padding: 6px 10px;
+        border-radius: 6px;
+        font-size: 0.75rem;
+        white-space: nowrap;
+        margin-bottom: 4px;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s;
+        z-index: 1000;
+      }
+      .calendar-day.event:hover .event-tooltip {
+        opacity: 1;
+      }
+      .current-date-display {
+        text-align: center;
+        font-size: 0.9rem;
+        color: #ff6b6b;
+        font-weight: 600;
+        padding-top: 8px;
+        border-top: 1px solid #eee;
+      }
+      @media (max-width: 1200px) {
+        .side-image-frame {
+          display: none;
+        }
+        .ui-layout-container {
+          display: none !important;
+        }
+      }
+      /* push chat content to the right so it doesn't overlap the side frame */
+      .chat-area {
+        margin: 0 460px 0 460px; /* 좌측 이미지(400+40) + 우측 UI(380+40) 여백 확보 */
+        max-width: 920px; /* 채팅 영역을 보다 중앙에 가깝게 */
+        /* 전체 영역 텍스트 선택 활성화 */
+        user-select: text;
+        -webkit-user-select: text;
+        -moz-user-select: text;
+        -ms-user-select: text;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="side-image-frame">
+      <img
+        class="side-image"
+        src="{{ url_for('static', filename='images/chatbot/하-0.png') }}"
+        alt="서가윤"
+      />
+      <!-- 서가윤 상태 표시 -->
+      <div class="character-status-display" id="character-status-display">
+        <div class="status-label">서가윤 상태</div>
+        <div class="status-value" id="status-value">정상</div>
+        <div class="status-description" id="status-description">
+          건강한 상태입니다.
+        </div>
+      </div>
+    </div>
+    <!-- UI 레이아웃 컨테이너 (모든 UI 요소를 담는 패널) -->
+    <div class="ui-layout-container" id="ui-layout-container">
+      <div class="ui-layout-header">게임 정보</div>
+      <div class="ui-layout-content">
+        <!-- 달력 UI -->
+        <div class="calendar-display" id="calendar-display">
+          <div class="calendar-title">시험 일정</div>
+          <div class="calendar-header">
+            <button class="calendar-nav-btn" id="calendar-prev">◀ 이전</button>
+            <span class="calendar-month-year" id="calendar-month-year"
+              >2023년 11월</span
+            >
+            <button class="calendar-nav-btn" id="calendar-next">다음 ▶</button>
+          </div>
+          <div class="calendar-grid" id="calendar-grid">
+            <!-- 달력 그리드가 여기에 동적으로 생성됩니다 -->
+          </div>
+          <div class="current-date-display" id="current-date-display">
+            현재 날짜: 2023년 11월 17일
+          </div>
+        </div>
+        <!-- 호감도 표시 -->
+        <div class="affection-display" id="affection-display">
+          <div class="affection-label">호감도</div>
+          <div class="affection-value" id="affection-value">5</div>
+        </div>
+        <!-- 체력 및 멘탈 표시 (나란히) -->
+        <div class="stats-container">
+          <div class="stamina-display" id="stamina-display">
+            <div class="stamina-label">체력</div>
+            <div class="stamina-value" id="stamina-value">30</div>
+            <div class="stamina-efficiency" id="stamina-efficiency">
+              (효율: 100%)
+            </div>
+          </div>
+          <div class="mental-display" id="mental-display">
+            <div class="mental-label">멘탈</div>
+            <div class="mental-value" id="mental-value">40</div>
+            <div class="mental-efficiency" id="mental-efficiency">
+              (효율: 100%)
+            </div>
+          </div>
+        </div>
+        <!-- 능력치 표시 -->
+        <div class="abilities-display" id="abilities-display">
+          <div class="abilities-label">능력치</div>
+          <div class="abilities-grid">
+            <div class="ability-item">
+              <span class="ability-name">국어</span>
+              <span class="ability-value" id="ability-국어">0</span>
+            </div>
+            <div class="ability-item">
+              <span class="ability-name">수학</span>
+              <span class="ability-value" id="ability-수학">0</span>
+            </div>
+            <div class="ability-item">
+              <span class="ability-name">영어</span>
+              <span class="ability-value" id="ability-영어">0</span>
+            </div>
+            <div class="ability-item">
+              <span class="ability-name">탐구1</span>
+              <span class="ability-value" id="ability-탐구1">0</span>
+            </div>
+            <div class="ability-item">
+              <span class="ability-name">탐구2</span>
+              <span class="ability-value" id="ability-탐구2">0</span>
+            </div>
+          </div>
+        </div>
+        <!-- 시간표 표시 -->
+        <div
+          class="schedule-display"
+          id="schedule-display"
+          style="display: none"
+        >
+          <div class="schedule-label">주간 학습 시간표</div>
+          <div class="schedule-grid">
+            <div class="schedule-item">
+              <span class="schedule-name">국어</span>
+              <span class="schedule-hours" id="schedule-국어">0시간</span>
+            </div>
+            <div class="schedule-item">
+              <span class="schedule-name">수학</span>
+              <span class="schedule-hours" id="schedule-수학">0시간</span>
+            </div>
+            <div class="schedule-item">
+              <span class="schedule-name">영어</span>
+              <span class="schedule-hours" id="schedule-영어">0시간</span>
+            </div>
+            <div class="schedule-item">
+              <span class="schedule-name">탐구1</span>
+              <span class="schedule-hours" id="schedule-탐구1">0시간</span>
+            </div>
+            <div class="schedule-item">
+              <span class="schedule-name">탐구2</span>
+              <span class="schedule-hours" id="schedule-탐구2">0시간</span>
+            </div>
+          </div>
+          <div class="schedule-total">
+            <span>총 시간: </span>
+            <span id="schedule-total">0시간</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <header class="header">
+      <div class="header-left">
+        <button class="reset-btn" id="reset-btn">초기화</button>
+      </div>
+      <div class="header-center">{{ bot_name }}</div>
+      <button
+        class="close-btn"
+        onclick="window.location.href='{{ url_for('index') }}'"
+      >
+        &times;
+      </button>
+    </header>
+
+    <div class="chat-area" data-username="{{ username }}">
+      <div id="chat-log"></div>
+
+      <div class="chat-input-area">
+        <input
+          type="text"
+          id="user-message"
+          placeholder="메시지를 입력하세요..."
+        />
+        <button class="send-btn" id="send-btn">전송</button>
+      </div>
+    </div>
+
+    <!-- Image Gallery Modal -->
+    <div id="imageModal" class="modal">
+      <div class="modal-content">
+        <button class="modal-close" data-close-modal="imageModal">
+          &times;
+        </button>
+        <h2>📷 이미지 갤러리</h2>
+        <div class="image-grid">
+          {% if image_files %} {% for filename in image_files %}
+          <img
+            src="./static/images/hateslop/logo_black_genai.png"
+            alt="{{ filename }}"
+          />
+          {% endfor %} {% else %}
+          <p>이미지가 없습니다.</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Video Modal -->
+    <div id="videoModal" class="modal">
+      <div class="modal-content">
+        <button class="modal-close" data-close-modal="videoModal">
+          &times;
+        </button>
+        <h2>🎬 영상 보기</h2>
+        <video
+          controls
+          style="width: 100%; border-radius: 12px; margin-top: 20px"
+        >
+          <source
+            src="{{ url_for('static', filename='videos/chatbot/video.mp4') }}"
+            type="video/mp4"
+          />
+          브라우저가 비디오를 지원하지 않습니다.
+        </video>
+      </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/calendar.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/chatbot.js') }}"></script>
+  </body>
+</html>

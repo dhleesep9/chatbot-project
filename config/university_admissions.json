@@ -1,0 +1,237 @@
+[
+  {
+    "university": "서강대학교",
+    "department": "경영학과",
+    "cutoff_percentile": 99.5
+  },
+  {
+    "university": "서강대학교",
+    "department": "경제학과",
+    "cutoff_percentile": 99.0
+  },
+  {
+    "university": "서강대학교",
+    "department": "국어국문학과",
+    "cutoff_percentile": 98.5
+  },
+  {
+    "university": "서강대학교",
+    "department": "영어영문학과",
+    "cutoff_percentile": 98.0
+  },
+  {
+    "university": "서강대학교",
+    "department": "사회학과",
+    "cutoff_percentile": 97.5
+  },
+  {
+    "university": "서강대학교",
+    "department": "심리학과",
+    "cutoff_percentile": 97.0
+  },
+  {
+    "university": "서강대학교",
+    "department": "정치외교학과",
+    "cutoff_percentile": 96.5
+  },
+  {
+    "university": "서강대학교",
+    "department": "미디어커뮤니케이션학부",
+    "cutoff_percentile": 96.0
+  },
+  {
+    "university": "서강대학교",
+    "department": "수학과",
+    "cutoff_percentile": 95.5
+  },
+  {
+    "university": "서강대학교",
+    "department": "물리학과",
+    "cutoff_percentile": 95.0
+  },
+  {
+    "university": "서강대학교",
+    "department": "화학과",
+    "cutoff_percentile": 94.5
+  },
+  {
+    "university": "서강대학교",
+    "department": "생명과학과",
+    "cutoff_percentile": 94.0
+  },
+  {
+    "university": "서강대학교",
+    "department": "전자공학과",
+    "cutoff_percentile": 93.5
+  },
+  {
+    "university": "서강대학교",
+    "department": "컴퓨터공학과",
+    "cutoff_percentile": 93.0
+  },
+  {
+    "university": "서강대학교",
+    "department": "기계공학과",
+    "cutoff_percentile": 92.5
+  },
+  {
+    "university": "서강대학교",
+    "department": "화학공학과",
+    "cutoff_percentile": 92.0
+  },
+  {
+    "university": "서울대학교",
+    "department": "경영학과",
+    "cutoff_percentile": 99.9
+  },
+  {
+    "university": "서울대학교",
+    "department": "경제학부",
+    "cutoff_percentile": 99.8
+  },
+  {
+    "university": "서울대학교",
+    "department": "의학과",
+    "cutoff_percentile": 99.9
+  },
+  {
+    "university": "서울대학교",
+    "department": "법학과",
+    "cutoff_percentile": 99.7
+  },
+  {
+    "university": "연세대학교",
+    "department": "경영학과",
+    "cutoff_percentile": 99.3
+  },
+  {
+    "university": "연세대학교",
+    "department": "경제학과",
+    "cutoff_percentile": 99.0
+  },
+  {
+    "university": "연세대학교",
+    "department": "의학과",
+    "cutoff_percentile": 99.5
+  },
+  {
+    "university": "연세대학교",
+    "department": "법학과",
+    "cutoff_percentile": 99.2
+  },
+  {
+    "university": "고려대학교",
+    "department": "경영학과",
+    "cutoff_percentile": 99.2
+  },
+  {
+    "university": "고려대학교",
+    "department": "경제학과",
+    "cutoff_percentile": 98.9
+  },
+  {
+    "university": "고려대학교",
+    "department": "의학과",
+    "cutoff_percentile": 99.4
+  },
+  {
+    "university": "고려대학교",
+    "department": "법학과",
+    "cutoff_percentile": 99.1
+  },
+  {
+    "university": "성균관대학교",
+    "department": "경영학과",
+    "cutoff_percentile": 98.0
+  },
+  {
+    "university": "성균관대학교",
+    "department": "경제학과",
+    "cutoff_percentile": 97.5
+  },
+  {
+    "university": "성균관대학교",
+    "department": "법학과",
+    "cutoff_percentile": 98.0
+  },
+  {
+    "university": "한양대학교",
+    "department": "경영학부",
+    "cutoff_percentile": 97.0
+  },
+  {
+    "university": "한양대학교",
+    "department": "경제금융학부",
+    "cutoff_percentile": 96.5
+  },
+  {
+    "university": "이화여자대학교",
+    "department": "경영학과",
+    "cutoff_percentile": 98.0
+  },
+  {
+    "university": "이화여자대학교",
+    "department": "경제학과",
+    "cutoff_percentile": 97.5
+  },
+  {
+    "university": "중앙대학교",
+    "department": "경영경제학부",
+    "cutoff_percentile": 95.0
+  },
+  {
+    "university": "중앙대학교",
+    "department": "법학과",
+    "cutoff_percentile": 95.5
+  },
+  {
+    "university": "경희대학교",
+    "department": "경영학과",
+    "cutoff_percentile": 94.0
+  },
+  {
+    "university": "경희대학교",
+    "department": "국제학부",
+    "cutoff_percentile": 94.5
+  },
+  {
+    "university": "한국외국어대학교",
+    "department": "경영학부",
+    "cutoff_percentile": 93.0
+  },
+  {
+    "university": "한국외국어대학교",
+    "department": "경제학과",
+    "cutoff_percentile": 92.5
+  },
+  {
+    "university": "서울시립대학교",
+    "department": "경영학과",
+    "cutoff_percentile": 91.0
+  },
+  {
+    "university": "서울시립대학교",
+    "department": "경제학부",
+    "cutoff_percentile": 90.5
+  },
+  {
+    "university": "건국대학교",
+    "department": "경영학과",
+    "cutoff_percentile": 89.0
+  },
+  {
+    "university": "건국대학교",
+    "department": "경제학과",
+    "cutoff_percentile": 88.5
+  },
+  {
+    "university": "홍익대학교",
+    "department": "경영학과",
+    "cutoff_percentile": 88.0
+  },
+  {
+    "university": "홍익대학교",
+    "department": "경제학부",
+    "cutoff_percentile": 87.5
+  }
+]
