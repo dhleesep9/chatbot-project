@@ -869,6 +869,26 @@ class ChatbotService:
         current_state = self._get_game_state(username)
         print(f"[STATE_CHECK] Current state: {current_state}, user_message: '{user_message}'")
 
+        # Global transitions 체크 (현재 state에 무관하게 항상 확인)
+        current_mental = self.mental.get(username, 40)
+        print(f"[GLOBAL_TRANSITION_CHECK] Mental: {current_mental}, Affection: {new_affection}")
+
+        # 멘탈이 0 이하일 경우 -> mental_explode 엔딩
+        if current_mental <= 0:
+            print(f"[GLOBAL_TRANSITION] Mental <= 0, transitioning to mental_explode")
+            self._set_game_state(username, "mental_explode")
+            next_state_info = self._get_state_info("mental_explode")
+            state_narration = next_state_info.get("narration")
+            return (True, state_narration)
+
+        # 호감도가 100 이상일 경우 -> love_attack 엔딩
+        if new_affection >= 100:
+            print(f"[GLOBAL_TRANSITION] Affection >= 100, transitioning to love_attack")
+            self._set_game_state(username, "love_attack")
+            next_state_info = self._get_state_info("love_attack")
+            state_narration = next_state_info.get("narration")
+            return (True, state_narration)
+
         # 현재 상태 정보 가져오기 (별도 JSON에서 로드)
         state_info = self._get_state_info(current_state)
         transitions = state_info.get("transitions", [])

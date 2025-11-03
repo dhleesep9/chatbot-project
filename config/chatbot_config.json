@@ -84,7 +84,9 @@
       "3su_ending",
       "athlete_ending",
       "military_ending",
-      "love_ending"
+      "love_ending",
+      "mental_explode",
+      "love_attack"
     ]
   },
   "prompt_injection_detection": {
