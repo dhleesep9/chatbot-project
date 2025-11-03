@@ -86,7 +86,8 @@
       "military_ending",
       "love_ending",
       "mental_explode",
-      "love_attack"
+      "love_attack",
+      "broken_body"
     ]
   },
   "prompt_injection_detection": {

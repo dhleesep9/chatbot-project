@@ -871,7 +871,16 @@ class ChatbotService:
 
         # Global transitions 체크 (현재 state에 무관하게 항상 확인)
         current_mental = self.mentals.get(username, 40)
-        print(f"[GLOBAL_TRANSITION_CHECK] Mental: {current_mental}, Affection: {new_affection}")
+        current_stamina = self.stamina.get(username, 30)
+        print(f"[GLOBAL_TRANSITION_CHECK] Mental: {current_mental}, Stamina: {current_stamina}, Affection: {new_affection}")
+
+        # 체력이 0 이하일 경우 -> broken_body 엔딩
+        if current_stamina <= 0:
+            print(f"[GLOBAL_TRANSITION] Stamina <= 0, transitioning to broken_body")
+            self._set_game_state(username, "broken_body")
+            next_state_info = self._get_state_info("broken_body")
+            state_narration = next_state_info.get("narration")
+            return (True, state_narration)
 
         # 멘탈이 0 이하일 경우 -> mental_explode 엔딩
         if current_mental <= 0:
