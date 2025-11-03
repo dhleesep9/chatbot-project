@@ -184,14 +184,22 @@ function updateAffectionDisplay(affection) {
   if (!speakingAnimationInterval) {
     const sideImage = document.querySelector(".side-image");
     if (sideImage) {
-      // 현재 이미지가 비정상 상태 이미지가 아닌 경우에만 호감도 이미지로 변경
-      const currentSrc = sideImage.src;
-      const isAbnormalState =
-        currentSrc.includes("/번아웃") || currentSrc.includes("/멘붕");
+      // 실제 상태 값을 확인 (체력이 10 이하이면 번아웃 상태 유지)
+      const isBurnout = currentStamina !== undefined && currentStamina <= 10;
+      const isConfusion = currentMental !== undefined && currentMental <= 20;
 
-      if (!isAbnormalState) {
+      // 번아웃이나 혼란 상태가 아니면 호감도 이미지로 변경
+      if (!isBurnout && !isConfusion) {
         const defaultImage = getDefaultImageByAffection(affection);
         sideImage.src = defaultImage;
+      }
+      // 번아웃 상태면 번아웃 이미지 유지
+      else if (isBurnout) {
+        sideImage.src = "/static/images/chatbot/번아웃-0.png";
+      }
+      // 혼란 상태면 멘붕 이미지 유지
+      else if (isConfusion) {
+        sideImage.src = "/static/images/chatbot/end/멘붕-2.png";
       }
     }
   }
@@ -205,6 +213,9 @@ function updateStaminaDisplay(stamina) {
   if (staminaValue) {
     staminaValue.textContent = stamina;
   }
+
+  // 현재 체력 저장 (번아웃 상태 확인용)
+  currentStamina = stamina;
 
   // 체력에 따른 효율 계산: 효율(%) = 100 + (체력 - 30)
   const efficiency = 100 + (stamina - 30);
@@ -221,6 +232,9 @@ function updateMentalDisplay(mental) {
   if (mentalValue) {
     mentalValue.textContent = mental;
   }
+
+  // 현재 멘탈 저장 (혼란 상태 확인용)
+  currentMental = mental;
 
   // 멘탈에 따른 효율 계산: 효율(%) = 100 + (멘탈 - 40)
   const efficiency = 100 + (mental - 40);
@@ -292,16 +306,21 @@ function updateCharacterStatus(stamina, mental) {
   // 이미지 업데이트
   if (sideImage && !speakingAnimationInterval) {
     if (mainStatus.image) {
-      // 비정상 상태 이미지로 변경
+      // 비정상 상태 이미지로 변경 (번호아웃 상태면 번아웃 이미지 유지)
       sideImage.src = mainStatus.image;
     } else {
       // 정상 상태로 복귀 시 호감도에 따른 이미지로 복원
-      const currentSrc = sideImage.src;
-      const isAbnormalState =
-        currentSrc.includes("/번아웃") || currentSrc.includes("/멘붕");
-      if (isAbnormalState) {
+      // 하지만 실제 상태 값이 번아웃이 아니라는 것을 확인 (이미지 경로가 아닌 실제 값으로 확인)
+      const isActuallyBurnout = currentStamina !== undefined && currentStamina <= 10;
+      const isActuallyConfusion = currentMental !== undefined && currentMental <= 20;
+      
+      if (!isActuallyBurnout && !isActuallyConfusion) {
         const defaultImage = getDefaultImageByAffection(currentAffection);
         sideImage.src = defaultImage;
+      }
+      // 실제로 번아웃 상태면 번아웃 이미지 유지
+      else if (isActuallyBurnout) {
+        sideImage.src = "/static/images/chatbot/번아웃-0.png";
       }
     }
   }
@@ -545,9 +564,9 @@ function startSpeakingAnimation(affection = null) {
   const sideImage = document.querySelector(".side-image");
   if (!sideImage) return;
 
-  const currentSrc = sideImage.src;
-  const isBurnout = currentSrc.includes("/번아웃");
-  const isConfusion = currentSrc.includes("/멘붕");
+  // 체력과 멘탈 상태를 우선적으로 확인 (현재 이미지 경로가 아닌 실제 상태 값 확인)
+  const isBurnout = currentStamina !== undefined && currentStamina <= 10;
+  const isConfusion = currentMental !== undefined && currentMental <= 20;
 
   // 호감도가 전달되지 않으면 현재 저장된 호감도 사용
   const targetAffection = affection !== null ? affection : currentAffection;
@@ -559,6 +578,7 @@ function startSpeakingAnimation(affection = null) {
   let prefix;
   let basePath;
   if (isBurnout) {
+    // 번아웃 상태: 무조건 번아웃 이미지 사용 (호감도 무관)
     prefix = "번아웃";
     basePath = "/static/images/chatbot/";
   } else if (isConfusion) {
@@ -618,8 +638,9 @@ function stopSpeakingAnimation(affection = null) {
   const sideImage = document.querySelector(".side-image");
   if (sideImage) {
     // 체력이 10 이하이거나 멘탈이 20 이하인 경우 비정상 상태 이미지 표시
+    // 번아웃이 우선순위가 높음 (체력이 낮으면 무조건 번아웃)
     if (currentStamina !== undefined && currentStamina <= 10) {
-      // 번아웃 이미지 표시 (-0 버전)
+      // 번아웃 이미지 표시 (-0 버전, 절대로 호감도 이미지로 바뀌지 않음)
       sideImage.src = "/static/images/chatbot/번아웃-0.png";
     } else if (currentMental !== undefined && currentMental <= 20) {
       // 혼란 이미지 표시 (멘붕)

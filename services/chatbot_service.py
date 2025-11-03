@@ -159,6 +159,7 @@ class ChatbotService:
         from services.handlers.subject_selection_handler import SubjectSelectionHandler
         from services.handlers.exam_feedback_handler import JuneExamFeedbackHandler, SeptemberExamFeedbackHandler
         from services.handlers.mock_exam_feedback_handler import MockExamFeedbackHandler, OfficialMockExamFeedbackHandler
+        from services.handlers.university_application_handler import UniversityApplicationHandler
 
         self.handler_registry = HandlerRegistry()
         self.handler_registry.register('exam_strategy', ExamStrategyHandler(self))
@@ -172,7 +173,8 @@ class ChatbotService:
         self.handler_registry.register('9exam_feedback', SeptemberExamFeedbackHandler(self))
         self.handler_registry.register('mock_exam_feedback', MockExamFeedbackHandler(self))
         self.handler_registry.register('official_mock_exam_feedback', OfficialMockExamFeedbackHandler(self))
-        print(f"[ChatbotService] handler registry loaded: exam_strategy, study_schedule, mock_exam, 6exam, 9exam, 11exam, selection, 6exam_feedback, 9exam_feedback, mock_exam_feedback, official_mock_exam_feedback")
+        self.handler_registry.register('university_application', UniversityApplicationHandler(self))
+        print(f"[ChatbotService] handler registry loaded: exam_strategy, study_schedule, mock_exam, 6exam, 9exam, 11exam, selection, 6exam_feedback, 9exam_feedback, mock_exam_feedback, official_mock_exam_feedback, university_application")
 
         # 2. OpenAI Client 초기화
         try:
@@ -239,6 +241,10 @@ class ChatbotService:
         # 9.5. 멘탈 저장 (기본값 40)
         self.mentals = {}  # {username: mental_value}
         print("[ChatbotService] 멘탈 시스템 초기화 완료")
+        
+        # 9.9. 대학 지원 정보 저장
+        self.university_application_info = {}  # {username: {"eligible_universities": [...], "avg_percentile": float, "exam_scores": {...}}}
+        print("[ChatbotService] 대학 지원 정보 저장 시스템 초기화 완료")
 
         # 9.6. 사설모의고사 취약점 정보 저장 (피드백용)
         self.mock_exam_weakness = {}  # {username: {"subject": str, "message": str}}
@@ -809,10 +815,16 @@ class ChatbotService:
             조건 만족 여부
         """
         trigger_type = transition.get("trigger_type")
+        print(f"[TRIGGER_EVAL_START] Starting evaluation for trigger_type: '{trigger_type}'")
         
         # 트리거가 등록되어 있는지 확인
-        if not self.trigger_registry.has_trigger(trigger_type):
-            print(f"[WARN] Trigger type '{trigger_type}' not found in registry. Available triggers: {self.trigger_registry.list_triggers()}")
+        available_triggers = self.trigger_registry.list_triggers()
+        print(f"[TRIGGER_EVAL] Available triggers: {available_triggers}")
+        has_trigger = self.trigger_registry.has_trigger(trigger_type)
+        print(f"[TRIGGER_EVAL] Has trigger '{trigger_type}': {has_trigger}")
+        
+        if not has_trigger:
+            print(f"[WARN] Trigger type '{trigger_type}' not found in registry. Available triggers: {available_triggers}")
             return False
 
         # 트리거 실행 컨텍스트 구성
@@ -827,10 +839,17 @@ class ChatbotService:
         }
         
         print(f"[TRIGGER_EVAL] Evaluating trigger '{trigger_type}' with user_message: '{user_message}'")
+        print(f"[TRIGGER_EVAL] Context: username={username}, current_state={context['current_state']}")
 
         # 트리거 레지스트리를 통해 동적으로 트리거 실행
-        result = self.trigger_registry.evaluate_trigger(trigger_type, transition, context)
-        print(f"[TRIGGER_EVAL] Trigger '{trigger_type}' result: {result}")
+        try:
+            result = self.trigger_registry.evaluate_trigger(trigger_type, transition, context)
+            print(f"[TRIGGER_EVAL] Trigger '{trigger_type}' result: {result}")
+        except Exception as e:
+            print(f"[ERROR] Trigger evaluation exception: {e}")
+            import traceback
+            traceback.print_exc()
+            result = False
         
         return result
 
@@ -860,9 +879,18 @@ class ChatbotService:
             trigger_type = transition.get('trigger_type')
             next_state = transition.get('next_state')
             print(f"[STATE_CHECK] Checking transition: {trigger_type} -> {next_state}")
+            print(f"[STATE_CHECK] Transition details: {transition}")
+            print(f"[STATE_CHECK] About to call _evaluate_transition_condition with username={username}, affection_increased={affection_increased}, user_message='{user_message}'")
             
-            result = self._evaluate_transition_condition(username, transition, affection_increased, user_message)
-            print(f"[STATE_CHECK] Transition evaluation result: {result} for trigger_type '{trigger_type}'")
+            try:
+                print(f"[STATE_CHECK] Calling _evaluate_transition_condition...")
+                result = self._evaluate_transition_condition(username, transition, affection_increased, user_message)
+                print(f"[STATE_CHECK] Transition evaluation result: {result} for trigger_type '{trigger_type}', next_state: '{next_state}'")
+            except Exception as e:
+                print(f"[ERROR] Transition evaluation failed: {e}")
+                import traceback
+                traceback.print_exc()
+                result = False
             
             if result:
                 transition_narration = transition.get("transition_narration")
@@ -1220,10 +1248,88 @@ class ChatbotService:
         new_date = date + timedelta(days=days)
         return new_date.strftime("%Y-%m-%d")
     
-    def _apply_schedule_to_abilities(self, username: str):
+    def _get_strategy_multiplier(self, username: str, subject: str) -> float:
+        """
+        시험 전략 배율 가져오기
+        
+        Args:
+            username: 사용자 이름
+            subject: 과목명 (국어, 수학, 영어, 탐구1, 탐구2)
+        
+        Returns:
+            배율 (VERY_GOOD: 1.5, GOOD: 1.05, POOR: 1.0, 전략 없음: 1.0)
+        """
+        if username not in self.exam_progress:
+            return 1.0
+        
+        strategies = self.exam_progress[username].get("strategies", {})
+        if subject not in strategies:
+            return 1.0
+        
+        strategy_quality = strategies[subject].get("quality", "POOR")
+        multiplier_map = {
+            "VERY_GOOD": 1.5,
+            "GOOD": 1.05,
+            "POOR": 1.0
+        }
+        return multiplier_map.get(strategy_quality, 1.0)
+    
+    def _apply_ability_multipliers(self, username: str, subject: str, base_increase: float) -> float:
+        """
+        능력치 증가에 배율을 적용하는 공통 함수
+        - 진로-과목 배율 (1.2배)
+        - 시험 전략 배율 (1.0, 1.05, 1.5배)
+        
+        Args:
+            username: 사용자 이름
+            subject: 과목명 (국어, 수학, 영어, 탐구1, 탐구2)
+            base_increase: 기본 증가량
+        
+        Returns:
+            최종 증가량 (배율 적용 후)
+        """
+        final_increase = base_increase
+        multipliers_applied = []
+        
+        # 1. 진로-과목 배율 적용
+        career = self._get_career(username)
+        selected_subjects = self._get_selected_subjects(username)
+        
+        # 탐구1, 탐구2를 실제 선택과목으로 매핑
+        actual_subject = subject
+        if subject == "탐구1" and len(selected_subjects) > 0:
+            actual_subject = selected_subjects[0]
+        elif subject == "탐구2" and len(selected_subjects) > 1:
+            actual_subject = selected_subjects[1]
+        
+        # 진로와 관련된 선택과목인지 확인
+        if career and actual_subject in selected_subjects:
+            from services.utils.career_manager import get_career_subject_bonus_multiplier
+            career_multiplier = get_career_subject_bonus_multiplier(career, actual_subject)
+            if career_multiplier > 1.0:
+                final_increase = final_increase * career_multiplier
+                multipliers_applied.append(f"진로-과목 {career_multiplier}배")
+        
+        # 2. 시험 전략 배율 적용
+        strategy_multiplier = self._get_strategy_multiplier(username, subject)
+        if strategy_multiplier > 1.0:
+            final_increase = final_increase * strategy_multiplier
+            multipliers_applied.append(f"시험전략 {strategy_multiplier}배")
+        
+        # 로그 출력
+        if multipliers_applied:
+            print(f"[ABILITY_MULTIPLIER] {username}의 '{subject}' 과목: 기본 {base_increase} → 최종 {final_increase:.2f} ({', '.join(multipliers_applied)} 적용)")
+        
+        return final_increase
+    
+    def _apply_schedule_to_abilities(self, username: str, mentoring_end_bonus: float = 1.0):
         """
         시간표에 따라 능력치 증가
         시간당 +1 증가 (체력에 따른 효율 적용)
+        
+        Args:
+            username: 사용자 이름
+            mentoring_end_bonus: 멘토링 종료 시 추가 배율 (기본값: 1.0, 멘토링 종료 시: 10.0)
         """
         schedule = self._get_schedule(username)
         if not schedule:
@@ -1244,40 +1350,33 @@ class ChatbotService:
             print(f"[STAMINA] {username}의 체력이 {current_stamina}에서 {new_stamina}로 증가했습니다. (운동 {exercise_hours}시간, +{exercise_hours})")
             stamina = new_stamina  # 이후 능력치 계산에 업데이트된 체력 사용
         
-        # 진로와 선택과목 매핑을 위한 진로 가져오기
-        career = self._get_career(username)
-        selected_subjects = self._get_selected_subjects(username)
-        
         for subject, hours in schedule.items():
             if subject in abilities:
                 # 체력과 멘탈의 곱연산 효율 적용: 시간 * 효율
-                increased = hours * efficiency
+                base_increase = hours * efficiency
                 
-                # 진로와 관련된 선택과목이면 배율 적용 (1.2배)
-                # 탐구1, 탐구2를 실제 선택과목으로 매핑
-                actual_subject = subject
-                if subject == "탐구1" and len(selected_subjects) > 0:
-                    actual_subject = selected_subjects[0]
-                elif subject == "탐구2" and len(selected_subjects) > 1:
-                    actual_subject = selected_subjects[1]
+                # 배율 적용 (진로-과목 + 시험 전략)
+                increased = self._apply_ability_multipliers(username, subject, base_increase)
                 
-                # 진로와 관련된 선택과목인지 확인
-                if career and actual_subject in selected_subjects:
-                    from services.utils.career_manager import get_career_subject_bonus_multiplier
-                    multiplier = get_career_subject_bonus_multiplier(career, actual_subject)
-                    increased = increased * multiplier
-                    if multiplier > 1.0:
-                        print(f"[CAREER_BONUS] {username}의 '{actual_subject}' 과목({subject})에 진로 관련 보너스 적용! ({multiplier}배)")
+                # 멘토링 종료 보너스 배율 적용
+                increased = increased * mentoring_end_bonus
                 
                 abilities[subject] = min(2500, abilities[subject] + increased)  # 최대 2500
             # 운동은 이미 위에서 처리했으므로 여기서는 스킵
         
+        if mentoring_end_bonus > 1.0:
+            print(f"[MENTORING_END_BONUS] 멘토링 종료 보너스 {mentoring_end_bonus}배 적용")
+        
         self._set_abilities(username, abilities)
     
-    def _advance_one_week(self, username: str) -> dict:
+    def _advance_one_week(self, username: str, mentoring_end: bool = False) -> dict:
         """
         1주일을 진행시키는 통합 메서드
         시간표에 따라 능력치를 증가시키고, 날짜와 주차를 업데이트합니다.
+        
+        Args:
+            username: 사용자 이름
+            mentoring_end: 멘토링 종료 여부 (멘토링 종료 시 능력치 10배 증가)
         
         Returns:
             dict: 시험 결과 정보 (시험이 있었으면 포함)
@@ -1287,7 +1386,9 @@ class ChatbotService:
         
         # 시간표에 따라 능력치 증가
         if current_schedule:
-            self._apply_schedule_to_abilities(username)
+            # 멘토링 종료 시 10배 보너스 적용
+            mentoring_end_bonus = 10.0 if mentoring_end else 1.0
+            self._apply_schedule_to_abilities(username, mentoring_end_bonus=mentoring_end_bonus)
             print(f"[WEEK] {username}의 1주일이 경과했습니다. 능력치가 증가했습니다.")
             print(f"[ABILITIES] 현재 능력치: {self._get_abilities(username)}")
         
@@ -2214,6 +2315,7 @@ class ChatbotService:
             narration = None
             reply = None  # reply 변수 초기화
             mentoring_end_reply = None  # 멘토링 종료 메시지 초기화
+            original_reply_on_game_end = None  # game_ended일 때 엔딩 메시지 백업용
             
             # june_exam_intro_reply 변수 선언 (6exam 처리에서 사용)
             june_exam_intro_reply = None
@@ -2268,7 +2370,7 @@ class ChatbotService:
             week_advance_narration = None
             week_result = None
             if "멘토링 종료" in user_message:
-                week_result = self._advance_one_week(username)
+                week_result = self._advance_one_week(username, mentoring_end=True)
                 week_advanced = True
                 
                 # 정규 모의고사인 경우 자동 전이
@@ -2538,6 +2640,66 @@ class ChatbotService:
                     if handler_result.get('skip_llm'):
                         september_exam_processed = True
                         reply = handler_result.get('reply')
+
+                    # 헬퍼로 narration 및 전이 처리
+                    narration, transition_to, handler_state_changed = self._process_handler_result(handler_result, narration)
+                    if transition_to:
+                        self._set_game_state(username, transition_to)
+                        new_state = transition_to
+                        state_changed = handler_state_changed
+            
+            # [1.7.5.8] university_application 상태 처리 (대학 지원 및 엔딩)
+            university_application_processed = False
+            game_ended = False
+            
+            # university_application 상태 진입 시 (on_enter 호출)
+            if new_state == "university_application" and current_state != "university_application":
+                handler_result = self.handler_registry.call_on_enter(
+                    'university_application', username,
+                    {'current_state': current_state, 'new_state': new_state}
+                )
+                if handler_result:
+                    if handler_result.get('skip_llm'):
+                        university_application_processed = True
+                        reply = handler_result.get('reply')
+
+                    # 헬퍼로 narration 및 전이 처리
+                    narration, transition_to, handler_state_changed = self._process_handler_result(handler_result, narration)
+                    if transition_to:
+                        self._set_game_state(username, transition_to)
+                        new_state = transition_to
+                        state_changed = handler_state_changed
+            
+            # university_application 상태에서 사용자 입력 처리
+            if new_state == "university_application" or current_state == "university_application":
+                handler_result = self.handler_registry.call_handle(
+                    'university_application', username, user_message,
+                    {'current_state': current_state, 'new_state': new_state}
+                )
+                if handler_result:
+                    # game_ended 플래그 확인
+                    if handler_result.get('game_ended'):
+                        game_ended = True
+                    
+                    # skip_llm이 True이고 reply가 None이 아닐 때만 처리 완료로 간주
+                    # reply가 None이면 LLM 호출이 필요함
+                    handler_reply = handler_result.get('reply')
+                    if handler_result.get('skip_llm') and handler_reply is not None:
+                        university_application_processed = True
+                        reply = handler_reply
+                        print(f"[UNIVERSITY_APPLICATION] handler에서 받은 reply 설정: '{reply[:100] if reply else 'None'}...'")
+                    elif handler_reply is not None:
+                        # skip_llm이 False이거나 없지만 reply가 있는 경우
+                        reply = handler_reply
+                        print(f"[UNIVERSITY_APPLICATION] handler에서 받은 reply 설정 (skip_llm=False): '{reply[:100] if reply else 'None'}...'")
+                    
+                    # game_ended이고 reply가 있으면 반드시 보존 (엔딩 메시지)
+                    if handler_result.get('game_ended') and handler_reply:
+                        reply = handler_reply  # 엔딩 메시지 강제 설정
+                        # 엔딩 메시지 백업 (다른 로직에 의해 변경되는 것을 방지)
+                        original_reply_on_game_end = handler_reply
+                        print(f"[UNIVERSITY_APPLICATION] game_ended=True, 엔딩 reply 강제 설정: '{reply[:100] if reply else 'None'}...'")
+                        print(f"[UNIVERSITY_APPLICATION] 엔딩 reply 백업 완료 (길이: {len(handler_reply) if handler_reply else 0})")
 
                     # 헬퍼로 narration 및 전이 처리
                     narration, transition_to, handler_state_changed = self._process_handler_result(handler_result, narration)
@@ -2997,8 +3159,16 @@ class ChatbotService:
                 
                 # mock_exam_feedback 또는 official_mock_exam_feedback에서 이미 처리된 경우 LLM 호출 건너뛰기
                 # 또는 6exam/9exam 상태에서 질문이 아닌 경우, 6exam_feedback/9exam_feedback에서 조언 처리 중인 경우
+                # 또는 게임이 종료된 경우 (university_application에서 합격 처리 완료)
                 processed = False
-                if mock_exam_processed or official_mock_exam_processed or june_exam_processed or september_exam_processed:
+                if game_ended:
+                    processed = True
+                    # game_ended일 때는 handler의 reply를 사용 (이미 설정됨)
+                    if not reply:
+                        print(f"[WARN] [GAME_ENDED] 게임 종료되었지만 reply가 없습니다. 기본 메시지 사용.")
+                        reply = "감사합니다. 멘토 덕분에 여기까지 올 수 있었어요."
+                    print(f"[GAME_ENDED] 게임 종료 - LLM 호출 건너뛰기 (reply: '{reply[:50] if reply else 'None'}...')")
+                elif mock_exam_processed or official_mock_exam_processed or june_exam_processed or september_exam_processed:
                     processed = True
                     if june_exam_processed:
                         print("[6EXAM] 6월 모의고사 처리 중 - LLM 호출 건너뛰기")
@@ -3006,6 +3176,9 @@ class ChatbotService:
                         print("[9EXAM] 9월 모의고사 처리 중 - LLM 호출 건너뛰기")
                     else:
                         print("[MOCK_EXAM_FEEDBACK] 피드백 처리 완료 - LLM 호출 건너뛰기")
+                elif university_application_processed:
+                    processed = True
+                    print("[UNIVERSITY_APPLICATION] 대학 지원 처리 완료 - LLM 호출 건너뛰기")
                 
                 # exam_strategy 상태에서 전략 입력 시 전용 LLM 호출
                 if exam_strategy_processed and exam_strategy_user_input:
@@ -3188,23 +3361,41 @@ class ChatbotService:
                             reply = f"[{state_name}] {reply}"
             
             # 학습시간표 관리 상태로 전이될 때 특별한 메시지 처리
-            if study_schedule_transition_reply:
+            # 단, game_ended일 때는 handler의 reply를 보존하기 위해 건너뛰기
+            if study_schedule_transition_reply and not game_ended:
                 state_info = self._get_state_info(new_state)
                 state_name = state_info.get("name", new_state)
                 reply = f"[{state_name}] {study_schedule_transition_reply}"
             
             # 멘토링 종료 시 특별 메시지 처리 (정규 모의고사나 6exam_feedback으로 전이되지 않는 경우에만)
-            if week_advanced and mentoring_end_reply and new_state != "6exam_feedback":
+            # 단, game_ended일 때는 handler의 reply를 보존하기 위해 건너뛰기
+            if week_advanced and mentoring_end_reply and new_state != "6exam_feedback" and not game_ended:
                 state_info = self._get_state_info(new_state)
                 state_name = state_info.get("name", new_state)
                 reply = f"[{state_name}] {mentoring_end_reply}"
                 print(f"[MENTORING_END] 멘토링 종료 메시지 적용: {reply}")
             
             # reply가 없으면 기본 메시지 추가 (상태 접두사 포함)
+            # 단, game_ended일 때는 handler의 reply가 반드시 있어야 함
             if not reply:
-                state_info = self._get_state_info(new_state)
-                state_name = state_info.get("name", new_state)
-                reply = f"[{state_name}]"
+                if game_ended:
+                    print(f"[WARN] [GAME_ENDED] 게임 종료되었지만 reply가 없습니다. 기본 메시지 사용.")
+                    reply = "감사합니다. 멘토 덕분에 여기까지 올 수 있었어요."
+                else:
+                    state_info = self._get_state_info(new_state)
+                    state_name = state_info.get("name", new_state)
+                    reply = f"[{state_name}]"
+            
+            # game_ended일 때 reply가 있는지 최종 확인 및 로그
+            # 만약 다른 로직에 의해 reply가 변경되었다면 원래 reply로 복원
+            if game_ended:
+                if original_reply_on_game_end and reply != original_reply_on_game_end:
+                    print(f"[WARN] [GAME_ENDED] reply가 변경되었습니다. 원래 reply로 복원합니다.")
+                    print(f"[WARN] 원래 reply: '{original_reply_on_game_end[:100]}...'")
+                    print(f"[WARN] 변경된 reply: '{reply[:100] if reply else 'None'}...'")
+                    reply = original_reply_on_game_end
+                print(f"[GAME_ENDED] 최종 reply 확인: '{reply[:150] if reply else 'None'}...'")
+                print(f"[GAME_ENDED] reply 길이: {len(reply) if reply else 0}")
             
             # 상태 전환 시 나레이션은 별도로 반환 (프론트엔드에서 처리)
             # reply에는 추가 메시지 없음 (나레이션으로 처리)
@@ -3228,16 +3419,18 @@ class ChatbotService:
             # 선택과목 완료 시 나레이션은 이미 state machine에서 설정됨
             # (subjects_completed는 더 이상 필요하지 않음 - state machine이 처리)
             
-            # 등급대별 반응을 reply에 추가 (서가윤이 성적에 대해 말함)
-            # 6월 모의고사 등급대별 반응 (문제점 메시지가 없을 때만 추가)
-            if june_exam_grade_reaction_reply and not june_subject_problem_reply and not june_exam_advice_reply:
-                state_info = self._get_state_info(new_state)
-                state_name = state_info.get("name", new_state)
-                if reply:
-                    reply = f"[{state_name}] {june_exam_grade_reaction_reply}\n\n{reply}"
-                else:
-                    reply = f"[{state_name}] {june_exam_grade_reaction_reply}"
-                print(f"[6EXAM_GRADE_REACTION] 등급대별 반응 설정: {reply}")
+            # game_ended일 때는 handler의 reply를 보존하기 위해 모든 추가 메시지 처리 건너뛰기
+            if not game_ended:
+                # 등급대별 반응을 reply에 추가 (서가윤이 성적에 대해 말함)
+                # 6월 모의고사 등급대별 반응 (문제점 메시지가 없을 때만 추가)
+                if june_exam_grade_reaction_reply and not june_subject_problem_reply and not june_exam_advice_reply:
+                    state_info = self._get_state_info(new_state)
+                    state_name = state_info.get("name", new_state)
+                    if reply:
+                        reply = f"[{state_name}] {june_exam_grade_reaction_reply}\n\n{reply}"
+                    else:
+                        reply = f"[{state_name}] {june_exam_grade_reaction_reply}"
+                    print(f"[6EXAM_GRADE_REACTION] 등급대별 반응 설정: {reply}")
             
             # 사설모의고사 등급대별 반응을 취약점 메시지 다음에 추가
             if mock_exam_grade_reaction_reply and new_state == "mock_exam_feedback":
@@ -3433,14 +3626,16 @@ class ChatbotService:
                         reply = f"[{state_name}] {mock_exam_weakness_reply}"
             
             # 시간표 업데이트 시 확인 메시지
-            if schedule_updated and not week_passed:
+            # game_ended일 때는 건너뛰기
+            if schedule_updated and not week_passed and not game_ended:
                 schedule = self._get_schedule(username)
                 schedule_text = ", ".join([f"{k} {v}시간" for k, v in schedule.items()])
                 total = sum(schedule.values())
                 reply += f"\n\n(시간표가 설정되었습니다: {schedule_text} (총 {total}시간))"
             
             # 대화 횟수 안내 (daily_routine 상태이고 시간표가 설정된 경우)
-            if new_state == "daily_routine" and not week_passed:
+            # game_ended일 때는 건너뛰기
+            if new_state == "daily_routine" and not week_passed and not game_ended:
                 conv_count = self._get_conversation_count(username)
                 schedule = self._get_schedule(username)
                 if schedule:
@@ -3449,10 +3644,12 @@ class ChatbotService:
                         reply += f"\n\n(대화 {remaining}번 후 1주일이 지나며 능력치가 증가합니다.)"
             
             # 최종 안전장치: reply에 접두사가 없으면 추가 (study_schedule 등 모든 상태에서)
+            # 단, university_application 상태이거나 game_ended인 경우에는 접두사 추가하지 않음 (서가윤의 직접적인 반응이므로)
             if reply and not (reply.startswith("[") and reply.find("]") > 0 and reply.find("]") < 50):
-                state_info = self._get_state_info(new_state)
-                state_name = state_info.get("name", new_state)
-                reply = f"[{state_name}] {reply}"
+                if new_state != "university_application" and not game_ended:
+                    state_info = self._get_state_info(new_state)
+                    state_name = state_info.get("name", new_state)
+                    reply = f"[{state_name}] {reply}"
             
             print(f"[BOT] {reply}")
             print(f"{'='*50}\n")
@@ -3476,7 +3673,8 @@ class ChatbotService:
                 'schedule': self._get_schedule(username),
                 'current_date': self._get_game_date(username),
                 'stamina': self._get_stamina(username),
-                'mental': self._get_mental(username)
+                'mental': self._get_mental(username),
+                'game_ended': game_ended  # 엔딩 플래그 (university_application에서 설정)
             }
         except Exception as e:
             import traceback

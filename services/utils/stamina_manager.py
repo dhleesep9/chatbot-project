@@ -39,3 +39,4 @@ def process_schedule_for_stamina(schedule: dict, current_stamina: int, set_stami
     
     return None
 
+

@@ -289,3 +289,4 @@ def initialize_career_for_user(username: str, existing_career: Optional[str] = N
     print(f"[CAREER] {username}의 진로가 '{career}'로 설정되었습니다.")
     return career
 
+

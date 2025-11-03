@@ -139,6 +139,11 @@ class CSATExamHandler(OfficialExamHandlerBase):
         Returns:
             Dict: 처리 결과
         """
+        # 대학지원하기 키워드 확인 - transition이 처리하도록 None 반환
+        if "대학지원하기" in user_message or "대학 지원하기" in user_message:
+            print(f"[{self.EXAM_NAME.upper()}] 대학지원하기 감지 - transition으로 처리하도록 None 반환")
+            return None  # transition이 처리하도록 None 반환
+        
         # 지원 가능 대학 보기 키워드 확인
         if "지원가능대학" in user_message or "지원 가능 대학" in user_message or "합격 가능 대학" in user_message:
             print(f"[{self.EXAM_NAME.upper()}] 지원 가능 대학 확인 요청 감지: {user_message}")

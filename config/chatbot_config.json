@@ -78,7 +78,8 @@
       "9exam",
       "9exam_feedback",
       "11exam",
-      "exam_strategy"
+      "exam_strategy",
+      "university_application"
     ]
   },
   "prompt_injection_detection": {

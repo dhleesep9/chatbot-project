@@ -30,6 +30,15 @@ class MockExamHandler(BaseStateHandler):
         self.service.mock_exam_last_week[username] = current_week
         print(f"[MOCK_EXAM] {username}의 사설모의고사 응시 주차 기록: {current_week}주차")
         
+        # 사설모의고사 응시 후 체력과 멘탈 감소
+        current_stamina = self.service._get_stamina(username)
+        current_mental = self.service._get_mental(username)
+        new_stamina = max(0, current_stamina - 10)
+        new_mental = max(0, current_mental - 10)
+        self.service._set_stamina(username, new_stamina)
+        self.service._set_mental(username, new_mental)
+        print(f"[MOCK_EXAM] {username}의 체력 {current_stamina} → {new_stamina} (-10), 멘탈 {current_mental} → {new_mental} (-10)")
+        
         # 사설모의고사 응시 - 성적표 생성
         mock_exam_scores = self.service._calculate_mock_exam_scores(username)
         weak_subject = self.service._identify_weak_subject(mock_exam_scores)

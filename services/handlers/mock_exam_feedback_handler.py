@@ -103,12 +103,22 @@ class MockExamFeedbackHandlerBase(BaseStateHandler):
             self.service._set_mental(username, new_mental)
 
             abilities = self.service._get_abilities(username)
+            increased_amount = 0.0
             if current_weak_subject in abilities:
-                abilities[current_weak_subject] = min(2500, abilities[current_weak_subject] + 10)
+                # 체력과 멘탈 효율 적용
+                stamina = self.service._get_stamina(username)
+                mental = self.service._get_mental(username)
+                efficiency = self.service._calculate_combined_efficiency(stamina, mental) / 100.0
+                
+                base_increase = 10.0 * efficiency
+                # 배율 적용 (진로-과목 + 시험 전략)
+                increased = self.service._apply_ability_multipliers(username, current_weak_subject, base_increase)
+                increased_amount = increased
+                abilities[current_weak_subject] = min(2500, abilities[current_weak_subject] + increased)
                 self.service._set_abilities(username, abilities)
 
-            narration = f"좋은 조언이었어요! {current_weak_subject} 능력치가 10, 호감도 +2, 멘탈 +5 증가했습니다.\n\n일상 루틴으로 돌아갑니다."
-            print(f"[{self.EXAM_NAME.upper()}] 조언 적절함 - 호감도 +2, 멘탈 +5, {current_weak_subject} +10")
+            narration = f"좋은 조언이었어요! {current_weak_subject} 능력치가 {increased_amount:.0f}, 호감도 +2, 멘탈 +5 증가했습니다.\n\n일상 루틴으로 돌아갑니다."
+            print(f"[{self.EXAM_NAME.upper()}] 조언 적절함 - 호감도 +2, 멘탈 +5, {current_weak_subject} +{increased_amount:.2f}")
         else:
             # 부적절한 조언: 호감도 -2, 멘탈 -2
             current_affection = self.service._get_affection(username)

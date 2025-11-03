@@ -229,6 +229,16 @@ def build_user_prompt(
     # 6exam_feedback 또는 9exam_feedback 상태에서는 절대로 여러 과목을 한 번에 말하지 않도록 지시
     if game_state == "6exam_feedback" or game_state == "9exam_feedback":
         prompt_parts.append("[중요] 절대로 여러 과목(국어, 수학, 영어, 탐구1, 탐구2)을 한 번에 말하지 마세요. 현재 대화하고 있는 과목 하나만 얘기하세요. 예를 들어, 국어에 대해 얘기하고 있다면 국어만 언급하고 수학, 영어, 탐구 등을 함께 말하지 마세요.")
+    
+    # university_application 상태에서는 자신이 대학원서를 넣는 입장이라는 것을 인지
+    if game_state == "university_application":
+        prompt_parts.append("""[중요: 현재 상황 인지]
+당신은 지금 대학 원서를 지원하는 단계에 있습니다.
+- 수능 시험이 끝나고 합격 발표를 기다리는 시점입니다.
+- 지원 가능한 대학 리스트를 확인한 후, 멘토님과 함께 어떤 대학과 학과에 지원할지 고민하고 있습니다.
+- 대학 지원은 매우 중요한 결정이므로 불안하고 신중한 마음입니다.
+- 대화할 때 자신이 지금 원서를 넣으려는 입장이라는 것을 자연스럽게 표현하세요.
+예: "어떤 대학에 지원하면 좋을까요?", "이 대학은 어떤가요?", "불안한데 제가 여기 지원해도 될까요?" 등""")
 
     # 프롬프트 조립
     sys_prompt = "\n\n".join(prompt_parts)
