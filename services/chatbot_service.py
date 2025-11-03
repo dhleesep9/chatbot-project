@@ -870,7 +870,7 @@ class ChatbotService:
         print(f"[STATE_CHECK] Current state: {current_state}, user_message: '{user_message}'")
 
         # Global transitions 체크 (현재 state에 무관하게 항상 확인)
-        current_mental = self.mental.get(username, 40)
+        current_mental = self.mentals.get(username, 40)
         print(f"[GLOBAL_TRANSITION_CHECK] Mental: {current_mental}, Affection: {new_affection}")
 
         # 멘탈이 0 이하일 경우 -> mental_explode 엔딩
