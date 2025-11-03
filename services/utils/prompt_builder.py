@@ -153,15 +153,51 @@ def build_system_prompt(config: Optional[Dict]) -> str:
 
     return "\n".join(system_parts)
 
-        if not schedule_set:
-            prompt_parts.append("[중요] 아직 주간 학습 시간표가 설정되지 않았습니다. 플레이어에게 '학습 시간표 관리'를 통해 시간표를 설정하도록 자연스럽게 안내하세요. 14시간 제한이나 구체적인 시간표 형식은 언급하지 마세요.")
-        else:
-            # 시간표가 이미 설정된 경우, 시간표에 대해 언급하지 말 것
-            prompt_parts.append("[중요] 시간표는 이미 설정되어 있습니다. 시간표, 학습 시간, 시간표 관리, 시간 분배 등 시간표와 관련된 내용은 절대 언급하지 마세요. 시간표가 언급되면 자연스럽게 다른 주제로 대화를 이어가세요.")
-        
-        # 사설모의고사 한 주에 한 번 제한 안내
-        if current_week == last_mock_exam_week and last_mock_exam_week >= 0:
-            prompt_parts.append(f"[중요] 이번 주({current_week}주차)에 이미 사설모의고사를 봤습니다. 플레이어가 '사설모의고사 응시'를 요청하면, 이미 이번 주에 봤다는 것을 자연스럽게 알려주고 다음 주에 볼 수 있다고 안내하세요.")
+
+def build_user_prompt(
+    user_message: str,
+    context: str = None,
+    username: str = "사용자",
+    game_state: str = "ice_break",
+    state_context: str = None,
+    selected_subjects: list = None,
+    schedule_set: bool = False,
+    official_mock_exam_grade_info: dict = None,
+    current_week: int = 0,
+    last_mock_exam_week: int = -1
+) -> str:
+    """
+    사용자 프롬프트 생성
+    
+    Args:
+        user_message: 사용자 메시지
+        context: 추가 컨텍스트 (RAG 검색 결과 등)
+        username: 사용자 이름
+        game_state: 현재 게임 상태
+        state_context: 게임 상태별 컨텍스트
+        selected_subjects: 선택한 과목 리스트
+        schedule_set: 시간표 설정 여부
+        official_mock_exam_grade_info: 공식 모의고사 성적 정보
+        current_week: 현재 주차
+        last_mock_exam_week: 마지막 사설모의고사 주차
+    
+    Returns:
+        str: 사용자 프롬프트
+    """
+    prompt_parts = []
+    
+    if state_context:
+        prompt_parts.append(state_context)
+    
+    if not schedule_set:
+        prompt_parts.append("[중요] 아직 주간 학습 시간표가 설정되지 않았습니다. 플레이어에게 '학습 시간표 관리'를 통해 시간표를 설정하도록 자연스럽게 안내하세요. 14시간 제한이나 구체적인 시간표 형식은 언급하지 마세요.")
+    else:
+        # 시간표가 이미 설정된 경우, 시간표에 대해 언급하지 말 것
+        prompt_parts.append("[중요] 시간표는 이미 설정되어 있습니다. 시간표, 학습 시간, 시간표 관리, 시간 분배 등 시간표와 관련된 내용은 절대 언급하지 마세요. 시간표가 언급되면 자연스럽게 다른 주제로 대화를 이어가세요.")
+    
+    # 사설모의고사 한 주에 한 번 제한 안내
+    if current_week == last_mock_exam_week and last_mock_exam_week >= 0:
+        prompt_parts.append(f"[중요] 이번 주({current_week}주차)에 이미 사설모의고사를 봤습니다. 플레이어가 '사설모의고사 응시'를 요청하면, 이미 이번 주에 봤다는 것을 자연스럽게 알려주고 다음 주에 볼 수 있다고 안내하세요.")
     
     # 6exam_feedback 또는 9exam_feedback 상태에서는 절대로 여러 과목을 한 번에 말하지 않도록 지시
     if game_state == "6exam_feedback" or game_state == "9exam_feedback":

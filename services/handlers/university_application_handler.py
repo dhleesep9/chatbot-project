@@ -88,23 +88,22 @@ class UniversityApplicationHandler(BaseStateHandler):
                 # diff = 학생 백분위 - 커트라인
                 # diff가 음수면 학생이 낮음, 양수면 학생이 높음
                 confident = []  # 합격가능: 학생이 높거나 0.5% 이내 낮음
-                moderate = []   # 소신: 학생이 0.5%~2% 높음 (위로만)
-                challenge = []  # 도전: 학생이 2% 이상 높음 (위로만)
+                moderate = []   # 소신: 학생이 0.5%~2% 낮음 (커트라인이 높음)
+                challenge = []  # 도전: 학생이 2% 이상 낮음 (커트라인이 높음)
                 
                 for uni in group_universities:
                     cutoff = uni.get('cutoff_percentile', 0)
                     diff = avg_percentile - cutoff
                     
-                    if diff >= -0.5:  # 학생이 커트라인보다 높거나 0.5% 이내로 낮음
-                        if diff >= 0.5:  # 학생이 0.5% 이상 높음
-                            if diff >= 2.0:  # 학생이 2% 이상 높음 → 도전
-                                challenge.append(uni)
-                            else:  # 학생이 0.5%~2% 높음 → 소신
-                                moderate.append(uni)
-                        else:  # 학생이 높거나 0.5% 이내로 낮음 → 합격가능
-                            confident.append(uni)
-                    else:  # 학생이 0.5% 이상 낮음 → 합격가능 (아래로 차이는 상관없음)
+                    # 학생 백분위가 커트라인보다 높거나 같으면 무조건 합격가능
+                    if diff >= 0:
                         confident.append(uni)
+                    elif diff >= -0.5:  # 학생이 0.5% 이내로 낮음 → 합격가능
+                        confident.append(uni)
+                    elif diff >= -2.0:  # 학생이 0.5%~2% 낮음 → 소신
+                        moderate.append(uni)
+                    else:  # 학생이 2% 이상 낮음 → 도전
+                        challenge.append(uni)
                 
                 # 합격가능 (🟢)
                 if confident:
@@ -213,6 +212,11 @@ class UniversityApplicationHandler(BaseStateHandler):
         Returns:
             bool: 합격 여부
         """
+        # 학생 백분위가 커트라인보다 높거나 같으면 무조건 합격
+        if student_percentile >= cutoff_percentile:
+            return True
+        
+        # 학생 백분위가 커트라인보다 낮은 경우에만 확률 기반 계산
         probability = self._calculate_admission_probability(student_percentile, cutoff_percentile)
         return random.random() < probability
 
@@ -302,23 +306,22 @@ class UniversityApplicationHandler(BaseStateHandler):
                     # diff = 학생 백분위 - 커트라인
                     # diff가 음수면 학생이 낮음, 양수면 학생이 높음
                     confident = []  # 합격가능: 학생이 높거나 0.5% 이내 낮음
-                    moderate = []   # 소신: 학생이 0.5%~2% 높음 (위로만)
-                    challenge = []  # 도전: 학생이 2% 이상 높음 (위로만)
+                    moderate = []   # 소신: 학생이 0.5%~2% 낮음 (커트라인이 높음)
+                    challenge = []  # 도전: 학생이 2% 이상 낮음 (커트라인이 높음)
                     
                     for uni in group_eligible:
                         cutoff = uni.get('cutoff_percentile', 0)
                         diff = student_percentile - cutoff
                         
-                        if diff >= -0.5:  # 학생이 커트라인보다 높거나 0.5% 이내로 낮음
-                            if diff >= 0.5:  # 학생이 0.5% 이상 높음
-                                if diff >= 2.0:  # 학생이 2% 이상 높음 → 도전
-                                    challenge.append(uni)
-                                else:  # 학생이 0.5%~2% 높음 → 소신
-                                    moderate.append(uni)
-                            else:  # 학생이 높거나 0.5% 이내로 낮음 → 합격가능
-                                confident.append(uni)
-                        else:  # 학생이 0.5% 이상 낮음 → 합격가능 (아래로 차이는 상관없음)
+                        # 학생 백분위가 커트라인보다 높거나 같으면 무조건 합격가능
+                        if diff >= 0:
                             confident.append(uni)
+                        elif diff >= -0.5:  # 학생이 0.5% 이내로 낮음 → 합격가능
+                            confident.append(uni)
+                        elif diff >= -2.0:  # 학생이 0.5%~2% 낮음 → 소신
+                            moderate.append(uni)
+                        else:  # 학생이 2% 이상 낮음 → 도전
+                            challenge.append(uni)
                     
                     # 합격가능 (🟢)
                     if confident:
@@ -623,13 +626,124 @@ class UniversityApplicationHandler(BaseStateHandler):
                 'transition_to': None
             }
         
-        # 단일 대학 입력 처리 (기존 로직)
+        # 대학명과 학과명 패턴 추출 (입학 선택과 원서 접수 모두에서 사용)
         university_pattern = r'([가-힣]+(?:대학교|대학))'
         department_pattern = r'([가-힣]+(?:과|학과|전공|계열|학부))'
         
         university_match = re.search(university_pattern, user_message)
         department_match = re.search(department_pattern, user_message)
         
+        # 4단계: 합격한 대학 중 입학 선택 (가장 먼저 확인 - 원서 접수보다 우선)
+        # 합격 결과가 있고, 대학명과 학과명이 입력되면 입학 처리
+        if university_match and department_match and any(admission_results.values()):
+            applied_university = university_match.group(1).strip()
+            applied_department = department_match.group(1).strip()
+            
+            # 합격한 대학인지 확인
+            matched_admission = None
+            for group_results in admission_results.values():
+                for result in group_results:
+                    if result.get('admitted', False):
+                        if applied_university in result['university'] or result['university'] in applied_university:
+                            if applied_department in result['department'] or result['department'] in applied_department:
+                                matched_admission = result
+                                break
+                if matched_admission:
+                    break
+            
+            if matched_admission:
+                # 합격한 대학에 입학
+                final_university = matched_admission['university']
+                final_department = matched_admission['department']
+                
+                print(f"[UNIVERSITY_APPLICATION] {username}의 입학 선택: {final_university} {final_department}")
+                
+                # 성적 정보
+                exam_scores = application_info.get('exam_scores', {})
+                score_text = " ".join([f"{subject} {data['grade']}등급" for subject, data in exam_scores.items()])
+                
+                # 서가윤의 호감도 가져오기
+                affection = self.service._get_affection(username)
+                
+                # LLM을 통해 서가윤의 캐릭터에 맞는 감사 엔딩 메시지 생성
+                ending_prompt = f"""멘토님, 입학을 선택했어요. 이제 정말로 {final_university} {final_department}에 입학하는 거예요!
+
+입학 선택 결과:
+- 대학: {final_university}
+- 학과: {final_department}
+- 이름: 서가윤
+
+서가윤이 지금 {final_university} {final_department}에 입학할 것을 결정했고, 이 모든 과정에서 멘토님의 도움이 정말 컸다는 것을 깨달았습니다.
+
+서가윤의 성격:
+- 불안하고 감정 기복이 심하지만, 진심 어린 지지와 격려를 받으면 다시 용기를 얻는 성격
+- 멘토에 대한 신뢰는 아직 완전하지 않아 방어적이지만, 동시에 진심으로 의지하고 싶어함
+- 원래 목표는 서강대학교였지만, 지금 {final_university} {final_department}에 합격하고 입학할 수 있게 되어 감사함을 느끼고 있습니다
+
+현재 호감도: {affection}/100
+
+서가윤의 반응을 자연스럽게 표현해주세요:
+1. 입학을 선택한 후 안도감과 기쁨
+2. 멘토님에 대한 진심 어린 감사 표현 ("정말 고마워요", "멘토님 덕분이에요" 등)
+3. 이 모든 과정에서 멘토님이 옆에 있어줘서 힘이 됐다는 표현
+4. 앞으로 대학생활에 대한 기대와 설렘
+5. 호감도에 따라 감정 표현의 차이 (낮으면 조금 어색하거나, 높으면 더 진심 어린 감사)
+6. 서가윤의 특유의 불안한 성격이지만, 이제는 조금 더 자신감을 갖게 되었다는 표현
+
+서가윤의 말투로, 3-4문장으로 자연스럽게 응답해주세요. 반드시 멘토님에 대한 감사와 {final_university} {final_department}에 입학할 수 있게 된 기쁨을 표현해주세요."""
+                
+                try:
+                    if not self.service.client:
+                        raise ValueError("OpenAI Client가 초기화되지 않았습니다.")
+                    
+                    response = self.service.client.chat.completions.create(
+                        model="gpt-4o-mini",
+                        messages=[
+                            {"role": "system", "content": self.service._build_system_prompt(username)},
+                            {"role": "user", "content": ending_prompt}
+                        ],
+                        temperature=0.9,
+                        max_tokens=200
+                    )
+                    
+                    seogayoon_reply = response.choices[0].message.content.strip()
+                    print(f"[UNIVERSITY_APPLICATION] LLM이 생성한 서가윤의 엔딩 메시지: {seogayoon_reply}")
+                    
+                except Exception as e:
+                    print(f"[UNIVERSITY_APPLICATION] LLM 호출 실패, 기본 메시지 사용: {e}")
+                    seogayoon_reply = f"멘토님... 정말 고마워요. 제가 {final_university} {final_department}에 합격하고 입학할 수 있게 된 건 전부 멘토님 덕분이에요. 멘토님이 옆에 있어줘서 힘들 때도 포기하지 않고 여기까지 올 수 있었어요. 정말 감사드려요...! 앞으로도 멘토님과 함께라면 자신있게 새로운 시작을 할 수 있을 것 같아요!"
+                
+                # 엔딩 나레이션 생성
+                narration = f"📋 입학 선택 완료\n\n"
+                narration += f"서가윤이 {final_university} {final_department}에 입학할 것을 선택했습니다.\n\n"
+                narration += f"🎓 입학 내역\n"
+                narration += f"대학: {final_university}\n"
+                narration += f"학과: {final_department}\n"
+                narration += f"이름: 서가윤\n\n"
+                narration += f"수능 성적: {score_text}\n\n"
+                narration += f"🎉 축하합니다! 서가윤이 {final_university} {final_department}에 입학합니다!\n\n"
+                narration += f"수고하셨습니다. 게임을 완료하셨습니다."
+                
+                if not seogayoon_reply:
+                    seogayoon_reply = f"멘토님... 정말 고마워요. 제가 {final_university} {final_department}에 합격하고 입학할 수 있게 된 건 전부 멘토님 덕분이에요. 멘토님이 옆에 있어줘서 힘들 때도 포기하지 않고 여기까지 올 수 있었어요. 정말 감사드려요...! 앞으로도 멘토님과 함께라면 자신있게 새로운 시작을 할 수 있을 것 같아요!"
+                
+                return {
+                    'skip_llm': True,
+                    'reply': seogayoon_reply,
+                    'narration': narration,
+                    'transition_to': None,
+                    'game_ended': True
+                }
+            else:
+                # 합격하지 않은 대학 선택 시
+                return {
+                    'skip_llm': True,
+                    'reply': f"'{applied_university} {applied_department}'는 합격한 대학이 아니에요. 합격한 대학 중에서 선택해주세요.",
+                    'narration': f"⚠️ '{applied_university} {applied_department}'는 합격하지 않은 대학입니다.\n\n합격한 대학 중에서 선택해주세요.",
+                    'transition_to': None
+                }
+        
+        # 단일 대학 입력 처리 (입학 선택이 아닐 때만 - 원서 접수 단계)
         if university_match and department_match:
             applied_university = university_match.group(1).strip()
             applied_department = department_match.group(1).strip()
@@ -763,116 +877,6 @@ class UniversityApplicationHandler(BaseStateHandler):
                 'narration': narration,
                 'transition_to': None
             }
-        
-        # 4단계: 합격한 대학 중 입학 선택
-        # 합격 결과가 있고, 대학명과 학과명이 입력되면 입학 처리
-        if university_match and department_match and any(admission_results.values()):
-            applied_university = university_match.group(1).strip()
-            applied_department = department_match.group(1).strip()
-            
-            # 합격한 대학인지 확인
-            matched_admission = None
-            for group_results in admission_results.values():
-                for result in group_results:
-                    if result.get('admitted', False):
-                        if applied_university in result['university'] or result['university'] in applied_university:
-                            if applied_department in result['department'] or result['department'] in applied_department:
-                                matched_admission = result
-                                break
-                if matched_admission:
-                    break
-            
-            if matched_admission:
-                # 합격한 대학에 입학
-                final_university = matched_admission['university']
-                final_department = matched_admission['department']
-                
-                print(f"[UNIVERSITY_APPLICATION] {username}의 입학 선택: {final_university} {final_department}")
-                
-                # 성적 정보
-                exam_scores = application_info.get('exam_scores', {})
-                score_text = " ".join([f"{subject} {data['grade']}등급" for subject, data in exam_scores.items()])
-                
-                # 서가윤의 호감도 가져오기
-                affection = self.service._get_affection(username)
-                
-                # LLM을 통해 서가윤의 캐릭터에 맞는 합격 엔딩 메시지 생성
-                ending_prompt = f"""멘토님, 합격 발표를 확인했어요... 잠깐, 이게... 이게 정말...?
-
-합격 확인 결과:
-- 대학: {final_university}
-- 학과: {final_department}
-- 이름: 서가윤
-
-서가윤이 지금 합격 발표 페이지를 보고 있고, 자신의 이름과 함께 "{final_university} {final_department}" 합격 내역을 확인하고 있습니다.
-
-서가윤의 성격:
-- 불안하고 감정 기복이 심하지만, 진심 어린 지지와 격려를 받으면 다시 용기를 얻는 성격
-- 멘토에 대한 신뢰는 아직 완전하지 않아 방어적이지만, 동시에 진심으로 의지하고 싶어함
-- 원래 목표는 서강대학교였지만, 지금 {final_university} {final_department}에 합격한 사실을 확인하고 있습니다
-
-현재 호감도: {affection}/100
-
-서가윤의 반응을 자연스럽게 표현해주세요:
-1. 합격 발표를 확인하는 순간의 반응 (놀람, 믿기지 않음)
-2. 자신의 이름과 "{final_university} {final_department}" 합격 내역을 직접 확인하며 반복하는 모습
-3. "나... 정말 {final_university} {final_department}에 합격한 거예요?" 같은 식으로 자신의 합격을 확인하고 인지하는 과정
-4. 합격 사실을 깨달은 후 기쁨과 안도감 표현
-5. 멘토에게 감사하는 마음
-6. 호감도에 따라 감정 표현의 차이 (낮으면 조금 어색하거나, 높으면 더 진심 어린 감사)
-
-서가윤의 말투로, 3-4문장으로 자연스럽게 응답해주세요. 반드시 "{final_university} {final_department}"를 직접 언급하며 자신이 합격했다는 것을 확인하고 인지하는 모습을 보여주세요."""
-                
-                try:
-                    if not self.service.client:
-                        raise ValueError("OpenAI Client가 초기화되지 않았습니다.")
-                    
-                    response = self.service.client.chat.completions.create(
-                        model="gpt-4o-mini",
-                        messages=[
-                            {"role": "system", "content": self.service._build_system_prompt(username)},
-                            {"role": "user", "content": ending_prompt}
-                        ],
-                        temperature=0.9,
-                        max_tokens=200
-                    )
-                    
-                    seogayoon_reply = response.choices[0].message.content.strip()
-                    print(f"[UNIVERSITY_APPLICATION] LLM이 생성한 서가윤의 엔딩 메시지: {seogayoon_reply}")
-                    
-                except Exception as e:
-                    print(f"[UNIVERSITY_APPLICATION] LLM 호출 실패, 기본 메시지 사용: {e}")
-                    seogayoon_reply = f"멘토님... 잠깐만요... 이게... 제 이름이... 서가윤... {final_university} {final_department}... 나... 정말 {final_university} {final_department}에 합격한 거예요? 정말 믿기지가 않아요...! 멘토 덕분에 여기까지 올 수 있었어요. 정말 고마워요...!"
-                
-                # 엔딩 나레이션 생성
-                narration = f"📋 합격 발표 확인\n\n"
-                narration += f"서가윤이 합격 발표 페이지를 확인하고 있습니다...\n\n"
-                narration += f"🎓 합격 내역\n"
-                narration += f"대학: {final_university}\n"
-                narration += f"학과: {final_department}\n"
-                narration += f"이름: 서가윤\n\n"
-                narration += f"수능 성적: {score_text}\n\n"
-                narration += f"🎉 축하합니다! 서가윤이 {final_university} {final_department}에 합격했습니다!\n\n"
-                narration += f"수고하셨습니다. 게임을 완료하셨습니다."
-                
-                if not seogayoon_reply:
-                    seogayoon_reply = f"멘토님... 잠깐만요... 이게... 제 이름이... 서가윤... {final_university} {final_department}... 나... 정말 {final_university} {final_department}에 합격한 거예요? 정말 믿기지가 않아요...! 멘토 덕분에 여기까지 올 수 있었어요. 정말 고마워요...!"
-                
-                return {
-                    'skip_llm': True,
-                    'reply': seogayoon_reply,
-                    'narration': narration,
-                    'transition_to': None,
-                    'game_ended': True
-                }
-            else:
-                # 합격하지 않은 대학 선택 시
-                return {
-                    'skip_llm': True,
-                    'reply': f"'{applied_university} {applied_department}'는 합격한 대학이 아니에요. 합격한 대학 중에서 선택해주세요.",
-                    'narration': f"⚠️ '{applied_university} {applied_department}'는 합격하지 않은 대학입니다.\n\n합격한 대학 중에서 선택해주세요.",
-                    'transition_to': None
-                }
         
         # 일반 대화 처리 (대학 지원 관련 키워드 없으면 LLM 처리)
         support_keywords = ["지원", "합격", "입학", "대학", "학과", "원서"]
