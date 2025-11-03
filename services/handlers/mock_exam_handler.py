@@ -25,6 +25,11 @@ class MockExamHandler(BaseStateHandler):
         Returns:
             Dict: 처리 결과
         """
+        # 현재 주차 기록 (한 주에 한 번만 보도록)
+        current_week = self.service._get_current_week(username)
+        self.service.mock_exam_last_week[username] = current_week
+        print(f"[MOCK_EXAM] {username}의 사설모의고사 응시 주차 기록: {current_week}주차")
+        
         # 사설모의고사 응시 - 성적표 생성
         mock_exam_scores = self.service._calculate_mock_exam_scores(username)
         weak_subject = self.service._identify_weak_subject(mock_exam_scores)

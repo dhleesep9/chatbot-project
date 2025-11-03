@@ -88,11 +88,32 @@ class SubjectSelectionHandler(BaseStateHandler):
             self.service._set_selected_subjects(username, found_subjects)
             print(f"[SELECTION] {username}의 탐구과목 선택 완료: {found_subjects}")
 
+            # 진로와의 시너지 확인
+            career = self.service._get_career(username)
+            synergy_messages = []
+            
+            if career:
+                from services.utils.career_manager import get_career_subject_bonus_multiplier
+                
+                for subject in found_subjects:
+                    multiplier = get_career_subject_bonus_multiplier(career, subject)
+                    if multiplier > 1.0:
+                        synergy_messages.append(f"'{career}' 진로와 '{subject}' 탐구과목이 시너지를 발휘합니다! 탐구과목 배율 {multiplier}배")
+                        print(f"[CAREER_SYNERGY] {username}의 '{career}' 진로와 '{subject}' 과목 시너지 발생! (배율: {multiplier}배)")
+
+            # 나레이션 구성
+            narration_parts = [f"탐구과목 선택이 완료되었습니다! ({', '.join(found_subjects)})"]
+            
+            if synergy_messages:
+                narration_parts.extend(synergy_messages)
+            
+            narration = "\n".join(narration_parts)
+
             return {
                 'subjects_selected': True,
                 'subjects': found_subjects,
                 'transition_to': 'daily_routine',
-                'narration': f"탐구과목 선택이 완료되었습니다! ({', '.join(found_subjects)})",
+                'narration': narration,
                 'error': None
             }
         else:

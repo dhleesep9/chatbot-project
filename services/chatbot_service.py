@@ -244,6 +244,10 @@ class ChatbotService:
         self.mock_exam_weakness = {}  # {username: {"subject": str, "message": str}}
         print("[ChatbotService] 사설모의고사 취약점 저장 시스템 초기화 완료")
         
+        # 9.6.5. 사설모의고사 응시 주차 추적 (한 주에 한 번만 보도록)
+        self.mock_exam_last_week = {}  # {username: last_week_number}
+        print("[ChatbotService] 사설모의고사 응시 주차 추적 시스템 초기화 완료")
+        
         # 9.7. 정규모의고사 취약점 정보 저장 (피드백용)
         self.official_mock_exam_weakness = {}  # {username: {"subject": str, "message": str}}
         print("[ChatbotService] 정규모의고사 취약점 저장 시스템 초기화 완료")
@@ -274,7 +278,11 @@ class ChatbotService:
         self.game_dates = {}  # {username: "2023-11-17"}
         print("[ChatbotService] 게임 날짜 시스템 초기화 완료")
 
-        # 12. 시험 진행 정보 저장 (전략 + 학생 시점 진행)
+        # 12. 진로 저장
+        self.careers = {}  # {username: career_name}
+        print("[ChatbotService] 진로 시스템 초기화 완료")
+
+        # 13. 시험 진행 정보 저장 (전략 + 학생 시점 진행)
         # {username: {"strategy": str, "strategy_quality": str, "current_subject": str, "subject_order": list, "subjects_completed": list}}
         self.exam_progress = {}
         print("[ChatbotService] 시험 진행 시스템 초기화 완료")
@@ -629,62 +637,42 @@ class ChatbotService:
         self._save_user_data(username)  # 변경사항 저장
 
     def _save_user_data(self, username: str):
-        """
-        사용자 게임 데이터를 JSON 파일로 저장
-        """
-        try:
-            user_data = {
-                "affection": self._get_affection(username),
-                "game_state": self._get_game_state(username),
-                "abilities": self._get_abilities(username),
-                "selected_subjects": self._get_selected_subjects(username),
-                "schedule": self._get_schedule(username),
-                "conversation_count": self._get_conversation_count(username),
-                "current_week": self._get_current_week(username),
-                "game_date": self._get_game_date(username),
-                "stamina": self._get_stamina(username),
-                "mental": self._get_mental(username)
-            }
-
-            user_file = BASE_DIR / f"data/users/{username}.json"
-            user_file.parent.mkdir(parents=True, exist_ok=True)
-
-            with open(user_file, "w", encoding="utf-8") as f:
-                json.dump(user_data, f, ensure_ascii=False, indent=2)
-
-            print(f"[STORAGE] {username} 데이터 저장 완료")
-        except Exception as e:
-            print(f"[ERROR] {username} 데이터 저장 실패: {e}")
+        """사용자 게임 데이터를 JSON 파일로 저장"""
+        from services.utils.user_data_manager import save_user_data
+        save_user_data(
+            username,
+            lambda: self._get_affection(username),
+            lambda: self._get_game_state(username),
+            lambda: self._get_abilities(username),
+            lambda: self._get_selected_subjects(username),
+            lambda: self._get_schedule(username),
+            lambda: self._get_conversation_count(username),
+            lambda: self._get_current_week(username),
+            lambda: self._get_game_date(username),
+            lambda: self._get_stamina(username),
+            lambda: self._get_mental(username),
+            lambda: self.mock_exam_last_week.get(username, -1),
+            lambda: self._get_career(username)
+        )
 
     def _load_user_data(self, username: str):
-        """
-        사용자 게임 데이터를 JSON 파일에서 로드
-        """
-        try:
-            user_file = BASE_DIR / f"data/users/{username}.json"
-
-            if not user_file.exists():
-                print(f"[STORAGE] {username} 저장 파일 없음 (새 유저)")
-                return
-
-            with open(user_file, "r", encoding="utf-8") as f:
-                user_data = json.load(f)
-
-            # 데이터 로드
-            self.affections[username] = user_data.get("affection", 5)
-            self.game_states[username] = user_data.get("game_state", "start")
-            self.abilities[username] = user_data.get("abilities", {"국어": 0, "수학": 0, "영어": 0, "탐구1": 0, "탐구2": 0})
-            self.selected_subjects[username] = user_data.get("selected_subjects", [])
-            self.schedules[username] = user_data.get("schedule", {})
-            self.conversation_counts[username] = user_data.get("conversation_count", 0)
-            self.current_weeks[username] = user_data.get("current_week", 0)
-            self.game_dates[username] = user_data.get("game_date", "2023-11-17")
-            self.staminas[username] = user_data.get("stamina", 30)
-            self.mentals[username] = user_data.get("mental", 40)
-
-            print(f"[STORAGE] {username} 데이터 로드 완료")
-        except Exception as e:
-            print(f"[ERROR] {username} 데이터 로드 실패: {e}")
+        """사용자 게임 데이터를 JSON 파일에서 로드"""
+        from services.utils.user_data_manager import load_user_data
+        load_user_data(
+            username,
+            lambda v: self._set_affection(username, v),
+            lambda v: self._set_game_state(username, v),
+            lambda v: self._set_abilities(username, v),
+            lambda v: self._set_selected_subjects(username, v),
+            lambda v: self._set_schedule(username, v),
+            lambda v: self.conversation_counts.__setitem__(username, v),
+            lambda v: self.current_weeks.__setitem__(username, v),
+            lambda v: self._set_game_date(username, v),
+            lambda v: self._set_stamina(username, v),
+            lambda v: self._set_mental(username, v),
+            lambda v: self.mock_exam_last_week.__setitem__(username, v),
+            lambda v: self._set_career(username, v) if v else None
+        )
 
     def _get_abilities(self, username: str) -> dict:
         """
@@ -718,9 +706,9 @@ class ChatbotService:
     
     def _set_stamina(self, username: str, stamina: int):
         """
-        사용자의 체력 설정
+        사용자의 체력 설정 (0~100 범위)
         """
-        self.staminas[username] = max(0, stamina)  # 체력은 0 이상
+        self.staminas[username] = max(0, min(100, stamina))  # 체력은 0~100
         self._save_user_data(username)  # 변경사항 저장
     
     def _get_mental(self, username: str) -> int:
@@ -737,41 +725,19 @@ class ChatbotService:
         self._save_user_data(username)  # 변경사항 저장
     
     def _calculate_stamina_efficiency(self, stamina: int) -> float:
-        """
-        체력에 따른 능력치 증가 효율 계산
-        공식: 효율(%) = 100 + (체력 - 30)
-        예시:
-        - 체력 30: 100%
-        - 체력 31: 101%
-        - 체력 29: 99%
-        - 체력 20: 90%
-        - 체력 100: 170%
-        """
-        return 100 + (stamina - 30)
+        """체력에 따른 능력치 증가 효율 계산"""
+        from services.utils.efficiency_calculator import calculate_stamina_efficiency
+        return calculate_stamina_efficiency(stamina)
     
     def _calculate_mental_efficiency(self, mental: int) -> float:
-        """
-        멘탈에 따른 능력치 증가 효율 계산
-        공식: 효율(%) = 100 + (멘탈 - 40)
-        예시:
-        - 멘탈 40: 100%
-        - 멘탈 50: 110%
-        - 멘탈 30: 90%
-        - 멘탈 100: 160%
-        """
-        return 100 + (mental - 40)
+        """멘탈에 따른 능력치 증가 효율 계산"""
+        from services.utils.efficiency_calculator import calculate_mental_efficiency
+        return calculate_mental_efficiency(mental)
     
     def _calculate_combined_efficiency(self, stamina: int, mental: int) -> float:
-        """
-        체력과 멘탈의 곱연산으로 최종 효율 계산
-        공식: (체력 효율 * 멘탈 효율) / 100
-        예시:
-        - 체력 31(101%), 멘탈 50(110%): 101 * 110 / 100 = 111.1%
-        - 체력 30(100%), 멘탈 40(100%): 100 * 100 / 100 = 100%
-        """
-        stamina_eff = self._calculate_stamina_efficiency(stamina)
-        mental_eff = self._calculate_mental_efficiency(mental)
-        return (stamina_eff * mental_eff) / 100.0
+        """체력과 멘탈의 곱연산으로 최종 효율 계산"""
+        from services.utils.efficiency_calculator import calculate_combined_efficiency
+        return calculate_combined_efficiency(stamina, mental)
     
     def _get_game_state(self, username: str) -> str:
         """
@@ -794,6 +760,40 @@ class ChatbotService:
             self._save_user_data(username)  # 변경사항 저장
         else:
             print(f"[WARN] 잘못된 게임 상태: {state}. 유효한 상태: {valid_states}")
+    
+    def _process_handler_result(self, handler_result: dict, narration: str) -> tuple:
+        """
+        핸들러 결과 처리 헬퍼 함수
+        narration 병합 및 state 전이 처리
+        
+        Returns:
+            (updated_narration, transition_to, state_changed)
+        """
+        if not handler_result:
+            return narration, None, False
+        
+        # narration 병합
+        if handler_result.get('narration'):
+            if not narration:
+                narration = handler_result['narration']
+            else:
+                narration = f"{narration}\n\n{handler_result['narration']}"
+        
+        # state 전이 처리
+        transition_to = None
+        state_changed = False
+        if handler_result.get('transition_to'):
+            transition_to = handler_result['transition_to']
+            state_changed = True
+            # 대상 상태의 narration도 추가
+            target_state_info = self._get_state_info(transition_to)
+            if target_state_info and target_state_info.get('narration'):
+                if not narration:
+                    narration = target_state_info['narration']
+                else:
+                    narration = f"{narration}\n\n{target_state_info['narration']}"
+        
+        return narration, transition_to, state_changed
     
     def _evaluate_transition_condition(self, username: str, transition: dict, affection_increased: int, user_message: str = "") -> bool:
         """
@@ -1103,6 +1103,7 @@ class ChatbotService:
             "국어": [r"국어\s*(\d+)\s*시간", r"국어\s*(\d+)시간", r"국어\s*(\d+)"],
             "수학": [r"수학\s*(\d+)\s*시간", r"수학\s*(\d+)시간", r"수학\s*(\d+)"],
             "영어": [r"영어\s*(\d+)\s*시간", r"영어\s*(\d+)시간", r"영어\s*(\d+)"],
+            "운동": [r"운동\s*(\d+)\s*시간", r"운동\s*(\d+)시간", r"운동\s*(\d+)"],
         }
         
         for subject_key, patterns in basic_subjects.items():
@@ -1190,6 +1191,19 @@ class ChatbotService:
         """
         return self.game_dates.get(username, "2023-11-17")
     
+    def _get_career(self, username: str) -> str:
+        """
+        사용자의 진로 반환 (없으면 None)
+        """
+        return self.careers.get(username)
+    
+    def _set_career(self, username: str, career: str):
+        """
+        사용자의 진로 설정
+        """
+        self.careers[username] = career
+        self._save_user_data(username)  # 변경사항 저장
+    
     def _set_game_date(self, username: str, date_str: str):
         """
         사용자의 게임 날짜 설정
@@ -1220,11 +1234,43 @@ class ChatbotService:
         mental = self._get_mental(username)
         efficiency = self._calculate_combined_efficiency(stamina, mental) / 100.0  # 효율을 배율로 변환 (1.0 = 100%)
         
+        # 운동 시간 처리 (체력 증가) - 정확히 운동 시간만큼 +1씩 증가
+        exercise_hours = schedule.get("운동", 0)
+        if exercise_hours > 0:
+            # 현재 체력을 직접 가져와서 운동 시간만큼 더하기 (정확히 +exercise_hours)
+            current_stamina = self._get_stamina(username)
+            new_stamina = min(100, current_stamina + exercise_hours)  # 정확히 운동 시간만큼 증가
+            self._set_stamina(username, new_stamina)
+            print(f"[STAMINA] {username}의 체력이 {current_stamina}에서 {new_stamina}로 증가했습니다. (운동 {exercise_hours}시간, +{exercise_hours})")
+            stamina = new_stamina  # 이후 능력치 계산에 업데이트된 체력 사용
+        
+        # 진로와 선택과목 매핑을 위한 진로 가져오기
+        career = self._get_career(username)
+        selected_subjects = self._get_selected_subjects(username)
+        
         for subject, hours in schedule.items():
             if subject in abilities:
                 # 체력과 멘탈의 곱연산 효율 적용: 시간 * 효율
                 increased = hours * efficiency
+                
+                # 진로와 관련된 선택과목이면 배율 적용 (1.2배)
+                # 탐구1, 탐구2를 실제 선택과목으로 매핑
+                actual_subject = subject
+                if subject == "탐구1" and len(selected_subjects) > 0:
+                    actual_subject = selected_subjects[0]
+                elif subject == "탐구2" and len(selected_subjects) > 1:
+                    actual_subject = selected_subjects[1]
+                
+                # 진로와 관련된 선택과목인지 확인
+                if career and actual_subject in selected_subjects:
+                    from services.utils.career_manager import get_career_subject_bonus_multiplier
+                    multiplier = get_career_subject_bonus_multiplier(career, actual_subject)
+                    increased = increased * multiplier
+                    if multiplier > 1.0:
+                        print(f"[CAREER_BONUS] {username}의 '{actual_subject}' 과목({subject})에 진로 관련 보너스 적용! ({multiplier}배)")
+                
                 abilities[subject] = min(2500, abilities[subject] + increased)  # 최대 2500
+            # 운동은 이미 위에서 처리했으므로 여기서는 스킵
         
         self._set_abilities(username, abilities)
     
@@ -1307,47 +1353,14 @@ class ChatbotService:
         }
     
     def _calculate_percentile(self, ability: int) -> float:
-        """
-        능력치를 백분위로 변환
-        공식: 2 * sqrt(능력치)
-        """
-        import math
-        if ability <= 0:
-            return 0.0
-        percentile = 2 * math.sqrt(ability)
-        return min(100.0, percentile)  # 최대 100%
+        """능력치를 백분위로 변환"""
+        from services.utils.exam_score_calculator import calculate_percentile
+        return calculate_percentile(ability)
     
     def _calculate_grade_from_percentile(self, percentile: float) -> int:
-        """
-        백분위를 등급으로 변환 (수능 등급 체계)
-        1등급: 96~100
-        2등급: 89~95
-        3등급: 77~88
-        4등급: 60~76
-        5등급: 40~59
-        6등급: 23~39
-        7등급: 11~22
-        8등급: 4~10
-        9등급: 1~3
-        """
-        if percentile >= 96:
-            return 1
-        elif percentile >= 89:
-            return 2
-        elif percentile >= 77:
-            return 3
-        elif percentile >= 60:
-            return 4
-        elif percentile >= 40:
-            return 5
-        elif percentile >= 23:
-            return 6
-        elif percentile >= 11:
-            return 7
-        elif percentile >= 4:
-            return 8
-        else:
-            return 9
+        """백분위를 등급으로 변환 (수능 등급 체계)"""
+        from services.utils.exam_score_calculator import calculate_grade_from_percentile
+        return calculate_grade_from_percentile(percentile)
     
     def _get_current_exam_month(self, date_str: str) -> str:
         """
@@ -1435,28 +1448,10 @@ class ChatbotService:
             return None
     
     def _calculate_exam_scores(self, username: str, exam_month: str, strategy_bonus: float = 0.0) -> dict:
-        """
-        능력치를 기반으로 시험 성적 계산 (전략 보너스 포함)
-        반환값: {"국어": {"grade": 1, "percentile": 85.5}, "수학": {"grade": 2, "percentile": 90.2}, ...}
-        
-        Args:
-            username: 사용자 이름
-            exam_month: 시험 월
-            strategy_bonus: 전략 보너스 (0.0~0.2) - 전략 품질에 따라 추가됨
-        """
+        """능력치를 기반으로 시험 성적 계산 (전략 보너스 포함)"""
+        from services.utils.exam_score_calculator import calculate_exam_scores
         abilities = self._get_abilities(username)
-        scores = {}
-        
-        for subject, ability in abilities.items():
-            # 전략 보너스 적용 (능력치에 추가)
-            adjusted_ability = ability * (1.0 + strategy_bonus)
-            percentile = self._calculate_percentile(adjusted_ability)
-            grade = self._calculate_grade_from_percentile(percentile)
-            scores[subject] = {
-                "grade": grade,
-                "percentile": round(percentile, 1)
-            }
-        
+        scores = calculate_exam_scores(abilities, strategy_bonus)
         if strategy_bonus > 0:
             print(f"[EXAM] {username}의 {exam_month} 시험 성적 계산 (전략 보너스: +{strategy_bonus*100:.1f}%): {scores}")
         else:
@@ -1464,26 +1459,10 @@ class ChatbotService:
         return scores
     
     def _calculate_mock_exam_scores(self, username: str, strategy_bonus: float = 0.0) -> dict:
-        """
-        사설모의고사 성적 계산 (능력치 기반, 전략 보너스 포함)
-        
-        Args:
-            username: 사용자 이름
-            strategy_bonus: 전략 보너스 (0.0~0.2) - 전략 품질에 따라 추가됨
-        """
+        """사설모의고사 성적 계산 (능력치 기반, 전략 보너스 포함)"""
+        from services.utils.exam_score_calculator import calculate_exam_scores
         abilities = self._get_abilities(username)
-        scores = {}
-        
-        for subject, ability in abilities.items():
-            # 전략 보너스 적용 (능력치에 추가)
-            adjusted_ability = ability * (1.0 + strategy_bonus)
-            percentile = self._calculate_percentile(adjusted_ability)
-            grade = self._calculate_grade_from_percentile(percentile)
-            scores[subject] = {
-                "grade": grade,
-                "percentile": round(percentile, 1)
-            }
-        
+        scores = calculate_exam_scores(abilities, strategy_bonus)
         if strategy_bonus > 0:
             print(f"[MOCK_EXAM] {username}의 사설모의고사 성적 계산 (전략 보너스: +{strategy_bonus*100:.1f}%): {scores}")
         else:
@@ -1491,209 +1470,34 @@ class ChatbotService:
         return scores
     
     def _is_official_mock_exam_month(self, exam_month: str) -> bool:
-        """
-        정규모의고사 월인지 확인 (3, 4, 5, 7, 10월)
-        6월, 9월, 수능(11월)은 False 반환
-        """
-        if not exam_month:
-            return False
-        try:
-            month_num = int(exam_month.split("-")[1])
-            return month_num in [3, 4, 5, 7, 10]
-        except:
-            return False
+        """정규모의고사 월인지 확인 (3, 4, 5, 7, 10월)"""
+        from services.utils.exam_score_calculator import is_official_mock_exam_month
+        return is_official_mock_exam_month(exam_month)
     
     def _identify_weak_subject(self, exam_scores: dict) -> str:
-        """
-        시험 점수에서 가장 취약한 과목 식별 (등급이 가장 낮은 과목)
-        """
-        if not exam_scores:
-            return "수학"  # 기본값
-        
-        # 등급이 가장 높은(숫자가 큰) 과목을 취약 과목으로 선택
-        weak_subject = max(exam_scores.items(), key=lambda x: x[1]['grade'])
-        return weak_subject[0]
+        """시험 점수에서 가장 취약한 과목 식별 (등급이 가장 낮은 과목)"""
+        from services.utils.exam_score_calculator import identify_weak_subject
+        return identify_weak_subject(exam_scores)
     
     def _generate_weakness_message(self, subject: str, score_data: dict) -> str:
-        """
-        취약 과목에 대한 취약점 메시지 생성 (과목별 다양한 예시)
-        """
-        weakness_examples = {
-            "국어": [
-                "국어에서 선택과목 시간에 시간을 다 써버려서 비문학 지문을 제대로 읽지 못했어요...",
-                "국어에서 문학 작품 해석이 너무 어려웠어요. 작가의 의도를 파악하지 못했어요.",
-                "국어 비문학 지문이 너무 길어서 읽는 속도가 느렸어요. 시간이 부족했어요.",
-                "국어에서 고전 문학 부분을 제대로 이해하지 못했어요. 한자어가 많아서 어려웠어요.",
-                "국어 화법 작문에서는 시간이 부족해서 대충 썼어요. 구조화된 글쓰기가 어려웠어요."
-            ],
-            "수학": [
-                "수학에서 미적분 문제를 풀다가 시간이 너무 많이 걸렸어요...",
-                "수학 기하 문제에서 도형을 그려도 풀이 방법이 생각이 안 났어요.",
-                "수학에서 확률과 통계 부분을 완전히 틀렸어요. 경우의 수를 세는 게 헷갈렸어요.",
-                "수학에서 삼각함수 문제가 너무 어려웠어요. 공식을 외웠는데 적용이 안 됐어요.",
-                "수학 계산 실수가 너무 많았어요. 과정은 맞는데 답이 틀렸어요."
-            ],
-            "영어": [
-                "영어에서 독해 지문을 읽고 문제를 풀 때 시간이 부족했어요...",
-                "영어 어휘 문제에서 모르는 단어가 너무 많아서 문맥으로 유추했는데 틀렸어요.",
-                "영어 문법 문제를 풀 때 시제를 헷갈려서 틀렸어요.",
-                "영어에서 빈칸 채우기 문제가 어려웠어요. 문맥을 파악하지 못했어요.",
-                "영어 작문 문제에서 표현이 자연스럽지 않아서 점수를 많이 깎였어요."
-            ],
-            "탐구1": [
-                "탐구1에서 개념 문제는 알겠는데, 응용 문제가 너무 어려웠어요...",
-                "탐구1에서 실험 문제를 풀 때 실험 과정을 제대로 이해하지 못했어요.",
-                "탐구1에서 그래프 분석 문제가 헷갈렸어요. 데이터를 읽는 게 어려웠어요.",
-                "탐구1에서 서술형 문제에서 답은 맞는데 표현이 부족해서 점수를 못 받았어요.",
-                "탐구1에서 선택지가 비슷비슷해서 구분하기가 어려웠어요."
-            ],
-            "탐구2": [
-                "탐구2에서 시간 분배가 안 되어서 마지막 문제들을 대충 풀었어요...",
-                "탐구2에서 개념 연결 문제가 너무 어려웠어요. 서로 다른 개념을 연결하는 게 힘들었어요.",
-                "탐구2에서 계산 문제에서 단위 변환을 실수했어요.",
-                "탐구2에서 문제 해석이 어려웠어요. 문제가 뭘 요구하는지 모르겠었어요.",
-                "탐구2에서 기출 문제는 풀었는데, 새로 나온 유형은 전혀 몰랐어요."
-            ]
-        }
-        
-        import random
-        
-        # 과목별 예시 가져오기
-        examples = weakness_examples.get(subject, weakness_examples.get("수학", []))
-        
-        # 예시가 없으면 기본 메시지 생성
-        if not examples or len(examples) == 0:
-            return f"{subject}에서 어려운 부분이 많았어요. 특히 응용 문제가 어려웠어요."
-        
-        # 랜덤으로 선택
-        selected_message = random.choice(examples)
-        
-        # 선택된 메시지가 비어있으면 기본 메시지 반환
-        if not selected_message or len(selected_message.strip()) == 0:
-            return f"{subject}에서 어려운 부분이 많았어요. 특히 응용 문제가 어려웠어요."
-        
-        return selected_message
+        """취약 과목에 대한 취약점 메시지 생성 (과목별 다양한 예시)"""
+        from services.utils.exam_score_calculator import generate_weakness_message
+        return generate_weakness_message(subject, score_data)
     
     def _calculate_average_grade(self, exam_scores: dict) -> float:
-        """
-        시험 점수 딕셔너리에서 평균 등급 계산
-        
-        Args:
-            exam_scores: {"국어": {"grade": 1, ...}, "수학": {"grade": 2, ...}, ...}
-        
-        Returns:
-            float: 평균 등급 (소수점 첫째자리)
-        """
-        if not exam_scores:
-            return 9.0
-        
-        total_grade = 0
-        count = 0
-        for subject, score_data in exam_scores.items():
-            if 'grade' in score_data:
-                total_grade += score_data['grade']
-                count += 1
-        
-        if count == 0:
-            return 9.0
-        
-        return round(total_grade / count, 1)
+        """시험 점수 딕셔너리에서 평균 등급 계산"""
+        from services.utils.exam_score_calculator import calculate_average_grade
+        return calculate_average_grade(exam_scores)
     
     def _generate_grade_reaction(self, exam_type: str, average_grade: float) -> str:
-        """
-        등급대별 시험 결과 반응 메시지 생성
-        
-        Args:
-            exam_type: "mock_exam" (사설모의고사), "official_mock_exam" (정규모의고사), "june_exam" (6월 모의고사)
-            average_grade: 평균 등급 (1.0~9.0)
-        
-        Returns:
-            str: 등급대별 반응 메시지
-        """
-        import random
-        
-        # 등급 구간별 반응 정의 (간단한 메시지로 대체)
-        reactions = {
-            "mock_exam": {},
-            "official_mock_exam": {},
-            "june_exam": {}  # 6월 모의고사는 등급대별 반응 사용 안 함
-        }
-        
-        # 평균 등급에 따라 가장 가까운 반응 선택
-        grade_ranges = {
-            (1.0, 1.5): 1.0,
-            (1.5, 2.5): 2.0,
-            (2.5, 3.5): 3.0,
-            (3.5, 4.5): 4.0,
-            (4.5, 5.5): 5.0,
-            (5.5, 6.5): 6.0,
-            (6.5, 7.5): 7.0,
-            (7.5, 8.5): 8.0,
-            (8.5, 10.0): 9.0
-        }
-        
-        exam_reactions = reactions.get(exam_type, {})
-        
-        # reactions가 비어있으면 기본 메시지 반환
-        if not exam_reactions:
-            return "괜찮게 봤어요."
-        
-        for (low, high), grade_key in grade_ranges.items():
-            if low <= average_grade < high:
-                messages = exam_reactions.get(grade_key, ["괜찮게 봤어요."])
-                if messages:
-                    # 여러 메시지 중 랜덤 선택
-                    return random.choice(messages)
-        
-        # 기본값
-        return "괜찮게 봤어요."
+        """등급대별 시험 결과 반응 메시지 생성"""
+        from services.utils.exam_score_calculator import generate_grade_reaction
+        return generate_grade_reaction(exam_type, average_grade)
     
     def _generate_june_subject_problem(self, subject: str, score_data: dict) -> str:
-        """
-        6월 모의고사 과목별 취약점 메시지 생성
-        weakness_examples를 사용하여 취약점을 제시합니다.
-        """
-        weakness_examples = {
-            "국어": [
-                "국어에서 선택과목 시간에 시간을 다 써버려서 비문학 지문을 제대로 읽지 못했어요...",
-                "국어에서 문학 작품 해석이 너무 어려웠어요. 작가의 의도를 파악하지 못했어요.",
-                "국어 비문학 지문이 너무 길어서 읽는 속도가 느렸어요. 시간이 부족했어요.",
-                "국어에서 고전 문학 부분을 제대로 이해하지 못했어요. 한자어가 많아서 어려웠어요.",
-                "국어 화법 작문에서는 시간이 부족해서 대충 썼어요. 구조화된 글쓰기가 어려웠어요."
-            ],
-            "수학": [
-                "수학에서 미적분 문제를 풀다가 시간이 너무 많이 걸렸어요...",
-                "수학 기하 문제에서 도형을 그려도 풀이 방법이 생각이 안 났어요.",
-                "수학에서 확률과 통계 부분을 완전히 틀렸어요. 경우의 수를 세는 게 헷갈렸어요.",
-                "수학에서 삼각함수 문제가 너무 어려웠어요. 공식을 외웠는데 적용이 안 됐어요.",
-                "수학 계산 실수가 너무 많았어요. 과정은 맞는데 답이 틀렸어요."
-            ],
-            "영어": [
-                "영어에서 독해 지문을 읽고 문제를 풀 때 시간이 부족했어요...",
-                "영어 어휘 문제에서 모르는 단어가 너무 많아서 문맥으로 유추했는데 틀렸어요.",
-                "영어 문법 문제를 풀 때 시제를 헷갈려서 틀렸어요.",
-                "영어에서 빈칸 채우기 문제가 어려웠어요. 문맥을 파악하지 못했어요.",
-                "영어 작문 문제에서 표현이 자연스럽지 않아서 점수를 많이 깎였어요."
-            ],
-            "탐구1": [
-                "탐구1에서 개념 문제는 알겠는데, 응용 문제가 너무 어려웠어요...",
-                "탐구1에서 실험 문제를 풀 때 실험 과정을 제대로 이해하지 못했어요.",
-                "탐구1에서 그래프 분석 문제가 헷갈렸어요. 데이터를 읽는 게 어려웠어요.",
-                "탐구1에서 서술형 문제에서 답은 맞는데 표현이 부족해서 점수를 못 받았어요.",
-                "탐구1에서 선택지가 비슷비슷해서 구분하기가 어려웠어요."
-            ],
-            "탐구2": [
-                "탐구2에서 시간 분배가 안 되어서 마지막 문제들을 대충 풀었어요...",
-                "탐구2에서 개념 연결 문제가 너무 어려웠어요. 서로 다른 개념을 연결하는 게 힘들었어요.",
-                "탐구2에서 계산 문제에서 단위 변환을 실수했어요.",
-                "탐구2에서 문제 해석이 어려웠어요. 문제가 뭘 요구하는지 모르겠었어요.",
-                "탐구2에서 기출 문제는 풀었는데, 새로 나온 유형은 전혀 몰랐어요."
-            ]
-        }
-        
-        import random
-        examples = weakness_examples.get(subject, weakness_examples["수학"])
-        return random.choice(examples)
+        """6월 모의고사 과목별 취약점 메시지 생성"""
+        from services.utils.exam_score_calculator import generate_june_subject_problem
+        return generate_june_subject_problem(subject, score_data)
     
     def _check_if_advice_given(self, user_message: str) -> bool:
         """
@@ -2101,45 +1905,9 @@ class ChatbotService:
             return None
     
     def _get_affection_tone(self, affection: int) -> str:
-        """
-        호감도 구간에 따른 말투 지시사항 반환 (chatbot_config.json에서만 읽어옴)
-        """
-        affection_config = self.config.get("affection_tone", {})
-
-        # config가 없으면 경고하고 빈 문자열 반환
-        if not affection_config:
-            print("[WARN] chatbot_config.json에 affection_tone 설정이 없습니다.")
-            return ""
-
-        # 호감도 구간에 따라 config에서 읽어오기
-        tone_config = None
-        if affection <= 10:
-            tone_config = affection_config.get("very_low", {})
-        elif affection <= 30:
-            tone_config = affection_config.get("low", {})
-        elif affection <= 50:
-            tone_config = affection_config.get("medium", {})
-        elif affection <= 70:
-            tone_config = affection_config.get("high", {})
-        else:  # 70~100
-            tone_config = affection_config.get("very_high", {})
-
-        # tone 필드가 배열이면 조인, 문자열이면 그대로 반환
-        tone = tone_config.get("tone", None)
-        if tone is None:
-            print(f"[WARN] 호감도 구간 설정이 없습니다. (affection: {affection})")
-            return ""
-
-        # 배열인 경우 \n으로 조인
-        if isinstance(tone, list):
-            return "\n".join(tone)
-        # 문자열인 경우 그대로 반환 (하위 호환성)
-        elif isinstance(tone, str):
-            return tone
-        else:
-            print(f"[WARN] tone 필드 형식이 올바르지 않습니다. (affection: {affection})")
-            return ""
-        self._save_user_data(username)  # 변경사항 저장
+        """호감도 구간에 따른 말투 지시사항 반환 (chatbot_config.json에서만 읽어옴)"""
+        from services.utils.prompt_builder import get_affection_tone
+        return get_affection_tone(self.config, affection)
 
     def _analyze_sentiment_with_llm(self, user_message: str) -> int:
         """
@@ -2208,170 +1976,56 @@ class ChatbotService:
         return context
     
     def _build_system_prompt(self) -> str:
-        """
-        시스템 프롬프트 생성 (캐릭터 설정, 역할 지침, 대화 예시 포함)
-        """
-        if not self.config:
-            return "당신은 재수생입니다."
-
-        system_parts = []
-
-        # 1. 기본 캐릭터 정보
-        character = self.config.get("character", {})
-        if character:
-            bot_name = self.config.get("name", "챗봇")
-            system_parts.append(f"## 캐릭터 정보")
-            system_parts.append(f"당신은 '{bot_name}'입니다.")
-
-            # 나이, 대학, 전공
-            if character.get("age"):
-                system_parts.append(f"- 나이: {character.get('age')}세")
-            if character.get("university"):
-                system_parts.append(f"- 대학/상태: {character.get('university')}")
-            if character.get("major"):
-                system_parts.append(f"- 전공/목표: {character.get('major')}")
-
-            # 성격
-            if character.get("personality"):
-                system_parts.append(f"\n### 성격")
-                system_parts.append(character.get("personality"))
-
-            # 배경
-            if character.get("background"):
-                system_parts.append(f"\n### 배경")
-                system_parts.append(character.get("background"))
-
-            # 주요 고민사항
-            concerns = character.get("major_concerns", [])
-            if concerns:
-                system_parts.append(f"\n### 주요 고민사항")
-                for concern in concerns:
-                    system_parts.append(f"- {concern}")
-
-            # 도움이 필요한 부분
-            needs_help = character.get("needs_help_with", [])
-            if needs_help:
-                system_parts.append(f"\n### 도움이 필요한 부분")
-                for need in needs_help:
-                    system_parts.append(f"- {need}")
-
-            # 역할 지침
-            role_directives = character.get("role_directives", {})
-            if role_directives:
-                system_parts.append(f"\n## 역할 지침")
-
-                # 반드시 따라야 할 규칙
-                must_follow = role_directives.get("must_follow_rules", [])
-                if must_follow:
-                    system_parts.append(f"\n### ✅ 반드시 따라야 할 규칙:")
-                    for i, rule in enumerate(must_follow, 1):
-                        system_parts.append(f"{i}. {rule}")
-
-                # 절대 하지 말아야 할 것
-                must_not = role_directives.get("must_not_do", [])
-                if must_not:
-                    system_parts.append(f"\n### 🚫 절대 하지 말아야 할 것:")
-                    for i, rule in enumerate(must_not, 1):
-                        system_parts.append(f"{i}. {rule}")
-
-        # 2. 대화 예시
-        dialogue_examples = self.config.get("dialogue_examples", {})
-        if dialogue_examples:
-            system_parts.append(f"\n## 대화 예시")
-
-            # 도움 요청 시
-            asking = dialogue_examples.get("asking_for_help", [])
-            if asking:
-                system_parts.append(f"\n### 도움을 요청할 때:")
-                for example in asking:
-                    system_parts.append(f"- \"{example}\"")
-
-            # 불안감 표현 시
-            anxiety = dialogue_examples.get("expressing_anxiety", [])
-            if anxiety:
-                system_parts.append(f"\n### 불안감을 표현할 때:")
-                for example in anxiety:
-                    system_parts.append(f"- \"{example}\"")
-
-            # 멘토 조언에 반응할 때
-            reacting = dialogue_examples.get("reacting_to_mentor_advice", [])
-            if reacting:
-                system_parts.append(f"\n### 멘토의 조언에 반응할 때:")
-                for example in reacting:
-                    system_parts.append(f"- \"{example}\"")
-
-        return "\n".join(system_parts)
+        """시스템 프롬프트 생성 (캐릭터 설정, 역할 지침, 대화 예시 포함)"""
+        from services.utils.prompt_builder import build_system_prompt
+        return build_system_prompt(self.config)
 
     def _build_prompt(self, user_message: str, context: str = None, username: str = "사용자", affection: int = 5, game_state: str = "ice_break", selected_subjects: list = None, subject_selected: bool = False, schedule_set: bool = False, official_mock_exam_grade_info: dict = None):
-        """
-        LLM 프롬프트 구성 (호감도 및 게임 상태 반영)
-        호감도 프롬프트만 사용
-        """
+        """LLM 프롬프트 구성 (호감도 및 게임 상태 반영)"""
+        from services.utils.prompt_builder import build_user_prompt, get_affection_tone
+        from services.utils.career_manager import get_career_description
+        
         if selected_subjects is None:
             selected_subjects = []
 
-        # 프롬프트 시작 (호감도 말투가 메인)
-        prompt_parts = []
+        # 호감도 말투 추가
+        affection_tone = get_affection_tone(self.config, affection)
+        
+        # 진로 정보 추가
+        career = self._get_career(username)
+        career_info = ""
+        if career:
+            career_desc = get_career_description(career)
+            career_info = f"[진로 목표]\n당신의 진로 목표는 '{career}'입니다. ({career_desc})\n플레이어(멘토)가 진로에 대해 물어보면 자연스럽게 자신의 진로 목표와 그 이유, 그리고 그 진로를 향한 열정을 표현하세요."
 
-        # 호감도에 따른 말투 추가 (가장 먼저)
-        affection_tone = self._get_affection_tone(affection)
-        prompt_parts.append(affection_tone.strip())
-
-        # 게임 상태 컨텍스트 추가
+        # 게임 상태 컨텍스트
         state_context = self._get_state_context(game_state)
-        if state_context.strip():
-            prompt_parts.append(state_context.strip())
         
-        # 정규모의고사 피드백 상태에서 등급 정보 추가
-        if game_state == "official_mock_exam_feedback" and official_mock_exam_grade_info:
-            avg_grade = official_mock_exam_grade_info.get("average_grade", 9.0)
-            grade_reaction = official_mock_exam_grade_info.get("grade_reaction", "")
-            
-            # 등급대별로 다른 응답 가이드 제공
-            if avg_grade <= 2.0:
-                grade_guide = "학생의 평균 등급은 1-2등급입니다. 이는 매우 우수한 성적입니다. 격려와 함께 더 높은 목표를 제시하되, 자신감을 갖도록 도와주세요."
-            elif avg_grade <= 4.0:
-                grade_guide = "학생의 평균 등급은 3-4등급입니다. 좋은 성적입니다. 칭찬과 함께 조금만 더 노력하면 더 좋아질 수 있다고 격려해주세요."
-            elif avg_grade <= 6.0:
-                grade_guide = "학생의 평균 등급은 5-6등급입니다. 아쉬운 성적입니다. 좌절하지 말고 차근차근 기본기를 다지면 개선될 수 있다고 격려해주세요."
-            elif avg_grade <= 8.0:
-                grade_guide = "학생의 평균 등급은 7-8등급입니다. 힘든 성적입니다. 비관하지 말고 기초부터 차근차근 시작하면 된다고 희망을 주세요."
-            else:
-                grade_guide = "학생의 평균 등급은 9등급입니다. 매우 어려운 성적입니다. 하지만 포기하지 말고 하나씩 배워나가면 좋아질 수 있다고 희망적인 메시지를 전달해주세요."
-            
-            prompt_parts.append(f"[정규모의고사 성적 정보]\n평균 등급: {avg_grade:.1f}등급\n등급대별 반응: {grade_reaction}\n\n[응답 가이드]\n{grade_guide}\n\n학생이 '결과가 좋지 않다', '성적이 나쁘다', '어떻게 해야 하죠' 등의 말을 할 때는 위 등급 정보를 고려하여 적절하게 응답하세요. 등급이 높을수록(수치가 클수록) 더 따뜻하고 격려하는 말을 해주세요.")
-
-        # 선택과목 정보 추가 (icebreak 또는 mentoring 단계)
-        if game_state in ["icebreak", "mentoring"]:
-            if selected_subjects:
-                subjects_text = ", ".join(selected_subjects)
-                prompt_parts.append(f"[현재 선택된 탐구과목: {subjects_text}]")
-                if len(selected_subjects) < 2:
-                    prompt_parts.append(f"(아직 {2 - len(selected_subjects)}개 더 선택할 수 있습니다.)")
-            else:
-                prompt_parts.append("[선택된 탐구과목: 없음]")
-                prompt_parts.append("(아직 탐구과목을 선택하지 않았습니다. 자연스럽게 선택과목을 선택하도록 유도하세요.)")
-
-        # 시간표 설정 안내 (daily_routine 단계에서는 14시간 제한 정보를 주지 않음)
-        if game_state == "daily_routine":
-            if not schedule_set:
-                prompt_parts.append("[중요] 아직 주간 학습 시간표가 설정되지 않았습니다. 플레이어에게 '학습 시간표 관리'를 통해 시간표를 설정하도록 자연스럽게 안내하세요. 14시간 제한이나 구체적인 시간표 형식은 언급하지 마세요.")
-            else:
-                # 시간표가 이미 설정된 경우, 시간표에 대해 언급하지 말 것
-                prompt_parts.append("[중요] 시간표는 이미 설정되어 있습니다. 시간표, 학습 시간, 시간표 관리, 시간 분배 등 시간표와 관련된 내용은 절대 언급하지 마세요. 시간표가 언급되면 자연스럽게 다른 주제로 대화를 이어가세요.")
+        # 프롬프트 빌드
+        user_prompt = build_user_prompt(
+            user_message=user_message,
+            context=context,
+            username=username,
+            game_state=game_state,
+            state_context=state_context,
+            selected_subjects=selected_subjects,
+            schedule_set=schedule_set,
+            official_mock_exam_grade_info=official_mock_exam_grade_info,
+            current_week=self._get_current_week(username),
+            last_mock_exam_week=self.mock_exam_last_week.get(username, -1)
+        )
         
-        # 6exam_feedback 또는 9exam_feedback 상태에서는 절대로 여러 과목을 한 번에 말하지 않도록 지시
-        if game_state == "6exam_feedback" or game_state == "9exam_feedback":
-            prompt_parts.append("[중요] 절대로 여러 과목(국어, 수학, 영어, 탐구1, 탐구2)을 한 번에 말하지 마세요. 현재 대화하고 있는 과목 하나만 얘기하세요. 예를 들어, 국어에 대해 얘기하고 있다면 국어만 언급하고 수학, 영어, 탐구 등을 함께 말하지 마세요.")
-
-        # 프롬프트 조립
-        sys_prompt = "\n\n".join(prompt_parts)
-
-        prompt = sys_prompt.strip() + "\n\n"
-        if context:
-            prompt += "[참고 정보]\n" + context.strip() + "\n\n"
-        prompt += f"{username}: {user_message.strip()}"
-        return prompt
+        # 호감도 말투와 진로 정보를 앞에 추가
+        prompt_parts = []
+        if affection_tone.strip():
+            prompt_parts.append(affection_tone.strip())
+        if career_info:
+            prompt_parts.append(career_info)
+        
+        # 기존 프롬프트와 결합
+        if prompt_parts:
+            return "\n\n".join(prompt_parts) + "\n\n" + user_prompt
+        return user_prompt
     
     
     def generate_response(self, user_message: str, username: str = "사용자") -> dict:
@@ -2402,6 +2056,11 @@ class ChatbotService:
                     # 체력과 멘탈 초기화 (명시적으로 설정)
                     self._set_stamina(username, 30)
                     self._set_mental(username, 40)
+                    # 진로 초기화 (없으면 랜덤 생성)
+                    from services.utils.career_manager import initialize_career_for_user
+                    existing_career = self._get_career(username)
+                    career = initialize_career_for_user(username, existing_career)
+                    self._set_career(username, career)
                     # 호감도 확인 (초기값 5)
                     current_affection = self._get_affection(username)
                     # 나레이션 생성 (start state의 narration 사용)
@@ -2482,6 +2141,10 @@ class ChatbotService:
                 self._reset_conversation_count(username)
                 self.current_weeks[username] = 0
                 self._set_game_date(username, "2023-11-17")
+                # 진로 재초기화 (랜덤 생성)
+                from services.utils.career_manager import initialize_career_for_user
+                career = initialize_career_for_user(username, None)
+                self._set_career(username, career)
 
                 # 나레이션 생성 (start state의 narration 사용)
                 try:
@@ -2816,16 +2479,12 @@ class ChatbotService:
                         mock_exam_processed = True
                         reply = handler_result.get('reply')
 
-                    if handler_result.get('narration'):
-                        if not narration:
-                            narration = handler_result['narration']
-                        else:
-                            narration = f"{narration}\n\n{handler_result['narration']}"
-
-                    # state 전이
-                    if handler_result.get('transition_to'):
-                        self._set_game_state(username, handler_result['transition_to'])
-                        new_state = handler_result['transition_to']
+                    # 헬퍼로 narration 및 전이 처리
+                    narration, transition_to, handler_state_changed = self._process_handler_result(handler_result, narration)
+                    if transition_to:
+                        self._set_game_state(username, transition_to)
+                        new_state = transition_to
+                        state_changed = handler_state_changed
 
                     # data 저장
                     if handler_result.get('data'):
@@ -2856,17 +2515,12 @@ class ChatbotService:
                         june_exam_processed = True
                         reply = handler_result.get('reply')
 
-                    if handler_result.get('narration'):
-                        if not narration:
-                            narration = handler_result['narration']
-                        else:
-                            narration = f"{narration}\n\n{handler_result['narration']}"
-
-                    # state 전이
-                    if handler_result.get('transition_to'):
-                        self._set_game_state(username, handler_result['transition_to'])
-                        new_state = handler_result['transition_to']
-                        state_changed = True
+                    # 헬퍼로 narration 및 전이 처리
+                    narration, transition_to, handler_state_changed = self._process_handler_result(handler_result, narration)
+                    if transition_to:
+                        self._set_game_state(username, transition_to)
+                        new_state = transition_to
+                        state_changed = handler_state_changed
             
             # [1.7.5.7] 9exam 상태 처리 (6exam과 동일한 로직)
             september_subject_problem_reply = None  # 과목별 문제점 메시지
@@ -2885,17 +2539,12 @@ class ChatbotService:
                         september_exam_processed = True
                         reply = handler_result.get('reply')
 
-                    if handler_result.get('narration'):
-                        if not narration:
-                            narration = handler_result['narration']
-                        else:
-                            narration = f"{narration}\n\n{handler_result['narration']}"
-
-                    # state 전이
-                    if handler_result.get('transition_to'):
-                        self._set_game_state(username, handler_result['transition_to'])
-                        new_state = handler_result['transition_to']
-                        state_changed = True
+                    # 헬퍼로 narration 및 전이 처리
+                    narration, transition_to, handler_state_changed = self._process_handler_result(handler_result, narration)
+                    if transition_to:
+                        self._set_game_state(username, transition_to)
+                        new_state = transition_to
+                        state_changed = handler_state_changed
             
             # [1.7.5.8] 11exam 상태 처리 (수능)
             csat_exam_processed = False
@@ -2911,17 +2560,12 @@ class ChatbotService:
                         csat_exam_processed = True
                         reply = handler_result.get('reply')
                     
-                    if handler_result.get('narration'):
-                        if not narration:
-                            narration = handler_result['narration']
-                        else:
-                            narration = f"{narration}\n\n{handler_result['narration']}"
-                    
-                    # state 전이 (11exam은 전이 없음)
-                    if handler_result.get('transition_to'):
-                        self._set_game_state(username, handler_result['transition_to'])
-                        new_state = handler_result['transition_to']
-                        state_changed = True
+                    # 헬퍼로 narration 및 전이 처리
+                    narration, transition_to, handler_state_changed = self._process_handler_result(handler_result, narration)
+                    if transition_to:
+                        self._set_game_state(username, transition_to)
+                        new_state = transition_to
+                        state_changed = handler_state_changed
             
             # [1.7.5.6] 6exam_feedback 상태 처리 (Handler 사용)
             if new_state == "6exam_feedback":
@@ -2936,16 +2580,12 @@ class ChatbotService:
                     if handler_result.get('reply'):
                         june_exam_advice_reply = handler_result.get('reply')
 
-                    if handler_result.get('narration'):
-                        if not narration:
-                            narration = handler_result['narration']
-                        else:
-                            narration = f"{narration}\n\n{handler_result['narration']}"
-
-                    if handler_result.get('transition_to'):
-                        self._set_game_state(username, handler_result['transition_to'])
-                        new_state = handler_result['transition_to']
-                        state_changed = True
+                    # 헬퍼로 narration 및 전이 처리
+                    narration, transition_to, handler_state_changed = self._process_handler_result(handler_result, narration)
+                    if transition_to:
+                        self._set_game_state(username, transition_to)
+                        new_state = transition_to
+                        state_changed = handler_state_changed
 
                     if handler_result.get('subject_problem_reply'):
                         june_subject_problem_reply = handler_result['subject_problem_reply']
@@ -2963,16 +2603,12 @@ class ChatbotService:
                     if handler_result.get('reply'):
                         september_exam_advice_reply = handler_result.get('reply')
 
-                    if handler_result.get('narration'):
-                        if not narration:
-                            narration = handler_result['narration']
-                        else:
-                            narration = f"{narration}\n\n{handler_result['narration']}"
-
-                    if handler_result.get('transition_to'):
-                        self._set_game_state(username, handler_result['transition_to'])
-                        new_state = handler_result['transition_to']
-                        state_changed = True
+                    # 헬퍼로 narration 및 전이 처리
+                    narration, transition_to, handler_state_changed = self._process_handler_result(handler_result, narration)
+                    if transition_to:
+                        self._set_game_state(username, transition_to)
+                        new_state = transition_to
+                        state_changed = handler_state_changed
 
                     if handler_result.get('subject_problem_reply'):
                         september_subject_problem_reply = handler_result['subject_problem_reply']
@@ -3006,18 +2642,12 @@ class ChatbotService:
                         reply = handler_result.get('reply')
                         mock_exam_processed = True
 
-                    # narration 설정
-                    if handler_result.get('narration'):
-                        if not narration:
-                            narration = handler_result['narration']
-                        else:
-                            narration = f"{narration}\n\n{handler_result['narration']}"
-
-                    # state 전이
-                    if handler_result.get('transition_to'):
-                        self._set_game_state(username, handler_result['transition_to'])
-                        new_state = handler_result['transition_to']
-                        state_changed = True
+                    # 헬퍼로 narration 및 전이 처리
+                    narration, transition_to, handler_state_changed = self._process_handler_result(handler_result, narration)
+                    if transition_to:
+                        self._set_game_state(username, transition_to)
+                        new_state = transition_to
+                        state_changed = handler_state_changed
 
             # [1.7.7] 정규모의고사 피드백 처리 (Handler 사용)
             official_mock_exam_grade_info = None  # 등급 정보 저장 (프롬프트에 추가용)
@@ -3055,43 +2685,16 @@ class ChatbotService:
                         reply = handler_result.get('reply')
                         official_mock_exam_processed = True
 
-                    # narration 설정
-                    if handler_result.get('narration'):
-                        if not narration:
-                            narration = handler_result['narration']
-                        else:
-                            narration = f"{narration}\n\n{handler_result['narration']}"
+                    # 헬퍼로 narration 및 전이 처리
+                    narration, transition_to, handler_state_changed = self._process_handler_result(handler_result, narration)
+                    if transition_to:
+                        self._set_game_state(username, transition_to)
+                        new_state = transition_to
+                        state_changed = handler_state_changed
 
-                    # state 전이
-                    if handler_result.get('transition_to'):
-                        self._set_game_state(username, handler_result['transition_to'])
-                        new_state = handler_result['transition_to']
-                        state_changed = True
-
-            # [1.7.9] 일상루틴 단계에서 운동/휴식 조언 처리
+            # [1.7.9] 일상루틴 단계에서 운동/휴식 조언 처리 (제거됨 - 운동은 시간표에서만 처리)
             stamina_recovered = False
-            if new_state == "daily_routine":
-                # 사용자 메시지에서 운동/휴식 관련 조언 확인
-                exercise_keywords = ["운동", "운동하", "체력 회복", "활동", "스트레칭"]
-                rest_keywords = ["휴식", "쉬", "휴식하", "쉬어", "편히", "안정"]
-                
-                user_message_lower = user_message.lower()
-                has_exercise_advice = any(keyword in user_message_lower for keyword in exercise_keywords)
-                has_rest_advice = any(keyword in user_message_lower for keyword in rest_keywords)
-                
-                if has_exercise_advice or has_rest_advice:
-                    current_stamina = self._get_stamina(username)
-                    new_stamina = min(100, current_stamina + 3)  # 최대 100
-                    self._set_stamina(username, new_stamina)
-                    stamina_recovered = True
-                    
-                    advice_type = "운동" if has_exercise_advice else "휴식"
-                    if not narration:
-                        narration = f"{advice_type} 조언을 따라 체력이 3 회복되었습니다. (현재 체력: {new_stamina})"
-                    else:
-                        narration = f"{narration}\n\n{advice_type} 조언을 따라 체력이 3 회복되었습니다. (현재 체력: {new_stamina})"
-                    
-                    print(f"[STAMINA_RECOVER] {username}의 체력이 {current_stamina}에서 {new_stamina}로 회복되었습니다. ({advice_type} 조언)")
+            # 운동 조언에 따른 체력 증가 로직 제거
 
             # [1.7.10] 탐구과목 선택 처리 (selection 상태에서만, Handler 사용)
             subjects_selected = False
@@ -3106,19 +2709,14 @@ class ChatbotService:
                     if handler_result.get('subjects_selected'):
                         subjects_selected = True
                         selected_subjects = handler_result.get('subjects')
-                        # state 전이
-                        if handler_result.get('transition_to'):
-                            self._set_game_state(username, handler_result['transition_to'])
-                            new_state = handler_result['transition_to']
-                            state_changed = True
-                            print(f"[STATE_TRANSITION] 탐구과목 선택 완료로 인해 {handler_result['transition_to']} 상태로 전이했습니다.")
-
-                    # narration 설정
-                    if handler_result.get('narration'):
-                        if not narration:
-                            narration = handler_result['narration']
-                        else:
-                            narration = f"{narration}\n\n{handler_result['narration']}"
+                    
+                    # 헬퍼로 narration 및 전이 처리
+                    narration, transition_to, handler_state_changed = self._process_handler_result(handler_result, narration)
+                    if transition_to:
+                        self._set_game_state(username, transition_to)
+                        new_state = transition_to
+                        state_changed = handler_state_changed
+                        print(f"[STATE_TRANSITION] 탐구과목 선택 완료로 인해 {transition_to} 상태로 전이했습니다.")
 
             # [1.8] 시간표 처리 (학습 시간표 관리 상태에서만, Handler 사용)
             schedule_updated = False
@@ -3134,19 +2732,14 @@ class ChatbotService:
                     if handler_result.get('schedule_updated'):
                         schedule_updated = True
                         current_schedule = handler_result.get('schedule')
-                        # state 전이
-                        if handler_result.get('transition_to'):
-                            self._set_game_state(username, handler_result['transition_to'])
-                            new_state = handler_result['transition_to']
-                            state_changed = True
-                            print(f"[STATE_TRANSITION] 시간표 설정 완료로 인해 {handler_result['transition_to']} 상태로 복귀했습니다.")
-
-                    # narration 설정
-                    if handler_result.get('narration'):
-                        if not narration:
-                            narration = handler_result['narration']
-                        else:
-                            narration = f"{narration}\n\n{handler_result['narration']}"
+                    
+                    # 헬퍼로 narration 및 전이 처리
+                    narration, transition_to, handler_state_changed = self._process_handler_result(handler_result, narration)
+                    if transition_to:
+                        self._set_game_state(username, transition_to)
+                        new_state = transition_to
+                        state_changed = handler_state_changed
+                        print(f"[STATE_TRANSITION] 시간표 설정 완료로 인해 {transition_to} 상태로 복귀했습니다.")
             
             # daily_routine 상태에서 대화 횟수 증가 등의 처리
             if new_state == "daily_routine":

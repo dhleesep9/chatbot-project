@@ -186,8 +186,9 @@ function updateAffectionDisplay(affection) {
     if (sideImage) {
       // 현재 이미지가 비정상 상태 이미지가 아닌 경우에만 호감도 이미지로 변경
       const currentSrc = sideImage.src;
-      const isAbnormalState = currentSrc.includes('서가윤_번아웃') || currentSrc.includes('서가윤_혼란');
-      
+      const isAbnormalState =
+        currentSrc.includes("/번아웃") || currentSrc.includes("/멘붕");
+
       if (!isAbnormalState) {
         const defaultImage = getDefaultImageByAffection(affection);
         sideImage.src = defaultImage;
@@ -248,17 +249,17 @@ function updateCharacterStatus(stamina, mental) {
       name: "번아웃",
       description: "체력이 너무 낮아 지쳤습니다. 휴식이 필요해요.",
       class: "status-burnout",
-      image: "/static/images/chatbot/서가윤_번아웃.png"
+      image: "/static/images/chatbot/번아웃-0.png",
     });
   }
 
-  // 멘탈이 20 이하일 때 혼란
+  // 멘탈이 20 이하일 때 혼란 (멘붕 이미지 사용)
   if (mental !== undefined && mental <= 20) {
     statuses.push({
       name: "혼란",
       description: "멘탈이 흔들리고 있습니다. 안정이 필요해요.",
       class: "status-confusion",
-      image: "/static/images/chatbot/서가윤_혼란.png"
+      image: "/static/images/chatbot/end/멘붕-2.png",
     });
   }
 
@@ -268,20 +269,22 @@ function updateCharacterStatus(stamina, mental) {
       name: "정상",
       description: "건강한 상태입니다.",
       class: "status-normal",
-      image: null // 정상일 때는 호감도에 따른 이미지 사용
+      image: null, // 정상일 때는 호감도에 따른 이미지 사용
     });
   }
 
   // 첫 번째 상태를 메인 상태로 사용 (우선순위)
   const mainStatus = statuses[0];
-  
+
   // 상태 표시 업데이트
   statusDisplay.className = `character-status-display ${mainStatus.class}`;
   statusValue.textContent = mainStatus.name;
-  
+
   // 여러 상태가 있을 때 설명 결합
   if (statuses.length > 1) {
-    statusDescription.textContent = statuses.map(s => s.description).join(' ');
+    statusDescription.textContent = statuses
+      .map((s) => s.description)
+      .join(" ");
   } else {
     statusDescription.textContent = mainStatus.description;
   }
@@ -294,7 +297,8 @@ function updateCharacterStatus(stamina, mental) {
     } else {
       // 정상 상태로 복귀 시 호감도에 따른 이미지로 복원
       const currentSrc = sideImage.src;
-      const isAbnormalState = currentSrc.includes('서가윤_번아웃') || currentSrc.includes('서가윤_혼란');
+      const isAbnormalState =
+        currentSrc.includes("/번아웃") || currentSrc.includes("/멘붕");
       if (isAbnormalState) {
         const defaultImage = getDefaultImageByAffection(currentAffection);
         sideImage.src = defaultImage;
@@ -541,12 +545,9 @@ function startSpeakingAnimation(affection = null) {
   const sideImage = document.querySelector(".side-image");
   if (!sideImage) return;
 
-  // 현재 이미지가 비정상 상태이면 애니메이션 시작하지 않음
   const currentSrc = sideImage.src;
-  const isAbnormalState = currentSrc.includes('서가윤_번아웃') || currentSrc.includes('서가윤_혼란');
-  if (isAbnormalState) {
-    return;
-  }
+  const isBurnout = currentSrc.includes("/번아웃");
+  const isConfusion = currentSrc.includes("/멘붕");
 
   // 호감도가 전달되지 않으면 현재 저장된 호감도 사용
   const targetAffection = affection !== null ? affection : currentAffection;
@@ -554,9 +555,21 @@ function startSpeakingAnimation(affection = null) {
   // 기존 애니메이션 중지
   stopSpeakingAnimation(targetAffection);
 
-  // 호감도에 따른 이미지 프리픽스 결정
-  const prefix = getImagePrefixByAffection(targetAffection);
-  const basePath = "/static/images/chatbot/";
+  // 비정상 상태에 따라 이미지 프리픽스 결정
+  let prefix;
+  let basePath;
+  if (isBurnout) {
+    prefix = "번아웃";
+    basePath = "/static/images/chatbot/";
+  } else if (isConfusion) {
+    // 멘붕은 end/ 폴더에 있고 애니메이션 없음
+    return;
+  } else {
+    // 정상 상태: 호감도에 따른 이미지 프리픽스 결정
+    prefix = getImagePrefixByAffection(targetAffection);
+    basePath = "/static/images/chatbot/";
+  }
+
   const image0 = basePath + prefix + "-0.png";
   const image1 = basePath + prefix + "-1.png";
 
@@ -606,11 +619,11 @@ function stopSpeakingAnimation(affection = null) {
   if (sideImage) {
     // 체력이 10 이하이거나 멘탈이 20 이하인 경우 비정상 상태 이미지 표시
     if (currentStamina !== undefined && currentStamina <= 10) {
-      // 번아웃 이미지 표시
-      sideImage.src = "/static/images/chatbot/서가윤_번아웃.png";
+      // 번아웃 이미지 표시 (-0 버전)
+      sideImage.src = "/static/images/chatbot/번아웃-0.png";
     } else if (currentMental !== undefined && currentMental <= 20) {
-      // 혼란 이미지 표시
-      sideImage.src = "/static/images/chatbot/서가윤_혼란.png";
+      // 혼란 이미지 표시 (멘붕)
+      sideImage.src = "/static/images/chatbot/end/멘붕-2.png";
     } else {
       // 정상 상태: 호감도에 따른 이미지로 복원
       const targetAffection = affection !== null ? affection : currentAffection;

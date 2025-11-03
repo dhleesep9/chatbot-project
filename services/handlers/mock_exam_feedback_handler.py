@@ -36,6 +36,19 @@ class MockExamFeedbackHandlerBase(BaseStateHandler):
 
         # [1] 재응시 확인 (mock_exam_feedback만 해당)
         if self.RETEST_KEYWORD and self.RETEST_KEYWORD in user_message:
+            # 한 주에 한 번만 보도록 체크
+            current_week = self.service._get_current_week(username)
+            last_week = self.service.mock_exam_last_week.get(username, -1)
+            
+            if current_week == last_week and last_week >= 0:
+                print(f"[{self.EXAM_NAME.upper()}] 재응시 차단: {username}이(가) 이미 {current_week}주차에 사설모의고사를 봤습니다.")
+                return {
+                    'skip_llm': True,
+                    'reply': f"이번 주({current_week}주차)에는 이미 사설모의고사를 봤어요. 다음 주에 다시 볼 수 있어요.",
+                    'narration': None,
+                    'transition_to': None  # 전이하지 않음
+                }
+            
             print(f"[{self.EXAM_NAME.upper()}] {self.RETEST_KEYWORD} 감지 - mock_exam으로 전환")
             return {
                 'skip_llm': True,
