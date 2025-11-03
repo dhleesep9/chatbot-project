@@ -54,7 +54,7 @@ class ExamStrategyHandler(BaseStateHandler):
                 }
 
                 # 전략 품질에 따른 피드백 (보너스 배수 표시)
-                bonus_multiplier = {"VERY_GOOD": 1.5, "GOOD": 1.05, "POOR": 1.0}.get(strategy_quality, 1.05)
+                bonus_multiplier = {"VERY_GOOD": 1.5, "GOOD": 1.2, "POOR": 1.0}.get(strategy_quality, 1.05)
                 quality_message = {
                     "VERY_GOOD": f"정교한 전략입니다! {subject}과목 보너스 {bonus_multiplier}배",
                     "GOOD": f"좋은 전략입니다. {subject}과목 보너스 {bonus_multiplier}배",

@@ -1298,7 +1298,7 @@ class ChatbotService:
         strategy_quality = strategies[subject].get("quality", "POOR")
         multiplier_map = {
             "VERY_GOOD": 1.5,
-            "GOOD": 1.05,
+            "GOOD": 1.2,
             "POOR": 1.0
         }
         return multiplier_map.get(strategy_quality, 1.0)
@@ -1874,13 +1874,16 @@ class ChatbotService:
         print(f"[STUDENT_THOUGHT] {subject}: {selected_thought} (등급: {grade}, 체력: {stamina}, 멘탈: {mental}, 전략: {strategy_quality})")
         return selected_thought
     
-    def _judge_advice_quality(self, username: str, advice: str, weak_subject: str, weakness_message: str) -> bool:
+    def _judge_advice_quality(self, username: str, advice: str, weak_subject: str, weakness_message: str) -> int:
         """
-        LLM을 사용하여 플레이어의 조언이 적절한지 판단
+        LLM을 사용하여 플레이어의 조언이 적절한지 판단하고 0~20 사이의 점수를 반환
         chatbot_config.json에서 프롬프트 설정을 로드합니다.
+        
+        Returns:
+            int: 0~20 사이의 점수 (0: 완전히 부적절, 20: 매우 적절)
         """
         try:
-            # 먼저 부정적 키워드를 직접 체크하여 확실한 부정적 조언은 즉시 거부
+            # 먼저 부정적 키워드를 직접 체크하여 확실한 부정적 조언은 즉시 0점
             negative_direct_keywords = [
                 "망해", "망하", "포기", "포기해", "그만둬", "그만", "안돼", "못해", 
                 "별로", "좋지않", "좋지 않", "안좋", "안 좋", "나쁘", "싫", "미워",
@@ -1893,42 +1896,38 @@ class ChatbotService:
             advice_lower = advice.lower()
             for keyword in negative_direct_keywords:
                 if keyword in advice_lower:
-                    print(f"[ADVICE_JUDGE] 부정적 키워드 직접 감지: '{keyword}' in '{advice}' → NO")
-                    return False
+                    print(f"[ADVICE_JUDGE] 부정적 키워드 직접 감지: '{keyword}' in '{advice}' → 0점")
+                    return 0
             
             if not self.client:
-                # LLM이 없으면 기본적으로 적절하다고 판단 (절반 확률)
+                # LLM이 없으면 기본적으로 5~15 사이의 랜덤 점수 반환
                 import random
-                return random.choice([True, False])
+                return random.randint(5, 15)
             
             # chatbot_config.json에서 판단 설정 로드
             judgment_config = self.config.get("mock_exam_advice_judgment", {})
             system_prompt = judgment_config.get(
                 "system_prompt", 
-                "당신은 교육 전문가입니다. 학생을 격려하고 도와주는 멘토의 조언이 적절한지 판단하세요. 부정적이고 해로운 조언은 절대 용납하지 마세요."
+                "당신은 교육 전문가입니다. 학생을 격려하고 도와주는 멘토의 조언이 취약점을 해결하는 데 얼마나 적절한지 0~20 사이의 점수로 평가하세요. 취약점과 조언의 연관성, 구체성, 실행 가능성을 종합적으로 고려하세요."
             )
             user_prompt_template = judgment_config.get(
                 "user_prompt_template",
-                "플레이어(멘토)가 재수생에게 다음과 같은 조언을 했습니다:\n{advice}\n\n이 조언이 학생에게 도움이 되고 격려가 되는 긍정적인 조언인지, 아니면 부정적이고 해로운 조언인지 판단해주세요.\n\n조언이 긍정적이고 격려적이면(예: '할 수 있어', '괜찮아', '응원해', '노력하면 돼' 등) \"YES\", 부정적이고 해로운 조언이면(예: '포기해', '망해', '안돼', '그만둬', 비꼬거나 비판적인 말 등) \"NO\"만 답변해주세요."
+                "플레이어(멘토)가 재수생에게 다음과 같은 조언을 했습니다:\n{advice}\n\n학생의 취약점:\n과목: {weak_subject}\n내용: {weakness_message}\n\n이 조언이 취약점을 해결하는 데 얼마나 적절한지 0~20 사이의 정수 점수로 평가해주세요.\n\n- 20점: 매우 적절함 (취약점과 직접 관련, 구체적이고 실행 가능한 조언)\n- 15점: 적절함 (취약점과 관련, 실용적인 조언)\n- 10점: 보통 (일반적인 조언, 취약점과 약간 관련)\n- 5점: 부적절함 (취약점과 관련 없거나 추상적인 조언)\n- 0점: 매우 부적절함 (부정적이거나 해로운 조언)\n\n점수만 숫자로 답변해주세요 (예: 15)."
             )
             temperature = judgment_config.get("temperature", 0.3)
             max_tokens = judgment_config.get("max_tokens", 10)
-            positive_keywords = judgment_config.get("positive_keywords", ["YES", "적절", "좋", "도움", "유용", "효과적", "격려", "긍정"])
-            negative_keywords = judgment_config.get("negative_keywords", ["NO", "부적절", "나쁨", "무도움", "비효과적", "비판", "부정", "해롭", "해로운"])
             
-            # 프롬프트 템플릿에 변수 치환 (advice만 사용)
-            # 템플릿에 있는 변수만 format
+            # 프롬프트 템플릿에 변수 치환
             try:
-                # advice 변수만 있는지 확인하고 format
-                if "{advice}" in user_prompt_template:
-                    judgment_prompt = user_prompt_template.format(advice=advice)
-                elif "{weak_subject}" in user_prompt_template or "{weakness_message}" in user_prompt_template:
-                    # 이전 형식 지원 (하위 호환성)
+                # weak_subject와 weakness_message가 포함된 경우
+                if "{weak_subject}" in user_prompt_template or "{weakness_message}" in user_prompt_template:
                     judgment_prompt = user_prompt_template.format(
                         weak_subject=weak_subject,
                         weakness_message=weakness_message,
                         advice=advice
                     )
+                elif "{advice}" in user_prompt_template:
+                    judgment_prompt = user_prompt_template.format(advice=advice)
                 else:
                     # 변수가 없으면 그대로 사용하고 advice만 추가
                     judgment_prompt = user_prompt_template + f"\n\n조언: {advice}"
@@ -1947,54 +1946,47 @@ class ChatbotService:
                 max_tokens=max_tokens
             )
             
-            judgment = response.choices[0].message.content.strip().upper()
+            judgment_text = response.choices[0].message.content.strip()
             
-            print(f"[ADVICE_JUDGE] LLM 원본 응답: {response.choices[0].message.content.strip()}")
+            print(f"[ADVICE_JUDGE] LLM 원본 응답: {judgment_text}")
             
-            # 키워드 기반 판단
-            judgment_upper = judgment.upper()
-            has_positive = any(keyword.upper() in judgment_upper for keyword in positive_keywords)
-            has_negative = any(keyword.upper() in judgment_upper for keyword in negative_keywords)
+            # 점수 파싱 (0~20 사이의 정수 추출)
+            import re
+            score_match = re.search(r'\b([0-9]|1[0-9]|20)\b', judgment_text)
             
-            print(f"[ADVICE_JUDGE] Positive keywords found: {has_positive}, Negative keywords found: {has_negative}")
-            print(f"[ADVICE_JUDGE] Judgment upper: {judgment_upper}")
-            
-            if has_positive:
-                is_good = True
-                print(f"[ADVICE_JUDGE] 긍정 키워드 발견 - YES로 판단")
-            elif has_negative:
-                is_good = False
-                print(f"[ADVICE_JUDGE] 부정 키워드 발견 - NO로 판단")
+            if score_match:
+                score = int(score_match.group(1))
+                # 0~20 범위로 제한
+                score = max(0, min(20, score))
+                print(f"[ADVICE_JUDGE] 점수 파싱 성공: {score}점 (원본: '{judgment_text}')")
+                return score
             else:
-                # 키워드가 없으면 응답 내용을 다시 확인
-                # "YES" 또는 "NO"가 직접 포함되어 있는지 확인
-                if "YES" in judgment_upper or "예" in judgment or "좋" in judgment or "긍정" in judgment:
-                    is_good = True
-                    print(f"[ADVICE_JUDGE] 직접 확인 - YES로 판단")
-                elif "NO" in judgment_upper or "아니" in judgment or "부정" in judgment or "나쁨" in judgment:
-                    is_good = False
-                    print(f"[ADVICE_JUDGE] 직접 확인 - NO로 판단")
+                # 점수를 찾을 수 없으면 응답 텍스트를 분석하여 점수 추정
+                judgment_lower = judgment_text.lower()
+                
+                # 매우 긍정적인 표현이면 높은 점수
+                if any(keyword in judgment_lower for keyword in ["매우", "완벽", "최고", "훌륭", "excellent", "perfect"]):
+                    estimated_score = 18
+                # 긍정적인 표현이면 중간~높은 점수
+                elif any(keyword in judgment_lower for keyword in ["좋", "적절", "유용", "효과적", "good", "appropriate"]):
+                    estimated_score = 15
+                # 보통 표현이면 중간 점수
+                elif any(keyword in judgment_lower for keyword in ["보통", "일반", "average", "normal"]):
+                    estimated_score = 10
+                # 부정적인 표현이면 낮은 점수
+                elif any(keyword in judgment_lower for keyword in ["부적절", "나쁨", "안좋", "bad", "inappropriate"]):
+                    estimated_score = 3
+                # 매우 부정적인 표현이면 0점
                 else:
-                    # 키워드가 없으면 LLM 응답을 다시 분석
-                    # 응답이 명확하지 않으면 안전하게 부적절로 판단
-                    if len(judgment_upper) > 0 and ("NO" in judgment_upper or "아니" in judgment or "부정" in judgment or "해롭" in judgment):
-                        is_good = False
-                        print(f"[ADVICE_JUDGE] 애매한 응답에서 부정 키워드 발견 - NO로 판단")
-                    elif len(judgment_upper) > 0 and ("YES" in judgment_upper or "예" in judgment or "좋" in judgment):
-                        is_good = True
-                        print(f"[ADVICE_JUDGE] 애매한 응답에서 긍정 키워드 발견 - YES로 판단")
-                    else:
-                        # 응답이 완전히 불명확하면 안전을 위해 부적절로 판단 (보수적 접근)
-                        is_good = False
-                        print(f"[ADVICE_JUDGE] 응답 불명확 - 안전을 위해 NO로 판단")
-            
-            print(f"[ADVICE_JUDGE] 최종 판단 결과: {is_good} (judgment: '{judgment}', advice: '{advice[:50]}...')")
-            return is_good
+                    estimated_score = 5  # 기본값
+                
+                print(f"[ADVICE_JUDGE] 점수 파싱 실패 - 추정 점수 사용: {estimated_score}점 (원본: '{judgment_text}')")
+                return estimated_score
             
         except Exception as e:
             print(f"[ERROR] 조언 판단 실패: {e}")
-            # 오류 시 안전을 위해 부적절로 판단 (보수적 접근)
-            return False
+            # 오류 시 안전을 위해 낮은 점수 반환 (보수적 접근)
+            return 5
     
     def _check_prompt_injection(self, user_message: str) -> bool:
         """
@@ -2733,6 +2725,7 @@ class ChatbotService:
             # [1.7.5.8] university_application 상태 처리 (대학 지원 및 엔딩)
             university_application_processed = False
             game_ended = False
+            handler_image = None  # handler에서 반환한 이미지 저장
             
             # university_application 상태 진입 시 (on_enter 호출)
             if new_state == "university_application" and current_state != "university_application":
@@ -2741,6 +2734,10 @@ class ChatbotService:
                     {'current_state': current_state, 'new_state': new_state}
                 )
                 if handler_result:
+                    # game_ended 플래그 확인
+                    if handler_result.get('game_ended'):
+                        game_ended = True
+                    
                     if handler_result.get('skip_llm'):
                         university_application_processed = True
                         reply = handler_result.get('reply')
@@ -2751,6 +2748,12 @@ class ChatbotService:
                         self._set_game_state(username, transition_to)
                         new_state = transition_to
                         state_changed = handler_state_changed
+                    
+                    # handler에서 반환한 이미지가 있으면 저장 (나중에 응답에 사용)
+                    if handler_result.get('image'):
+                        handler_image = handler_result.get('image')
+                        if not handler_image.startswith('/'):
+                            handler_image = '/' + handler_image
             
             # university_application 상태에서 사용자 입력 처리
             if new_state == "university_application" or current_state == "university_application":
@@ -3730,27 +3733,32 @@ class ChatbotService:
                 )
 
             # [5.5] 엔딩 상태의 이미지 설정
-            # 엔딩 상태(to_states가 빈 리스트)인 경우 state JSON에 정의된 이미지를 사용
+            # handler에서 반환한 이미지가 있으면 우선 사용
             response_image = None
-            try:
-                state_info = self._get_state_info(new_state)
-                if state_info:
-                    # 엔딩 state 체크: to_states가 비어있거나 state 이름에 ending이 포함된 경우
-                    to_states = state_info.get('to_states', [])
-                    state_name = state_info.get('name', new_state)
-                    if not to_states or 'ending' in new_state.lower():
-                        # 엔딩 상태인 경우 state JSON에 정의된 이미지 사용
-                        state_image = state_info.get('image')
-                        if state_image:
-                            # 이미지 경로 앞에 /가 없으면 추가
-                            if not state_image.startswith('/'):
-                                response_image = '/' + state_image
-                            else:
-                                response_image = state_image
-                            print(f"[ENDING_IMAGE] {new_state} 엔딩 이미지 설정: {response_image}")
-            except Exception as e:
-                print(f"[WARN] 엔딩 이미지 설정 중 오류: {e}")
-                response_image = None
+            if handler_image:
+                response_image = handler_image
+                print(f"[ENDING_IMAGE] handler에서 반환한 이미지 사용: {response_image}")
+            else:
+                # 엔딩 상태(to_states가 빈 리스트)인 경우 state JSON에 정의된 이미지를 사용
+                try:
+                    state_info = self._get_state_info(new_state)
+                    if state_info:
+                        # 엔딩 state 체크: to_states가 비어있거나 state 이름에 ending이 포함된 경우
+                        to_states = state_info.get('to_states', [])
+                        state_name = state_info.get('name', new_state)
+                        if not to_states or 'ending' in new_state.lower():
+                            # 엔딩 상태인 경우 state JSON에 정의된 이미지 사용
+                            state_image = state_info.get('image')
+                            if state_image:
+                                # 이미지 경로 앞에 /가 없으면 추가
+                                if not state_image.startswith('/'):
+                                    response_image = '/' + state_image
+                                else:
+                                    response_image = state_image
+                                print(f"[ENDING_IMAGE] {new_state} 엔딩 이미지 설정: {response_image}")
+                except Exception as e:
+                    print(f"[WARN] 엔딩 이미지 설정 중 오류: {e}")
+                    response_image = None
 
             # [6] 응답 반환 (호감도, 게임 상태, 선택과목, 나레이션, 능력치, 시간표, 날짜, 체력 포함)
             return {

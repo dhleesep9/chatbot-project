@@ -126,7 +126,23 @@ class UniversityApplicationHandler(BaseStateHandler):
                 narration += "\n"
         
         if not has_eligible:
+            # 지원 가능한 대학이 없으면 3su_ending으로 전이
+            print(f"[UNIVERSITY_APPLICATION] {username}의 지원 가능 대학 없음 - 3su_ending으로 전이 (평균 백분위: {avg_percentile:.1f}%)")
+            
+            narration = f"평균 백분위: {avg_percentile:.1f}%\n\n"
+            narration += "📋 [지원 가능 대학/학과]\n"
+            narration += "="*50 + "\n"
             narration += "\n지원 가능한 대학이 없습니다.\n"
+            narration += "\n수능 성적이 기대에 미치지 못했습니다. 하지만 서가윤은 포기하지 않기로 했습니다. 다시 한 번, 더 높은 목표를 향해..."
+            
+            return {
+                'skip_llm': True,  # LLM 호출 건너뛰기
+                'reply': None,
+                'narration': narration,
+                'transition_to': '3su_ending',
+                'image': '/static/images/chatbot/end/삼수.png',
+                'game_ended': True  # 게임 종료 플래그
+            }
         
         narration += "\n\n지원하고 싶은 대학과 학과를 '대학명 학과명' 형식으로 입력해주세요."
         narration += "\n예: '서울대학교 컴퓨터공학과', '연세대학교 의학과'"

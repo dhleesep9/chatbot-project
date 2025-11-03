@@ -114,52 +114,64 @@ class ExamFeedbackHandlerBase(BaseStateHandler):
             if current_subject and not subjects.get(current_subject, {}).get("solved", False):
                 skip_llm = True  # 조언 처리 시 LLM 호출 건너뛰기
 
-                # LLM으로 해결방안 적절성 판단
+                # LLM으로 해결방안 적절성 판단 (0~20 점수)
                 current_problem = subjects.get(current_subject, {}).get("problem", "")
-                is_solution_good = self.service._judge_advice_quality(username, user_message, current_subject, current_problem)
+                advice_score = self.service._judge_advice_quality(username, user_message, current_subject, current_problem)
+                print(f"[{self.EXAM_NAME.upper()}] 조언 점수: {advice_score}점 (0~20)")
 
                 # 조언에 대한 서가윤의 반응 생성 (LLM 사용)
-                advice_reply = self._generate_advice_reaction(username, user_message, current_subject, current_problem, is_solution_good)
+                # is_good은 점수가 11 이상이면 True로 변환
+                is_good_for_reaction = advice_score >= 11
+                advice_reply = self._generate_advice_reaction(username, user_message, current_subject, current_problem, is_good_for_reaction)
 
-                # 능력치/멘탈/호감도 변경
-                if is_solution_good:
-                    # 적절한 조언: 해당과목 +100, 멘탈 +5, 호감도 +2 (배율 적용)
-                    abilities = self.service._get_abilities(username)
-                    increased_amount = 100.0
-                    if current_subject in abilities:
-                        # 체력과 멘탈 효율 적용
-                        stamina = self.service._get_stamina(username)
-                        mental = self.service._get_mental(username)
-                        efficiency = self.service._calculate_combined_efficiency(stamina, mental) / 100.0
-                        
-                        base_increase = 100.0 * efficiency
-                        # 배율 적용 (진로-과목 + 시험 전략)
-                        increased_amount = self.service._apply_ability_multipliers(username, current_subject, base_increase)
-                        abilities[current_subject] = min(2500, abilities[current_subject] + increased_amount)
-                        self.service._set_abilities(username, abilities)
-
-                    current_mental = self.service._get_mental(username)
-                    new_mental = min(100, current_mental + 5)
-                    self.service._set_mental(username, new_mental)
-
-                    current_affection = self.service._get_affection(username)
-                    new_affection = min(100, current_affection + 2)
-                    self.service._set_affection(username, new_affection)
-
-                    narration = f"적절한 조언이였습니다 {current_subject}과목 능력치 +{increased_amount:.0f} 멘탈 +5 호감도 +2"
-                    print(f"[{self.EXAM_NAME.upper()}] {current_subject} 해결방안 적절함 - 능력치 +{increased_amount:.2f}, 멘탈 +5")
+                # 능력치/멘탈/호감도 변경 (점수에 따라)
+                # 점수에 따라 호감도와 멘탈 변화 결정
+                if advice_score >= 11:
+                    # 적절한 조언 (11~20점): 호감도 +2, 멘탈 +5
+                    affection_change = 2
+                    mental_change = 5
+                    advice_quality_text = "적절한"
+                elif advice_score >= 6:
+                    # 보통 조언 (6~10점): 호감도 +1, 멘탈 +2
+                    affection_change = 1
+                    mental_change = 2
+                    advice_quality_text = "보통"
                 else:
-                    # 부적절한 조언: 호감도 -2, 멘탈 -5
-                    current_affection = self.service._get_affection(username)
-                    new_affection = max(0, current_affection - 2)
-                    self.service._set_affection(username, new_affection)
+                    # 부적절한 조언 (0~5점): 호감도 -2, 멘탈 -5
+                    affection_change = -2
+                    mental_change = -5
+                    advice_quality_text = "적절하지 않은"
+                
+                current_affection = self.service._get_affection(username)
+                new_affection = max(0, min(100, current_affection + affection_change))
+                self.service._set_affection(username, new_affection)
 
-                    current_mental = self.service._get_mental(username)
-                    new_mental = max(0, current_mental - 5)
-                    self.service._set_mental(username, new_mental)
+                current_mental = self.service._get_mental(username)
+                new_mental = max(0, min(100, current_mental + mental_change))
+                self.service._set_mental(username, new_mental)
 
-                    narration = f"적절하지 않은 조언이였습니다. 호감도 -2, 멘탈 -5"
-                    print(f"[{self.EXAM_NAME.upper()}] {current_subject} 해결방안 부적절함 - 호감도 -2, 멘탈 -5")
+                # 능력치 증가: 점수에 따라 0~20 (효율과 배율 적용)
+                abilities = self.service._get_abilities(username)
+                increased_amount = 0.0
+                if current_subject in abilities:
+                    # 체력과 멘탈 효율 적용
+                    stamina = self.service._get_stamina(username)
+                    mental = self.service._get_mental(username)
+                    efficiency = self.service._calculate_combined_efficiency(stamina, mental) / 100.0
+                    
+                    # 점수를 그대로 base_increase로 사용 (0~20)
+                    base_increase = float(advice_score) * efficiency
+                    # 배율 적용 (진로-과목 + 시험 전략)
+                    increased_amount = self.service._apply_ability_multipliers(username, current_subject, base_increase)
+                    abilities[current_subject] = min(2500, abilities[current_subject] + increased_amount)
+                    self.service._set_abilities(username, abilities)
+
+                if advice_score >= 6:
+                    narration = f"{advice_quality_text} 조언이였습니다 {current_subject}과목 능력치 +{increased_amount:.0f} 멘탈 {mental_change:+.0f} 호감도 {affection_change:+.0f}"
+                else:
+                    narration = f"{advice_quality_text} 조언이였습니다. 호감도 {affection_change:+.0f}, 멘탈 {mental_change:+.0f}"
+                
+                print(f"[{self.EXAM_NAME.upper()}] {current_subject} 조언 점수: {advice_score}점 - 호감도 {affection_change:+.0f}, 멘탈 {mental_change:+.0f}, 능력치 +{increased_amount:.2f}")
 
                 # 현재 과목 완료 처리
                 subjects[current_subject]["solved"] = True
