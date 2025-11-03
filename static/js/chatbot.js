@@ -187,7 +187,7 @@ function updateAffectionDisplay(affection) {
       // 현재 이미지가 비정상 상태 이미지가 아닌 경우에만 호감도 이미지로 변경
       const currentSrc = sideImage.src;
       const isAbnormalState =
-        currentSrc.includes("/번아웃") || currentSrc.includes("/멘붕");
+        currentSrc.includes("/번아웃") || currentSrc.includes("/멘붕") || currentSrc.includes("/질병");
 
       if (!isAbnormalState) {
         const defaultImage = getDefaultImageByAffection(affection);
@@ -243,18 +243,26 @@ function updateCharacterStatus(stamina, mental) {
   // 상태 정보 배열 (우선순위 순)
   const statuses = [];
 
-  // 체력이 10 이하일 때 번아웃
+  // 체력이 10 이하일 때 질병
   if (stamina !== undefined && stamina <= 10) {
     statuses.push({
-      name: "번아웃",
-      description: "체력이 너무 낮아 지쳤습니다. 휴식이 필요해요.",
-      class: "status-burnout",
-      image: "/static/images/chatbot/번아웃-0.png",
+      name: "질병",
+      description: "체력이 너무 낮아 몸이 아픕니다. 휴식이 필요해요.",
+      class: "status-sick",
+      image: "/static/images/chatbot/질병-0.png",
     });
   }
 
-  // 멘탈이 20 이하일 때 혼란 (멘붕 이미지 사용)
-  if (mental !== undefined && mental <= 20) {
+  // 멘탈이 10 이하일 때 번아웃
+  if (mental !== undefined && mental <= 10) {
+    statuses.push({
+      name: "번아웃",
+      description: "멘탈이 극도로 낮아 번아웃 상태입니다. 회복이 필요해요.",
+      class: "status-burnout",
+      image: "/static/images/chatbot/번아웃-0.png",
+    });
+  } else if (mental !== undefined && mental <= 20) {
+    // 멘탈이 20 이하일 때 혼란 (멘붕 이미지 사용)
     statuses.push({
       name: "혼란",
       description: "멘탈이 흔들리고 있습니다. 안정이 필요해요.",
@@ -298,7 +306,7 @@ function updateCharacterStatus(stamina, mental) {
       // 정상 상태로 복귀 시 호감도에 따른 이미지로 복원
       const currentSrc = sideImage.src;
       const isAbnormalState =
-        currentSrc.includes("/번아웃") || currentSrc.includes("/멘붕");
+        currentSrc.includes("/번아웃") || currentSrc.includes("/멘붕") || currentSrc.includes("/질병");
       if (isAbnormalState) {
         const defaultImage = getDefaultImageByAffection(currentAffection);
         sideImage.src = defaultImage;
@@ -529,8 +537,10 @@ function getImagePrefixByAffection(affection) {
     return "중";
   } else if (affection < 70) {
     return "중상";
-  } else {
+  } else if (affection < 90) {
     return "상";
+  } else {
+    return "사랑";
   }
 }
 
@@ -546,6 +556,7 @@ function startSpeakingAnimation(affection = null) {
   if (!sideImage) return;
 
   const currentSrc = sideImage.src;
+  const isSick = currentSrc.includes("/질병");
   const isBurnout = currentSrc.includes("/번아웃");
   const isConfusion = currentSrc.includes("/멘붕");
 
@@ -558,7 +569,10 @@ function startSpeakingAnimation(affection = null) {
   // 비정상 상태에 따라 이미지 프리픽스 결정
   let prefix;
   let basePath;
-  if (isBurnout) {
+  if (isSick) {
+    prefix = "질병";
+    basePath = "/static/images/chatbot/";
+  } else if (isBurnout) {
     prefix = "번아웃";
     basePath = "/static/images/chatbot/";
   } else if (isConfusion) {
@@ -614,15 +628,18 @@ function stopSpeakingAnimation(affection = null) {
     speakingAnimationTimeout = null;
   }
 
-  // 애니메이션 종료 후 체력 상태 확인하여 이미지 업데이트
+  // 애니메이션 종료 후 체력/멘탈 상태 확인하여 이미지 업데이트
   const sideImage = document.querySelector(".side-image");
   if (sideImage) {
-    // 체력이 10 이하이거나 멘탈이 20 이하인 경우 비정상 상태 이미지 표시
+    // 체력이 10 이하일 때 질병 이미지 표시 (최우선)
     if (currentStamina !== undefined && currentStamina <= 10) {
-      // 번아웃 이미지 표시 (-0 버전)
+      // 질병 이미지 표시 (-0 버전)
+      sideImage.src = "/static/images/chatbot/질병-0.png";
+    } else if (currentMental !== undefined && currentMental <= 10) {
+      // 멘탈이 10 이하일 때 번아웃 이미지 표시
       sideImage.src = "/static/images/chatbot/번아웃-0.png";
     } else if (currentMental !== undefined && currentMental <= 20) {
-      // 혼란 이미지 표시 (멘붕)
+      // 멘탈이 20 이하일 때 혼란 이미지 표시 (멘붕)
       sideImage.src = "/static/images/chatbot/end/멘붕-2.png";
     } else {
       // 정상 상태: 호감도에 따른 이미지로 복원
