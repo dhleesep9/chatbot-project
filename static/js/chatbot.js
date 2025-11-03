@@ -184,11 +184,13 @@ function updateAffectionDisplay(affection) {
   if (!speakingAnimationInterval) {
     const sideImage = document.querySelector(".side-image");
     if (sideImage) {
-      // 현재 이미지가 비정상 상태 이미지가 아닌 경우에만 호감도 이미지로 변경
-      const currentSrc = sideImage.src;
+      // 체력/멘탈 상태를 직접 확인하여 비정상 상태인지 판단
+      // 우선순위: 체력 10 이하 > 멘탈 10 이하 > 정상
       const isAbnormalState =
-        currentSrc.includes("/번아웃") || currentSrc.includes("/멘붕");
+        (currentStamina !== undefined && currentStamina <= 10) ||
+        (currentMental !== undefined && currentMental <= 10);
 
+      // 비정상 상태가 아닐 때만 호감도에 따른 이미지로 변경
       if (!isAbnormalState) {
         const defaultImage = getDefaultImageByAffection(affection);
         sideImage.src = defaultImage;
@@ -240,69 +242,51 @@ function updateCharacterStatus(stamina, mental) {
     return;
   }
 
-  // 상태 정보 배열 (우선순위 순)
-  const statuses = [];
+  // 우선순위: 체력 10 이하 > 멘탈 10 이하 > 정상
+  let status;
 
-  // 체력이 10 이하일 때 번아웃
+  // 체력이 10 이하일 때 질병 (최우선)
   if (stamina !== undefined && stamina <= 10) {
-    statuses.push({
+    status = {
+      name: "질병",
+      description: "체력이 너무 낮아 몸이 아픕니다. 휴식이 필요해요.",
+      class: "status-sick",
+      image: "/static/images/chatbot/질병-0.png",
+    };
+  }
+  // 멘탈이 10 이하일 때 번아웃 (체력이 정상일 때만)
+  else if (mental !== undefined && mental <= 10) {
+    status = {
       name: "번아웃",
-      description: "체력이 너무 낮아 지쳤습니다. 휴식이 필요해요.",
+      description: "멘탈이 극도로 낮아 번아웃 상태입니다. 회복이 필요해요.",
       class: "status-burnout",
       image: "/static/images/chatbot/번아웃-0.png",
-    });
+    };
   }
-
-  // 멘탈이 20 이하일 때 혼란 (멘붕 이미지 사용)
-  if (mental !== undefined && mental <= 20) {
-    statuses.push({
-      name: "혼란",
-      description: "멘탈이 흔들리고 있습니다. 안정이 필요해요.",
-      class: "status-confusion",
-      image: "/static/images/chatbot/end/멘붕-2.png",
-    });
-  }
-
-  // 상태가 없는 경우 정상 상태
-  if (statuses.length === 0) {
-    statuses.push({
+  // 정상 상태
+  else {
+    status = {
       name: "정상",
       description: "건강한 상태입니다.",
       class: "status-normal",
       image: null, // 정상일 때는 호감도에 따른 이미지 사용
-    });
+    };
   }
-
-  // 첫 번째 상태를 메인 상태로 사용 (우선순위)
-  const mainStatus = statuses[0];
 
   // 상태 표시 업데이트
-  statusDisplay.className = `character-status-display ${mainStatus.class}`;
-  statusValue.textContent = mainStatus.name;
+  statusDisplay.className = `character-status-display ${status.class}`;
+  statusValue.textContent = status.name;
+  statusDescription.textContent = status.description;
 
-  // 여러 상태가 있을 때 설명 결합
-  if (statuses.length > 1) {
-    statusDescription.textContent = statuses
-      .map((s) => s.description)
-      .join(" ");
-  } else {
-    statusDescription.textContent = mainStatus.description;
-  }
-
-  // 이미지 업데이트
+  // 이미지 업데이트 (애니메이션 중이 아닐 때만)
   if (sideImage && !speakingAnimationInterval) {
-    if (mainStatus.image) {
-      // 비정상 상태 이미지로 변경
-      sideImage.src = mainStatus.image;
+    if (status.image) {
+      // 비정상 상태 이미지로 변경 (질병 또는 번아웃)
+      sideImage.src = status.image;
     } else {
       // 정상 상태로 복귀 시 호감도에 따른 이미지로 복원
-      const currentSrc = sideImage.src;
-      const isAbnormalState =
-        currentSrc.includes("/번아웃") || currentSrc.includes("/멘붕");
-      if (isAbnormalState) {
-        const defaultImage = getDefaultImageByAffection(currentAffection);
-        sideImage.src = defaultImage;
-      }
+      const defaultImage = getDefaultImageByAffection(currentAffection);
+      sideImage.src = defaultImage;
     }
   }
 }
@@ -529,8 +513,10 @@ function getImagePrefixByAffection(affection) {
     return "중";
   } else if (affection < 70) {
     return "중상";
-  } else {
+  } else if (affection < 90) {
     return "상";
+  } else {
+    return "사랑";
   }
 }
 
@@ -545,29 +531,26 @@ function startSpeakingAnimation(affection = null) {
   const sideImage = document.querySelector(".side-image");
   if (!sideImage) return;
 
-  const currentSrc = sideImage.src;
-  const isBurnout = currentSrc.includes("/번아웃");
-  const isConfusion = currentSrc.includes("/멘붕");
-
   // 호감도가 전달되지 않으면 현재 저장된 호감도 사용
   const targetAffection = affection !== null ? affection : currentAffection;
 
   // 기존 애니메이션 중지
   stopSpeakingAnimation(targetAffection);
 
-  // 비정상 상태에 따라 이미지 프리픽스 결정
+  // 체력/멘탈 상태를 직접 확인하여 이미지 프리픽스 결정
+  // 우선순위: 체력 10 이하 > 멘탈 10 이하 > 정상
   let prefix;
-  let basePath;
-  if (isBurnout) {
+  const basePath = "/static/images/chatbot/";
+
+  if (currentStamina !== undefined && currentStamina <= 10) {
+    // 체력이 10 이하일 때 질병 이미지
+    prefix = "질병";
+  } else if (currentMental !== undefined && currentMental <= 10) {
+    // 멘탈이 10 이하일 때 번아웃 이미지
     prefix = "번아웃";
-    basePath = "/static/images/chatbot/";
-  } else if (isConfusion) {
-    // 멘붕은 end/ 폴더에 있고 애니메이션 없음
-    return;
   } else {
     // 정상 상태: 호감도에 따른 이미지 프리픽스 결정
     prefix = getImagePrefixByAffection(targetAffection);
-    basePath = "/static/images/chatbot/";
   }
 
   const image0 = basePath + prefix + "-0.png";
@@ -614,18 +597,21 @@ function stopSpeakingAnimation(affection = null) {
     speakingAnimationTimeout = null;
   }
 
-  // 애니메이션 종료 후 체력 상태 확인하여 이미지 업데이트
+  // 애니메이션 종료 후 체력/멘탈 상태 확인하여 이미지 업데이트
   const sideImage = document.querySelector(".side-image");
   if (sideImage) {
-    // 체력이 10 이하이거나 멘탈이 20 이하인 경우 비정상 상태 이미지 표시
+    // 우선순위: 체력 10 이하 > 멘탈 10 이하 > 정상
+
+    // 체력이 10 이하일 때 질병 이미지 표시 (최우선)
     if (currentStamina !== undefined && currentStamina <= 10) {
-      // 번아웃 이미지 표시 (-0 버전)
+      sideImage.src = "/static/images/chatbot/질병-0.png";
+    }
+    // 멘탈이 10 이하일 때 번아웃 이미지 표시 (체력이 정상일 때만)
+    else if (currentMental !== undefined && currentMental <= 10) {
       sideImage.src = "/static/images/chatbot/번아웃-0.png";
-    } else if (currentMental !== undefined && currentMental <= 20) {
-      // 혼란 이미지 표시 (멘붕)
-      sideImage.src = "/static/images/chatbot/end/멘붕-2.png";
-    } else {
-      // 정상 상태: 호감도에 따른 이미지로 복원
+    }
+    // 정상 상태: 호감도에 따른 이미지로 복원
+    else {
       const targetAffection = affection !== null ? affection : currentAffection;
       const defaultImage = getDefaultImageByAffection(targetAffection);
       sideImage.src = defaultImage;
