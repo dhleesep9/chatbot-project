@@ -60,8 +60,6 @@ def build_system_prompt(config: Optional[Dict]) -> str:
     
     Args:
         config: chatbot_config.json 설정
-    
-    Returns:
         str: 시스템 프롬프트
     """
     if not config:
@@ -155,67 +153,6 @@ def build_system_prompt(config: Optional[Dict]) -> str:
 
     return "\n".join(system_parts)
 
-
-def build_user_prompt(
-    user_message: str,
-    context: Optional[str] = None,
-    username: str = "사용자",
-    game_state: str = "ice_break",
-    state_context: str = "",
-    selected_subjects: Optional[List[str]] = None,
-    schedule_set: bool = False,
-    official_mock_exam_grade_info: Optional[Dict] = None,
-    current_week: int = 0,
-    last_mock_exam_week: int = -1
-) -> str:
-    """
-    LLM 프롬프트 구성 (호감도 및 게임 상태 반영)
-    
-    Returns:
-        str: 구성된 프롬프트
-    """
-    if selected_subjects is None:
-        selected_subjects = []
-
-    # 프롬프트 시작 (호감도 말투가 메인)
-    prompt_parts = []
-    
-    # 게임 상태 컨텍스트 추가
-    if state_context.strip():
-        prompt_parts.append(state_context.strip())
-    
-    # 정규모의고사 피드백 상태에서 등급 정보 추가
-    if game_state == "official_mock_exam_feedback" and official_mock_exam_grade_info:
-        avg_grade = official_mock_exam_grade_info.get("average_grade", 9.0)
-        grade_reaction = official_mock_exam_grade_info.get("grade_reaction", "")
-        
-        # 등급대별로 다른 응답 가이드 제공
-        if avg_grade <= 2.0:
-            grade_guide = "학생의 평균 등급은 1-2등급입니다. 이는 매우 우수한 성적입니다. 격려와 함께 더 높은 목표를 제시하되, 자신감을 갖도록 도와주세요."
-        elif avg_grade <= 4.0:
-            grade_guide = "학생의 평균 등급은 3-4등급입니다. 좋은 성적입니다. 칭찬과 함께 조금만 더 노력하면 더 좋아질 수 있다고 격려해주세요."
-        elif avg_grade <= 6.0:
-            grade_guide = "학생의 평균 등급은 5-6등급입니다. 아쉬운 성적입니다. 좌절하지 말고 차근차근 기본기를 다지면 개선될 수 있다고 격려해주세요."
-        elif avg_grade <= 8.0:
-            grade_guide = "학생의 평균 등급은 7-8등급입니다. 힘든 성적입니다. 비관하지 말고 기초부터 차근차근 시작하면 된다고 희망을 주세요."
-        else:
-            grade_guide = "학생의 평균 등급은 9등급입니다. 매우 어려운 성적입니다. 하지만 포기하지 말고 하나씩 배워나가면 좋아질 수 있다고 희망적인 메시지를 전달해주세요."
-        
-        prompt_parts.append(f"[정규모의고사 성적 정보]\n평균 등급: {avg_grade:.1f}등급\n등급대별 반응: {grade_reaction}\n\n[응답 가이드]\n{grade_guide}\n\n학생이 '결과가 좋지 않다', '성적이 나쁘다', '어떻게 해야 하죠' 등의 말을 할 때는 위 등급 정보를 고려하여 적절하게 응답하세요. 등급이 높을수록(수치가 클수록) 더 따뜻하고 격려하는 말을 해주세요.")
-
-    # 선택과목 정보 추가 (icebreak 또는 mentoring 단계)
-    if game_state in ["icebreak", "mentoring"]:
-        if selected_subjects:
-            subjects_text = ", ".join(selected_subjects)
-            prompt_parts.append(f"[현재 선택된 탐구과목: {subjects_text}]")
-            if len(selected_subjects) < 2:
-                prompt_parts.append(f"(아직 {2 - len(selected_subjects)}개 더 선택할 수 있습니다.)")
-        else:
-            prompt_parts.append("[선택된 탐구과목: 없음]")
-            prompt_parts.append("(아직 탐구과목을 선택하지 않았습니다. 자연스럽게 선택과목을 선택하도록 유도하세요.)")
-
-    # 시간표 설정 안내 (daily_routine 단계에서는 14시간 제한 정보를 주지 않음)
-    if game_state == "daily_routine":
         if not schedule_set:
             prompt_parts.append("[중요] 아직 주간 학습 시간표가 설정되지 않았습니다. 플레이어에게 '학습 시간표 관리'를 통해 시간표를 설정하도록 자연스럽게 안내하세요. 14시간 제한이나 구체적인 시간표 형식은 언급하지 마세요.")
         else:
