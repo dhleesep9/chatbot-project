@@ -80,11 +80,11 @@
       "11exam",
       "exam_strategy",
       "university_application",
-      "love_ending",
-      "military_ending",
+      "youtuber_ending",
       "3su_ending",
       "athlete_ending",
-      "youtuber_ending"
+      "military_ending",
+      "love_ending"
     ]
   },
   "prompt_injection_detection": {

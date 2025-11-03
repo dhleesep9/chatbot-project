@@ -3660,11 +3660,34 @@ class ChatbotService:
                     {"input": user_message},
                     {"output": reply}
                 )
-            
+
+            # [5.5] 엔딩 상태의 이미지 설정
+            # 엔딩 상태(to_states가 빈 리스트)인 경우 state JSON에 정의된 이미지를 사용
+            response_image = None
+            try:
+                state_info = self._get_state_info(new_state)
+                if state_info:
+                    # 엔딩 state 체크: to_states가 비어있거나 state 이름에 ending이 포함된 경우
+                    to_states = state_info.get('to_states', [])
+                    state_name = state_info.get('name', new_state)
+                    if not to_states or 'ending' in new_state.lower():
+                        # 엔딩 상태인 경우 state JSON에 정의된 이미지 사용
+                        state_image = state_info.get('image')
+                        if state_image:
+                            # 이미지 경로 앞에 /가 없으면 추가
+                            if not state_image.startswith('/'):
+                                response_image = '/' + state_image
+                            else:
+                                response_image = state_image
+                            print(f"[ENDING_IMAGE] {new_state} 엔딩 이미지 설정: {response_image}")
+            except Exception as e:
+                print(f"[WARN] 엔딩 이미지 설정 중 오류: {e}")
+                response_image = None
+
             # [6] 응답 반환 (호감도, 게임 상태, 선택과목, 나레이션, 능력치, 시간표, 날짜, 체력 포함)
             return {
                 'reply': reply,
-                'image': None,
+                'image': response_image,
                 'affection': new_affection,
                 'game_state': new_state,
                 'selected_subjects': self._get_selected_subjects(username),
