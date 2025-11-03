@@ -184,11 +184,15 @@ function updateAffectionDisplay(affection) {
   if (!speakingAnimationInterval) {
     const sideImage = document.querySelector(".side-image");
     if (sideImage) {
-      // 현재 이미지가 비정상 상태 이미지가 아닌 경우에만 호감도 이미지로 변경
-      const currentSrc = sideImage.src;
+      // 체력/멘탈 상태를 직접 확인하여 비정상 상태인지 판단
+      // 체력 10 이하: 질병 상태 (최우선)
+      // 멘탈 10 이하: 번아웃 상태
+      // 멘탈 20 이하: 혼란 상태
       const isAbnormalState =
-        currentSrc.includes("/번아웃") || currentSrc.includes("/멘붕") || currentSrc.includes("/질병");
+        (currentStamina !== undefined && currentStamina <= 10) ||
+        (currentMental !== undefined && currentMental <= 20);
 
+      // 비정상 상태가 아닐 때만 호감도에 따른 이미지로 변경
       if (!isAbnormalState) {
         const defaultImage = getDefaultImageByAffection(affection);
         sideImage.src = defaultImage;
