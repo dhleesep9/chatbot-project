@@ -56,6 +56,14 @@ async function sendMessage(isInitial = false) {
       throw new Error("서버 응답이 올바르지 않습니다.");
     }
 
+    // 엔딩 이미지가 있는지 먼저 확인 (엔딩 상태 플래그 설정)
+    if (data.image) {
+      isEndingState = true;
+      console.log("[ENDING_STATE] 엔딩 상태 진입, 이미지 고정:", data.image);
+    } else {
+      isEndingState = false;
+    }
+
     // 능력치 업데이트
     if (data.abilities !== undefined) {
       updateAbilitiesDisplay(data.abilities);
@@ -122,8 +130,18 @@ async function sendMessage(isInitial = false) {
       currentAffection = data.affection;
     }
 
-    // 서가윤 뻐끔뻐끔 애니메이션 시작 (호감도 전달)
-    startSpeakingAnimation(currentAffection);
+    // 엔딩 이미지가 있으면 그것을 사용하고 애니메이션 건너뛰기
+    // 엔딩 상태의 경우 서버에서 data.image를 보내므로 그것을 우선 사용
+    const sideImage = document.querySelector(".side-image");
+    if (data.image && sideImage) {
+      // 엔딩 이미지가 있으면 해당 이미지로 설정하고 애니메이션 실행하지 않음
+      console.log("[ENDING_IMAGE] 엔딩 이미지 설정:", data.image);
+      sideImage.src = data.image;
+      // 애니메이션 건너뛰기 (엔딩 이미지는 고정)
+    } else {
+      // 엔딩 이미지가 없으면 일반 애니메이션 실행 (호감도 기반)
+      startSpeakingAnimation(currentAffection);
+    }
 
     // 게임 상태 저장 (F5 새로고침 시 복원하기 위해)
     saveGameState(data);
@@ -179,6 +197,11 @@ function updateAffectionDisplay(affection) {
 
   // 현재 호감도 저장
   currentAffection = affection;
+
+  // 엔딩 상태에서는 이미지 변경 금지
+  if (isEndingState) {
+    return;
+  }
 
   // 호감도 변경 시 기본 이미지 업데이트 (애니메이션 중이 아닐 때만, 비정상 상태가 아닐 때만)
   if (!speakingAnimationInterval) {
@@ -303,6 +326,11 @@ function updateCharacterStatus(stamina, mental) {
     statusDescription.textContent = mainStatus.description;
   }
 
+  // 엔딩 상태에서는 이미지 변경 금지
+  if (isEndingState) {
+    return;
+  }
+
   // 이미지 업데이트
   if (sideImage && !speakingAnimationInterval) {
     if (mainStatus.image) {
@@ -313,7 +341,7 @@ function updateCharacterStatus(stamina, mental) {
       // 하지만 실제 상태 값이 번아웃이 아니라는 것을 확인 (이미지 경로가 아닌 실제 값으로 확인)
       const isActuallyBurnout = currentStamina !== undefined && currentStamina <= 10;
       const isActuallyConfusion = currentMental !== undefined && currentMental <= 20;
-      
+
       if (!isActuallyBurnout && !isActuallyConfusion) {
         const defaultImage = getDefaultImageByAffection(currentAffection);
         sideImage.src = defaultImage;
@@ -537,6 +565,7 @@ let speakingAnimationTimeout = null;
 let currentAffection = 5; // 현재 호감도 저장
 let currentStamina = 30; // 현재 체력 저장
 let currentMental = 40; // 현재 멘탈 저장
+let isEndingState = false; // 엔딩 상태 플래그 (엔딩 상태에서는 이미지 변경 금지)
 
 // 호감도에 따른 이미지 프리픽스 반환
 function getImagePrefixByAffection(affection) {
