@@ -1,0 +1,9 @@
+{
+  "name": "6월 모의고사",
+  "description": "6월 모의고사 응시 및 성적 발표 상태",
+  "from_states": ["daily_routine"],
+  "to_states": ["daily_routine", "6exam_feedback"],
+  "narration": "6월 모의고사가 끝났습니다. CH2가 시작됩니다.",
+  "context": "[게임 상태: 6월 모의고사]\n- 6월 모의고사가 끝났습니다.\n- 멘토(유저)가 '어땠니?', '어떠니?' 등의 질문을 하면 성적을 발표합니다.\n- 성적 발표 후 과목별로 문제점을 이야기합니다.",
+  "transitions": []
+}

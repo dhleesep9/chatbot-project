@@ -1,0 +1,13 @@
+# Web Framework
+Flask==3.0.0
+
+# AI & VectorDB (Core Libraries)
+openai>=1.0.0,<2.0.0
+chromadb==0.4.24
+
+# LLM Framework -> Installing only the core and necessary components
+langchain-core
+langchain-openai
+
+# Utilities
+python-dotenv==1.0.1
