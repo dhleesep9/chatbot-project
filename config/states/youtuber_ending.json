@@ -1,0 +1,10 @@
+{
+  "name": "youtuber_ending",
+  "description": "유튜버 엔딩 - 수능 성적이 평균 5~6등급인 경우",
+  "from_states": ["수능"],
+  "to_states": [],
+  "narration": "수능이 끝나고 당신은 새로운 길을 선택했습니다. 대학보다는 자신만의 콘텐츠로 세상과 소통하기로 했습니다.",
+  "context": "[게임 상태: 유튜버 엔딩]\n- 당신은 유튜버의 길을 선택했습니다.\n- 수능 성적은 평범했지만, 당신에게는 다른 재능이 있었습니다.\n- 서가윤은 당신의 선택을 응원합니다.\n\n엔딩: 유튜버의 꿈",
+  "image": "static/images/chatbot/end/유튜버.png",
+  "transitions": []
+}
