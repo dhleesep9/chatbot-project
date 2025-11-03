@@ -871,7 +871,7 @@ class ChatbotService:
 
         # Global transitions 체크 (현재 state에 무관하게 항상 확인)
         current_mental = self.mentals.get(username, 40)
-        current_stamina = self.stamina.get(username, 30)
+        current_stamina = self.staminas.get(username, 30)
         print(f"[GLOBAL_TRANSITION_CHECK] Mental: {current_mental}, Stamina: {current_stamina}, Affection: {new_affection}")
 
         # 체력이 0 이하일 경우 -> broken_body 엔딩
