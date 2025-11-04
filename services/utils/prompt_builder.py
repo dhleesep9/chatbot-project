@@ -133,7 +133,7 @@ def build_system_prompt(config: Optional[Dict], current_scores: Optional[Dict] =
         
         system_parts.append(f"\n## ⚠️ 중요: 현재 성적 상태에 따른 말투 강제 조정")
         system_parts.append(f"\n당신은 반드시 자신의 현재 평균 백분위 {avg_percentile:.1f}% (평균 등급: {avg_grade:.1f}등급)를 인지하고 있어야 합니다.")
-        system_parts.append(f"이 성적은 당신의 현재 실력을 정확히 반영하며, 모든 대화에서 이 성적에 따른 감정과 말투가 무조건 반영되어야 합니다.\n")
+        system_parts.append(f"이 성적은 당신의 현재 실력을 정확히 반영하며, 모든 대화에서 이 성적에 따른 감정과 말투가 은연중에 반영되어야 합니다.\n")
         
         # 평균 백분위에 따른 말투 지시사항
         if avg_percentile >= 95:
@@ -268,10 +268,7 @@ def build_system_prompt(config: Optional[Dict], current_scores: Optional[Dict] =
 **무조건 지켜야 할 말투:**
 - 절망적이고 패닉에 빠진 어조를 최대한 강하게 사용하세요
 - 목표 대학에 대한 절망감과 포기하고 싶은 마음을 자주 표현하세요 ("목표 대학은 포기해야 하는 건가요?")
-- "근본적인 변화가 필요하다"는 절박함을 계속 강조하세요
-- 자신감이 거의 없는 표현을 자연스럽게 사용하세요
 - 멘토에게 구원을 요청하는 듯한 말투를 반복해서 사용하세요
-- 패닉 상태를 드러내는 표현을 자주 사용하세요
 
 **절대로 하지 말아야 할 것:**
 - 긍정적이거나 여유 있는 표현을 절대 사용하지 마세요
@@ -280,16 +277,12 @@ def build_system_prompt(config: Optional[Dict], current_scores: Optional[Dict] =
 
 **예시 (이런 말투를 무조건 사용하세요):**
 - "성적이 정말 안 나와요... 정말 어떻게 해야 할지 모르겠어요..."
-- "목표 대학은 포기해야 하는 건가요? 정말 절망스러워요..."
-- "정말 어떻게 해야 할지 모르겠어요... 멘토님 도와주세요..."
 - "근본적으로 바뀌어야 하는데 어떻게 해야 할지 모르겠어요..."
-- "정말 패닉이에요... 어떻게 해야 할까요?"
-- "멘토님, 정말 제가 구원이 필요해요. 어떻게 해야 할까요?"
 - "정말 포기하고 싶은 마음이 들어요... 하지만 포기할 수도 없고..."
 """)
         
         # 최종 강조
-        system_parts.append(f"\n**⚠️ 최종 경고: 위의 말투 지시사항은 절대적이며, 반드시 모든 대화에서 준수해야 합니다. 현재 성적 {avg_percentile:.1f}%에 맞는 말투를 무조건 사용하세요.**")
+        system_parts.append(f"\n**⚠️ 최종 경고: 위의 말투 지시사항은 절대적이며, 반드시 모든 대화에서 준수해야 합니다. 현재 성적 {avg_percentile:.1f}%에 맞는 말투를 은연중에 사용하세요.**")
 
     # 3. 대화 예시
     dialogue_examples = config.get("dialogue_examples", {})

@@ -874,9 +874,9 @@ class ChatbotService:
         current_stamina = self.staminas.get(username, 30)
         print(f"[GLOBAL_TRANSITION_CHECK] Mental: {current_mental}, Stamina: {current_stamina}, Affection: {new_affection}")
 
-        # 체력이 0 이하일 경우 -> broken_body 엔딩
-        if current_stamina <= 0:
-            print(f"[GLOBAL_TRANSITION] Stamina <= 0, transitioning to broken_body")
+        # 체력이 정확히 0일 경우에만 -> broken_body 엔딩 (체력이 1일 때는 게임오버 발생 안 함)
+        if current_stamina == 0:
+            print(f"[GLOBAL_TRANSITION] Stamina == 0, transitioning to broken_body")
             self._set_game_state(username, "broken_body")
             next_state_info = self._get_state_info("broken_body")
             state_narration = next_state_info.get("narration")
@@ -3753,12 +3753,20 @@ class ChatbotService:
                     {"output": reply}
                 )
 
-            # [5.5] 엔딩 상태의 이미지 설정
+            # [5.5] 상태별 이미지 설정
             # handler에서 반환한 이미지가 있으면 우선 사용
             response_image = None
             if handler_image:
                 response_image = handler_image
-                print(f"[ENDING_IMAGE] handler에서 반환한 이미지 사용: {response_image}")
+                print(f"[IMAGE] handler에서 반환한 이미지 사용: {response_image}")
+            elif new_state == "6exam_feedback":
+                # 6exam_feedback 상태일 때 6평.png 이미지 사용
+                response_image = "/static/images/chatbot/6평.png"
+                print(f"[IMAGE] {new_state} 상태 이미지 설정: {response_image}")
+            elif new_state == "9exam_feedback":
+                # 9exam_feedback 상태일 때 9평.png 이미지 사용
+                response_image = "/static/images/chatbot/9평.png"
+                print(f"[IMAGE] {new_state} 상태 이미지 설정: {response_image}")
             else:
                 # 엔딩 상태(to_states가 빈 리스트)인 경우 state JSON에 정의된 이미지를 사용
                 try:

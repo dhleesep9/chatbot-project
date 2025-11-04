@@ -34,7 +34,6 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-
         padding: 15px 20px;
       }
       .modal-header h2 {
@@ -52,44 +51,64 @@
         color: #666;
       }
       .modal-content {
-        padding: 30px;
+        padding: 0 30px 30px;
       }
-      .bot-image {
+      /* 캐릭터 사진 - 세로형 큰 사각형 */
+      .character-photo {
         width: 100%;
-        max-width: 300px;
-        height: auto;
+        max-width: 400px;
+        height: 500px;
+        object-fit: cover;
         border-radius: 12px;
         display: block;
-        margin: 0 auto 20px;
+        margin: 0 auto 30px;
+        background: #f5f5f5;
       }
-      .bot-info {
+      /* 메인 제목 */
+      .main-title {
         text-align: center;
-      }
-      .bot-info h1 {
-        margin: 0 0 15px 0;
-        font-size: 2rem;
+        margin: 0 0 20px 0;
+        font-size: 2.5rem;
+        font-weight: bold;
         color: #333;
       }
-      .bot-info p {
-        margin: 15px 0;
-        font-size: 1rem;
-        color: #666;
-        line-height: 1.6;
-      }
+      /* 해시태그 영역 */
       .tags {
-        margin: 15px 0;
+        text-align: center;
+        margin: 0 0 30px 0;
       }
       .tag {
         display: inline-block;
         background: #e0e0e0;
         color: #555;
-        padding: 6px 12px;
-        border-radius: 15px;
+        padding: 8px 16px;
+        border-radius: 20px;
         margin: 4px;
-        font-size: 0.9rem;
+        font-size: 1rem;
       }
+      /* 소개글 섹션 */
+      .description-section {
+        margin: 30px 0;
+      }
+      .description-label {
+        font-size: 1.2rem;
+        font-weight: bold;
+        color: #333;
+        margin-bottom: 15px;
+      }
+      .description-content {
+        font-size: 1rem;
+        color: #666;
+        line-height: 1.8;
+        padding: 20px;
+        background: #f9f9f9;
+        border-radius: 8px;
+        min-height: 100px;
+        white-space: pre-wrap;
+      }
+      /* 사용자명 입력 및 채팅 시작 */
       .username-area {
-        margin: 20px 0;
+        margin: 30px 0 20px;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -100,7 +119,7 @@
         color: #333;
       }
       .username-area input {
-        padding: 8px 12px;
+        padding: 10px 15px;
         font-size: 1rem;
         border: 2px solid #ddd;
         border-radius: 8px;
@@ -114,7 +133,7 @@
       .start-chat {
         display: block;
         margin: 20px 0;
-        padding: 12px 20px;
+        padding: 14px 24px;
         background: #764ba2;
         color: #fff;
         text-decoration: none;
@@ -142,22 +161,30 @@
       </div>
 
       <div class="modal-content">
+        <!-- 캐릭터 사진 -->
         <img
-          src="./static/images/hateslop/logo_black_genai.png"
+          src="{{ bot.image }}"
           alt="{{ bot.name }}"
-          class="bot-image"
+          class="character-photo"
         />
 
-        <div class="bot-info">
-          <h1>{{ bot.name }}</h1>
+        <!-- 메인 제목 -->
+        <h1 class="main-title">{{ bot.name }}</h1>
 
-          <div class="tags">
-            {% for tag in bot.tags %}
-            <span class="tag">{{ tag }}</span>
-            {% endfor %}
-          </div>
+        <!-- 해시태그 -->
+        <div class="tags">
+          {% for tag in bot.tags %}
+          <span class="tag">{{ tag }}</span>
+          {% endfor %}
         </div>
 
+        <!-- 소개글 -->
+        <div class="description-section">
+          <div class="description-label">소개글</div>
+          <div class="description-content">{{ bot.description }}</div>
+        </div>
+
+        <!-- 사용자명 입력 및 채팅 시작 -->
         <div class="username-area">
           <label for="username">이름:</label>
           <input type="text" id="username" placeholder="이름을 입력하세요" />

@@ -142,16 +142,29 @@ async function sendMessage(isInitial = false) {
       currentAffection = data.affection;
     }
 
-    // 엔딩 이미지가 있으면 그것을 사용하고 애니메이션 건너뛰기
-    // 엔딩 상태의 경우 서버에서 data.image를 보내므로 그것을 우선 사용
+    // 상태별 이미지 설정
+    // 서버에서 data.image를 보내면 그것을 우선 사용
     const sideImage = document.querySelector(".side-image");
     if (data.image && sideImage) {
-      // 엔딩 이미지가 있으면 해당 이미지로 설정하고 애니메이션 실행하지 않음
-      console.log("[ENDING_IMAGE] 엔딩 이미지 설정:", data.image);
+      // 이미지가 있으면 해당 이미지로 설정
+      const isEndingState =
+        data.game_state && data.game_state.toLowerCase().includes("ending");
+      const isExamFeedbackState =
+        data.game_state === "6exam_feedback" ||
+        data.game_state === "9exam_feedback";
+
+      console.log(`[IMAGE] ${data.game_state} 상태 이미지 설정:`, data.image);
       sideImage.src = data.image;
-      // 애니메이션 건너뛰기 (엔딩 이미지는 고정)
+
+      // 엔딩 상태나 시험 피드백 상태일 때는 애니메이션 건너뛰기 (고정 이미지)
+      if (isEndingState || isExamFeedbackState) {
+        // 애니메이션 건너뛰기
+      } else {
+        // 일반 상태에서는 애니메이션 실행 (호감도 기반)
+        startSpeakingAnimation(currentAffection);
+      }
     } else {
-      // 엔딩 이미지가 없으면 일반 애니메이션 실행 (호감도 기반)
+      // 이미지가 없으면 일반 애니메이션 실행 (호감도 기반)
       startSpeakingAnimation(currentAffection);
     }
 
@@ -427,7 +440,7 @@ function appendNarration(text) {
   return messageId;
 }
 
-// 게임 상태 저장 함수
+// 게임 상태 저장 함수 (localStorage에 모든 데이터 저장)
 function saveGameState(data) {
   try {
     // 채팅 로그 저장
@@ -436,21 +449,40 @@ function saveGameState(data) {
       localStorage.setItem(CHAT_LOG_KEY, chatLogHTML);
     }
 
-    // 게임 상태 저장
-    const gameState = {
-      abilities: data.abilities,
-      affection: data.affection,
-      stamina: data.stamina,
-      mental: data.mental,
-      schedule: data.schedule,
-      current_date: data.current_date,
-      game_state: data.game_state,
-      selected_subjects: data.selected_subjects,
-      timestamp: Date.now(),
-    };
+    // 기존 게임 상태 불러오기 (없으면 빈 객체)
+    const existingState = localStorage.getItem(GAME_STATE_KEY);
+    let gameState = existingState ? JSON.parse(existingState) : {};
+
+    // 서버 응답 데이터로 업데이트 (모든 필드 포함)
+    if (data.abilities !== undefined) gameState.abilities = data.abilities;
+    if (data.affection !== undefined) gameState.affection = data.affection;
+    if (data.stamina !== undefined) gameState.stamina = data.stamina;
+    if (data.mental !== undefined) gameState.mental = data.mental;
+    if (data.schedule !== undefined) gameState.schedule = data.schedule;
+    if (data.current_date !== undefined)
+      gameState.current_date = data.current_date;
+    if (data.game_state !== undefined) gameState.game_state = data.game_state;
+    if (data.selected_subjects !== undefined)
+      gameState.selected_subjects = data.selected_subjects;
+
+    // 추가 필드들도 저장 (서버가 응답에 포함하는 경우)
+    if (data.conversation_count !== undefined)
+      gameState.conversation_count = data.conversation_count;
+    if (data.current_week !== undefined)
+      gameState.current_week = data.current_week;
+    if (data.mock_exam_last_week !== undefined)
+      gameState.mock_exam_last_week = data.mock_exam_last_week;
+    if (data.career !== undefined) gameState.career = data.career;
+    if (data.narration !== undefined) gameState.last_narration = data.narration;
+
+    // 타임스탬프 업데이트
+    gameState.timestamp = Date.now();
+    gameState.last_saved = new Date().toISOString();
+
+    // localStorage에 저장
     localStorage.setItem(GAME_STATE_KEY, JSON.stringify(gameState));
 
-    console.log("[SAVE] 게임 상태 저장 완료");
+    console.log("[SAVE] 게임 상태 localStorage 저장 완료 (모든 데이터 포함)");
   } catch (err) {
     console.error("[SAVE] 게임 상태 저장 실패:", err);
   }
