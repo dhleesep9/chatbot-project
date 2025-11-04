@@ -3230,12 +3230,18 @@ class ChatbotService:
                             # 시험이 없는 경우
                             narration = f"{current_week}주차가 완료되었습니다. 다시 일상 루틴 단계입니다. 다음 중 하나를 입력하여 다음 행동을 선택하세요. '학습시간표 관리','사설모의고사 응시','멘토링 종료'"
 
-            # [1.9] fixed_reply 체크 (모든 핸들러 실행 후 최종 상태에서 체크)
+            # [1.9] fixed_reply와 narration 체크 (모든 핸들러 실행 후 최종 상태에서 체크)
             # 핸들러들이 상태를 변경할 수 있으므로, 모든 핸들러 실행 후 최종 new_state로 체크
             state_info = self._get_state_info(new_state)
             if state_info:
                 fixed_reply = state_info.get('fixed_reply')
+                state_narration = state_info.get('narration')
                 to_states = state_info.get('to_states', [])
+
+                # state narration이 있으면 무조건 사용 (핸들러 narration 덮어쓰기)
+                if state_narration:
+                    narration = state_narration
+                    print(f"[STATE_NARRATION] {new_state} state - narration 사용: '{narration[:100]}...'")
 
                 # fixed_reply가 있으면 무조건 사용 (state 전환 여부와 관계없이)
                 if fixed_reply:
