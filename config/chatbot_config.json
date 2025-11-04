@@ -87,7 +87,9 @@
       "love_ending",
       "mental_explode",
       "love_attack",
-      "broken_body"
+      "broken_body",
+      "sogang",
+      "campus_couple"
     ]
   },
   "prompt_injection_detection": {

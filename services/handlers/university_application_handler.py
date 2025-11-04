@@ -742,14 +742,43 @@ class UniversityApplicationHandler(BaseStateHandler):
                 
                 if not seogayoon_reply:
                     seogayoon_reply = f"멘토님... 정말 고마워요. 제가 {final_university} {final_department}에 합격하고 입학할 수 있게 된 건 전부 멘토님 덕분이에요. 멘토님이 옆에 있어줘서 힘들 때도 포기하지 않고 여기까지 올 수 있었어요. 정말 감사드려요...! 앞으로도 멘토님과 함께라면 자신있게 새로운 시작을 할 수 있을 것 같아요!"
-                
-                return {
-                    'skip_llm': True,
-                    'reply': seogayoon_reply,
-                    'narration': narration,
-                    'transition_to': None,
-                    'game_ended': True
-                }
+
+                # 서강대학교 입학 확인
+                is_sogang = '서강대학교' in final_university or '서강대' in final_university
+
+                if is_sogang:
+                    # 서강대학교 입학 - 호감도에 따라 엔딩 결정
+                    if affection >= 80:
+                        # 캠퍼스 커플 엔딩
+                        print(f"[UNIVERSITY_APPLICATION] {username}의 서강대 캠퍼스 커플 엔딩 (호감도: {affection})")
+                        return {
+                            'skip_llm': True,
+                            'reply': seogayoon_reply,
+                            'narration': narration,
+                            'transition_to': 'campus_couple',
+                            'image': '/static/images/chatbot/end/서강대2.png',
+                            'game_ended': True
+                        }
+                    else:
+                        # 서강대 입학 엔딩
+                        print(f"[UNIVERSITY_APPLICATION] {username}의 서강대 입학 엔딩 (호감도: {affection})")
+                        return {
+                            'skip_llm': True,
+                            'reply': seogayoon_reply,
+                            'narration': narration,
+                            'transition_to': 'sogang',
+                            'image': '/static/images/chatbot/end/서강대.png',
+                            'game_ended': True
+                        }
+                else:
+                    # 일반 대학 입학 엔딩
+                    return {
+                        'skip_llm': True,
+                        'reply': seogayoon_reply,
+                        'narration': narration,
+                        'transition_to': None,
+                        'game_ended': True
+                    }
             else:
                 # 합격하지 않은 대학 선택 시
                 return {
