@@ -128,28 +128,20 @@ async function sendMessage(isInitial = false) {
     }
 
     // 상태별 이미지 설정
-    // 서버에서 data.image를 보내면 그것을 우선 사용
+    // 서버에서 data.image를 보내면 그것을 최우선으로 사용
     const sideImage = document.querySelector(".side-image");
     if (data.image && sideImage) {
-      // 이미지가 있으면 해당 이미지로 설정
-      const isEndingState =
-        data.game_state && data.game_state.toLowerCase().includes("ending");
-      const isExamFeedbackState =
-        data.game_state === "6exam_feedback" ||
-        data.game_state === "9exam_feedback";
+      // state에 지정된 이미지가 있으면 저장 (다른 함수가 덮어쓰지 못하도록)
+      currentStateImage = data.image;
 
-      console.log(`[IMAGE] ${data.game_state} 상태 이미지 설정:`, data.image);
+      console.log(`[IMAGE] ${data.game_state} state 이미지 설정 (고정):`, data.image);
       sideImage.src = data.image;
 
-      // 엔딩 상태나 시험 피드백 상태일 때는 애니메이션 건너뛰기 (고정 이미지)
-      if (isEndingState || isExamFeedbackState) {
-        // 애니메이션 건너뛰기
-      } else {
-        // 일반 상태에서는 애니메이션 실행 (호감도 기반)
-        startSpeakingAnimation(currentAffection);
-      }
+      // state 이미지가 있을 때는 절대 애니메이션 실행하지 않음
+      // (애니메이션이 이미지를 변경할 수 있음)
     } else {
-      // 이미지가 없으면 일반 애니메이션 실행 (호감도 기반)
+      // state 이미지가 없으면 일반 애니메이션 실행 (호감도 기반)
+      currentStateImage = null; // state 이미지 없음
       startSpeakingAnimation(currentAffection);
     }
 
@@ -208,6 +200,11 @@ function updateAffectionDisplay(affection) {
   // 현재 호감도 저장
   currentAffection = affection;
 
+  // state 이미지가 지정되어 있으면 이미지 변경 금지
+  if (currentStateImage) {
+    return;
+  }
+
   // 호감도 변경 시 기본 이미지 업데이트 (애니메이션 중이 아닐 때만, 비정상 상태가 아닐 때만)
   if (!speakingAnimationInterval) {
     const sideImage = document.querySelector(".side-image");
@@ -242,6 +239,11 @@ function updateConfidenceDisplay(confidence) {
 
   // 현재 자신감 저장
   currentConfidence = confidence;
+
+  // state 이미지가 지정되어 있으면 이미지 변경 금지
+  if (currentStateImage) {
+    return;
+  }
 
   // 모든 상태이상 체크 (우선순위: 질병 > 번아웃 > 자신감)
   const sideImage = document.querySelector(".side-image");
@@ -395,6 +397,11 @@ function updateCharacterStatus(stamina, mental, confidence) {
     statusDescription.textContent = mainStatus.description;
   }
 
+  // state 이미지가 지정되어 있으면 이미지 변경 금지
+  if (currentStateImage) {
+    return;
+  }
+
   // 이미지 업데이트
   if (sideImage && !speakingAnimationInterval) {
     if (mainStatus.image) {
@@ -515,6 +522,7 @@ function saveGameState(data) {
     if (data.game_state !== undefined) gameState.game_state = data.game_state;
     if (data.selected_subjects !== undefined)
       gameState.selected_subjects = data.selected_subjects;
+    if (data.image !== undefined) gameState.state_image = data.image;
 
     // 추가 필드들도 저장 (서버가 응답에 포함하는 경우)
     if (data.conversation_count !== undefined)
@@ -606,6 +614,18 @@ function loadGameState() {
         updateGameDate(gameState.current_date);
       }
 
+      // state 이미지 복원
+      if (gameState.state_image) {
+        currentStateImage = gameState.state_image;
+        const sideImage = document.querySelector(".side-image");
+        if (sideImage) {
+          sideImage.src = currentStateImage;
+          console.log("[LOAD] state 이미지 복원:", currentStateImage);
+        }
+      } else {
+        currentStateImage = null;
+      }
+
       console.log("[LOAD] 게임 상태 복원 완료");
       return true; // 복원 성공
     }
@@ -667,6 +687,7 @@ let currentAffection = 5; // 현재 호감도 저장
 let currentStamina = 30; // 현재 체력 저장
 let currentMental = 40; // 현재 멘탈 저장
 let currentConfidence = 50; // 현재 자신감 저장
+let currentStateImage = null; // 현재 state에 지정된 이미지 (이미지 변경 금지용)
 
 // 호감도에 따른 이미지 프리픽스 반환
 function getImagePrefixByAffection(affection) {
@@ -693,6 +714,11 @@ function getDefaultImageByAffection(affection) {
 function startSpeakingAnimation(affection = null) {
   const sideImage = document.querySelector(".side-image");
   if (!sideImage) return;
+
+  // state 이미지가 지정되어 있으면 애니메이션 실행하지 않음
+  if (currentStateImage) {
+    return;
+  }
 
   // 모든 상태이상을 우선적으로 확인 (우선순위: 질병 > 번아웃 > 자신감)
   const isDisease = currentStamina !== undefined && currentStamina <= 10;
@@ -773,6 +799,11 @@ function stopSpeakingAnimation(affection = null) {
   if (speakingAnimationTimeout) {
     clearTimeout(speakingAnimationTimeout);
     speakingAnimationTimeout = null;
+  }
+
+  // state 이미지가 지정되어 있으면 이미지 변경하지 않음
+  if (currentStateImage) {
+    return;
   }
 
   // 애니메이션 종료 후 모든 상태이상 확인하여 이미지 업데이트 (우선순위: 질병 > 번아웃 > 자신감)
