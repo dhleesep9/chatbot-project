@@ -104,8 +104,8 @@ async function sendMessage(isInitial = false) {
     }
 
     // 서가윤 상태 업데이트
-    if (data.stamina !== undefined || data.mental !== undefined) {
-      updateCharacterStatus(data.stamina, data.mental);
+    if (data.stamina !== undefined || data.mental !== undefined || data.confidence !== undefined) {
+      updateCharacterStatus(data.stamina, data.mental, data.confidence);
     }
 
     // 시간표 업데이트
@@ -264,6 +264,44 @@ function updateConfidenceDisplay(confidence) {
   if (confidenceValue) {
     confidenceValue.textContent = confidence;
   }
+
+  // 현재 자신감 저장
+  currentConfidence = confidence;
+
+  // 엔딩 상태에서는 이미지 변경 금지
+  if (isEndingState) {
+    return;
+  }
+
+  // 자신감에 따른 상태이상 처리
+  const sideImage = document.querySelector(".side-image");
+  if (sideImage && !speakingAnimationInterval) {
+    // 의기소침 상태 (자신감 10 이하)
+    if (confidence <= 10) {
+      sideImage.src = "/static/images/chatbot/기죽음-0.png";
+      updateCharacterStatus(currentStamina, currentMental, confidence);
+      return;
+    }
+    // 오만 상태 (자신감 90 이상)
+    else if (confidence >= 90) {
+      sideImage.src = "/static/images/chatbot/오만-0.png";
+      updateCharacterStatus(currentStamina, currentMental, confidence);
+      return;
+    }
+    // 정상 상태: 다른 상태이상 체크
+    else {
+      // 체력이나 멘탈 상태이상이 없으면 호감도 이미지로 복귀
+      const isDisease = currentStamina !== undefined && currentStamina <= 10;
+      const isBurnout = currentMental !== undefined && currentMental <= 10;
+
+      if (!isDisease && !isBurnout) {
+        const defaultImage = getDefaultImageByAffection(currentAffection);
+        sideImage.src = defaultImage;
+      }
+
+      updateCharacterStatus(currentStamina, currentMental, confidence);
+    }
+  }
 }
 
 // 체력 표시 업데이트
@@ -305,7 +343,7 @@ function updateMentalDisplay(mental) {
 }
 
 // 서가윤 상태 표시 업데이트
-function updateCharacterStatus(stamina, mental) {
+function updateCharacterStatus(stamina, mental, confidence) {
   const statusDisplay = document.getElementById("character-status-display");
   const statusValue = document.getElementById("status-value");
   const statusDescription = document.getElementById("status-description");
@@ -317,6 +355,26 @@ function updateCharacterStatus(stamina, mental) {
 
   // 상태 정보 배열 (우선순위 순)
   const statuses = [];
+
+  // 자신감이 10 이하일 때 의기소침 (최우선)
+  if (confidence !== undefined && confidence <= 10) {
+    statuses.push({
+      name: "의기소침",
+      description: "자신감이 너무 낮아 기가 죽은 상태입니다.",
+      class: "status-discouraged",
+      image: "/static/images/chatbot/기죽음-0.png",
+    });
+  }
+
+  // 자신감이 90 이상일 때 오만
+  if (confidence !== undefined && confidence >= 90) {
+    statuses.push({
+      name: "오만",
+      description: "자신감이 너무 높아 오만한 상태입니다.",
+      class: "status-arrogant",
+      image: "/static/images/chatbot/오만-0.png",
+    });
+  }
 
   // 체력이 10 이하일 때 질병
   if (stamina !== undefined && stamina <= 10) {
@@ -372,19 +430,30 @@ function updateCharacterStatus(stamina, mental) {
   // 이미지 업데이트
   if (sideImage && !speakingAnimationInterval) {
     if (mainStatus.image) {
-      // 비정상 상태 이미지로 변경 (번호아웃 상태면 번아웃 이미지 유지)
+      // 비정상 상태 이미지로 변경
       sideImage.src = mainStatus.image;
     } else {
       // 정상 상태로 복귀 시 호감도에 따른 이미지로 복원
-      // 하지만 실제 상태 값이 질병이나 번아웃이 아니라는 것을 확인 (이미지 경로가 아닌 실제 값으로 확인)
+      // 모든 상태이상을 체크
       const isActuallyDisease =
         currentStamina !== undefined && currentStamina <= 10;
       const isActuallyBurnout =
         currentMental !== undefined && currentMental <= 10;
+      const isActuallyDiscouraged =
+        currentConfidence !== undefined && currentConfidence <= 10;
+      const isActuallyArrogant =
+        currentConfidence !== undefined && currentConfidence >= 90;
 
-      if (!isActuallyDisease && !isActuallyBurnout) {
+      if (!isActuallyDisease && !isActuallyBurnout && !isActuallyDiscouraged && !isActuallyArrogant) {
         const defaultImage = getDefaultImageByAffection(currentAffection);
         sideImage.src = defaultImage;
+      }
+      // 자신감 상태이상 우선
+      else if (isActuallyDiscouraged) {
+        sideImage.src = "/static/images/chatbot/기죽음-0.png";
+      }
+      else if (isActuallyArrogant) {
+        sideImage.src = "/static/images/chatbot/오만-0.png";
       }
       // 실제로 질병 상태면 질병 이미지 유지
       else if (isActuallyDisease) {
@@ -559,8 +628,8 @@ function loadGameState() {
       }
 
       // 서가윤 상태 복원
-      if (gameState.stamina !== undefined || gameState.mental !== undefined) {
-        updateCharacterStatus(gameState.stamina, gameState.mental);
+      if (gameState.stamina !== undefined || gameState.mental !== undefined || gameState.confidence !== undefined) {
+        updateCharacterStatus(gameState.stamina, gameState.mental, gameState.confidence);
       }
 
       // 시간표 복원
@@ -649,6 +718,7 @@ let speakingAnimationTimeout = null;
 let currentAffection = 5; // 현재 호감도 저장
 let currentStamina = 30; // 현재 체력 저장
 let currentMental = 40; // 현재 멘탈 저장
+let currentConfidence = 50; // 현재 자신감 저장
 let isEndingState = false; // 엔딩 상태 플래그 (엔딩 상태에서는 이미지 변경 금지)
 
 // 호감도에 따른 이미지 프리픽스 반환
@@ -677,7 +747,9 @@ function startSpeakingAnimation(affection = null) {
   const sideImage = document.querySelector(".side-image");
   if (!sideImage) return;
 
-  // 체력과 멘탈 상태를 우선적으로 확인 (현재 이미지 경로가 아닌 실제 상태 값 확인)
+  // 모든 상태이상을 우선적으로 확인
+  const isDiscouraged = currentConfidence !== undefined && currentConfidence <= 10;
+  const isArrogant = currentConfidence !== undefined && currentConfidence >= 90;
   const isDisease = currentStamina !== undefined && currentStamina <= 10;
   const isBurnout = currentMental !== undefined && currentMental <= 10;
 
@@ -687,15 +759,23 @@ function startSpeakingAnimation(affection = null) {
   // 기존 애니메이션 중지
   stopSpeakingAnimation(targetAffection);
 
-  // 비정상 상태에 따라 이미지 프리픽스 결정 (체력이 우선순위)
+  // 비정상 상태에 따라 이미지 프리픽스 결정 (자신감 상태이상이 최우선)
   let prefix;
   let basePath;
-  if (isDisease) {
-    // 질병 상태: 무조건 질병 이미지 사용 (호감도 무관, 체력이 최우선)
+  if (isDiscouraged) {
+    // 의기소침 상태: 무조건 기죽음 이미지 사용 (최우선)
+    prefix = "기죽음";
+    basePath = "/static/images/chatbot/";
+  } else if (isArrogant) {
+    // 오만 상태: 무조건 오만 이미지 사용
+    prefix = "오만";
+    basePath = "/static/images/chatbot/";
+  } else if (isDisease) {
+    // 질병 상태: 무조건 질병 이미지 사용
     prefix = "질병";
     basePath = "/static/images/chatbot/";
   } else if (isBurnout) {
-    // 번아웃 상태: 무조건 번아웃 이미지 사용 (호감도 무관)
+    // 번아웃 상태: 무조건 번아웃 이미지 사용
     prefix = "번아웃";
     basePath = "/static/images/chatbot/";
   } else {
@@ -748,13 +828,18 @@ function stopSpeakingAnimation(affection = null) {
     speakingAnimationTimeout = null;
   }
 
-  // 애니메이션 종료 후 체력/멘탈 상태 확인하여 이미지 업데이트
+  // 애니메이션 종료 후 모든 상태이상 확인하여 이미지 업데이트
   const sideImage = document.querySelector(".side-image");
   if (sideImage) {
-    // 체력이 10 이하이거나 멘탈이 10 이하인 경우 비정상 상태 이미지 표시
-    // 질병이 우선순위가 높음 (체력이 낮으면 무조건 질병)
-    if (currentStamina !== undefined && currentStamina <= 10) {
-      // 질병 이미지 표시 (-0 버전, 절대로 호감도 이미지로 바뀌지 않음)
+    // 자신감 상태이상이 최우선
+    if (currentConfidence !== undefined && currentConfidence <= 10) {
+      // 의기소침 이미지 표시
+      sideImage.src = "/static/images/chatbot/기죽음-0.png";
+    } else if (currentConfidence !== undefined && currentConfidence >= 90) {
+      // 오만 이미지 표시
+      sideImage.src = "/static/images/chatbot/오만-0.png";
+    } else if (currentStamina !== undefined && currentStamina <= 10) {
+      // 질병 이미지 표시
       sideImage.src = "/static/images/chatbot/질병-0.png";
     } else if (currentMental !== undefined && currentMental <= 10) {
       // 번아웃 이미지 표시
@@ -1223,7 +1308,7 @@ window.addEventListener("load", () => {
       currentAffection = 5;
       updateScheduleDisplay({}, "ice_break");
       updateGameDate("2023-11-17");
-      updateCharacterStatus(30, 40); // 기본 체력 30, 멘탈 40으로 상태 업데이트
+      updateCharacterStatus(30, 40, 50); // 기본 체력 30, 멘탈 40, 자신감 50으로 상태 업데이트
 
       // 초기 메시지 전송 (즉시)
       if (chatLog && chatLog.childElementCount === 0) {
@@ -1241,7 +1326,7 @@ window.addEventListener("load", () => {
       currentAffection = 5;
       // 초기 게임 날짜 설정
       updateGameDate("2023-11-17");
-      updateCharacterStatus(30, 40); // 기본 체력 30, 멘탈 40으로 상태 업데이트
+      updateCharacterStatus(30, 40, 50); // 기본 체력 30, 멘탈 40, 자신감 50으로 상태 업데이트
     } else if (stateRestored) {
       console.log(
         "게임 상태가 복원되었습니다. 초기 메시지를 전송하지 않습니다."
