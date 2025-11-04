@@ -50,6 +50,13 @@ class OfficialExamHandlerBase(BaseStateHandler):
         if is_asking or not scores_already_shown:
             # 성적 계산 (전략 보너스 없음)
             exam_scores = self.service._calculate_mock_exam_scores(username)
+            
+            # 성적이 제대로 계산되었는지 확인
+            if not exam_scores or len(exam_scores) == 0:
+                print(f"[{self.EXAM_NAME.upper()}] 경고: 성적 계산 결과가 비어있습니다. 재계산 시도...")
+                exam_scores = self.service._calculate_mock_exam_scores(username)
+            
+            print(f"[{self.EXAM_NAME.upper()}] 계산된 성적: {exam_scores}")
 
             # 성적표 나레이션 생성 (한 번만)
             narration = None
@@ -59,9 +66,16 @@ class OfficialExamHandlerBase(BaseStateHandler):
                     if subject in exam_scores:
                         score_data = exam_scores[subject]
                         score_parts.append(f"{subject} {score_data['grade']}등급 (백분위 {score_data['percentile']}%)")
+                    else:
+                        print(f"[{self.EXAM_NAME.upper()}] 경고: {subject} 과목의 성적이 없습니다.")
 
-                # 나레이션에는 성적표만 포함
-                narration = f"{self.EXAM_DISPLAY_NAME} 성적이 발표 되었습니다: " + " ".join(score_parts)
+                # 성적표가 비어있지 않은 경우에만 나레이션 생성
+                if score_parts:
+                    # 나레이션에는 성적표만 포함
+                    narration = f"{self.EXAM_DISPLAY_NAME} 성적이 발표 되었습니다: " + " ".join(score_parts)
+                    print(f"[{self.EXAM_NAME.upper()}] 생성된 나레이션: {narration}")
+                else:
+                    print(f"[{self.EXAM_NAME.upper()}] 오류: 성적표가 비어있습니다!")
 
                 # 문제점 추적 시스템 초기화
                 problem_storage[username] = {

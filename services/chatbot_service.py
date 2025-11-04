@@ -1639,6 +1639,11 @@ class ChatbotService:
         from services.utils.exam_score_calculator import generate_june_subject_problem
         return generate_june_subject_problem(subject, score_data)
     
+    def _generate_september_subject_problem(self, subject: str, score_data: dict) -> str:
+        """9월 모의고사 과목별 취약점 메시지 생성"""
+        from services.utils.exam_score_calculator import generate_september_subject_problem
+        return generate_september_subject_problem(subject, score_data)
+    
     def _check_if_advice_given(self, user_message: str) -> bool:
         """
         사용자 메시지에 조언이 포함되어 있는지 확인
@@ -1936,6 +1941,10 @@ class ChatbotService:
                 print(f"[WARN] Prompt template format error: {e}. Using advice directly.")
                 judgment_prompt = user_prompt_template.replace("{advice}", advice) if "{advice}" in user_prompt_template else f"{user_prompt_template}\n\n조언: {advice}"
 
+            print(f"[ADVICE_JUDGE] LLM 호출 시작 - 조언: '{advice[:50]}...', 취약점: {weak_subject}")
+            print(f"[ADVICE_JUDGE] System prompt: {system_prompt[:100]}...")
+            print(f"[ADVICE_JUDGE] User prompt: {judgment_prompt[:200]}...")
+            
             response = self.client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
@@ -1961,32 +1970,44 @@ class ChatbotService:
                 print(f"[ADVICE_JUDGE] 점수 파싱 성공: {score}점 (원본: '{judgment_text}')")
                 return score
             else:
-                # 점수를 찾을 수 없으면 응답 텍스트를 분석하여 점수 추정
-                judgment_lower = judgment_text.lower()
+                # 점수를 찾을 수 없으면 재시도 (하드코딩 대신)
+                print(f"[ADVICE_JUDGE] 점수 파싱 실패 - LLM 응답에 숫자가 없음: '{judgment_text}'")
+                print(f"[ADVICE_JUDGE] 재시도: 더 명확한 프롬프트로 재요청")
+                # 재시도 프롬프트
+                retry_prompt = f"앞서 평가한 조언의 점수를 0~20 사이의 정수로만 답변해주세요. 다른 설명 없이 숫자만:"
+                try:
+                    retry_response = self.client.chat.completions.create(
+                        model="gpt-4o-mini",
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": judgment_prompt},
+                            {"role": "assistant", "content": judgment_text},
+                            {"role": "user", "content": retry_prompt}
+                        ],
+                        temperature=0.1,
+                        max_tokens=5
+                    )
+                    retry_text = retry_response.choices[0].message.content.strip()
+                    print(f"[ADVICE_JUDGE] 재시도 응답: {retry_text}")
+                    retry_match = re.search(r'\b([0-9]|1[0-9]|20)\b', retry_text)
+                    if retry_match:
+                        score = int(retry_match.group(1))
+                        score = max(0, min(20, score))
+                        print(f"[ADVICE_JUDGE] 재시도 성공: {score}점")
+                        return score
+                except Exception as retry_e:
+                    print(f"[ADVICE_JUDGE] 재시도 실패: {retry_e}")
                 
-                # 매우 긍정적인 표현이면 높은 점수
-                if any(keyword in judgment_lower for keyword in ["매우", "완벽", "최고", "훌륭", "excellent", "perfect"]):
-                    estimated_score = 18
-                # 긍정적인 표현이면 중간~높은 점수
-                elif any(keyword in judgment_lower for keyword in ["좋", "적절", "유용", "효과적", "good", "appropriate"]):
-                    estimated_score = 15
-                # 보통 표현이면 중간 점수
-                elif any(keyword in judgment_lower for keyword in ["보통", "일반", "average", "normal"]):
-                    estimated_score = 10
-                # 부정적인 표현이면 낮은 점수
-                elif any(keyword in judgment_lower for keyword in ["부적절", "나쁨", "안좋", "bad", "inappropriate"]):
-                    estimated_score = 3
-                # 매우 부정적인 표현이면 0점
-                else:
-                    estimated_score = 5  # 기본값
-                
-                print(f"[ADVICE_JUDGE] 점수 파싱 실패 - 추정 점수 사용: {estimated_score}점 (원본: '{judgment_text}')")
-                return estimated_score
+                # 재시도도 실패하면 에러 반환 (하드코딩 제거)
+                print(f"[ERROR][ADVICE_JUDGE] 점수 파싱 완전 실패 - 하드코딩 없이 에러 처리")
+                raise ValueError(f"LLM 응답에서 점수를 파싱할 수 없습니다: '{judgment_text}'")
             
         except Exception as e:
-            print(f"[ERROR] 조언 판단 실패: {e}")
-            # 오류 시 안전을 위해 낮은 점수 반환 (보수적 접근)
-            return 5
+            import traceback
+            print(f"[ERROR][ADVICE_JUDGE] 조언 판단 실패: {e}")
+            print(f"[ERROR][ADVICE_JUDGE] 스택 트레이스:\n{traceback.format_exc()}")
+            # 오류 시 예외를 다시 발생시켜서 호출자가 처리하도록 함 (하드코딩 제거)
+            raise
     
     def _check_prompt_injection(self, user_message: str) -> bool:
         """
