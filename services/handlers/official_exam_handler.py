@@ -193,14 +193,19 @@ class CSATExamHandler(OfficialExamHandlerBase):
                     setattr(self.service, self.PROBLEM_STORAGE_ATTR, {})
                 score_storage = getattr(self.service, self.PROBLEM_STORAGE_ATTR)
                 score_storage[username] = {"scores": exam_scores}
-                
+
                 print(f"[{self.EXAM_NAME.upper()}] {username}의 {self.EXAM_DISPLAY_NAME} 성적 발표 완료")
-            
+
+                # 5급 공채 엔딩 조건 체크
+                transition_to = self._check_public_agent_ending(username, exam_scores)
+            else:
+                transition_to = None
+
             return {
                 'skip_llm': False,  # LLM 호출 진행
                 'reply': None,  # LLM이 생성
                 'narration': narration,
-                'transition_to': None,  # 상태 전이 없음
+                'transition_to': transition_to,  # 조건 만족 시 public_agent로 전이
                 'data': {
                     'exam_scores': exam_scores
                 }
@@ -290,3 +295,55 @@ class CSATExamHandler(OfficialExamHandlerBase):
             'narration': narration,
             'transition_to': None
         }
+
+    def _check_public_agent_ending(self, username: str, exam_scores: Dict[str, Any]) -> Optional[str]:
+        """
+        5급 공채 엔딩 조건 체크
+
+        조건:
+        - 영어 3등급 이하
+        - 수학 3등급 이하
+        - 국어 1등급
+        - (탐구1 + 탐구2) / 2 < 2.0 (평균이 2등급보다 좋음)
+
+        Args:
+            username: 사용자 이름
+            exam_scores: 수능 성적
+
+        Returns:
+            Optional[str]: 조건 만족 시 'public_agent', 아니면 None
+        """
+        try:
+            # 각 과목 등급 가져오기
+            korean_grade = exam_scores.get('국어', {}).get('grade', 9)
+            math_grade = exam_scores.get('수학', {}).get('grade', 9)
+            english_grade = exam_scores.get('영어', {}).get('grade', 9)
+            tamgu1_grade = exam_scores.get('탐구1', {}).get('grade', 9)
+            tamgu2_grade = exam_scores.get('탐구2', {}).get('grade', 9)
+
+            # 탐구 평균 계산
+            tamgu_avg = (tamgu1_grade + tamgu2_grade) / 2.0
+
+            # 조건 체크
+            is_english_ok = english_grade >= 3  # 3등급 이하 (3, 4, 5, ...)
+            is_math_ok = math_grade >= 3  # 3등급 이하
+            is_korean_ok = korean_grade == 1  # 1등급
+            is_tamgu_ok = tamgu_avg < 2.0  # 평균이 2.0보다 작음 (1~2등급 사이)
+
+            print(f"[11EXAM] {username}의 5급 공채 조건 체크:")
+            print(f"  - 국어 {korean_grade}등급 (1등급 필요): {is_korean_ok}")
+            print(f"  - 수학 {math_grade}등급 (3등급 이하): {is_math_ok}")
+            print(f"  - 영어 {english_grade}등급 (3등급 이하): {is_english_ok}")
+            print(f"  - 탐구 평균 {tamgu_avg:.1f}등급 (2등급 미만): {is_tamgu_ok}")
+
+            # 모든 조건 만족 시
+            if is_korean_ok and is_math_ok and is_english_ok and is_tamgu_ok:
+                print(f"[11EXAM] {username}의 5급 공채 엔딩 조건 만족! public_agent로 전이")
+                return 'public_agent'
+            else:
+                print(f"[11EXAM] {username}의 5급 공채 엔딩 조건 미충족")
+                return None
+
+        except Exception as e:
+            print(f"[11EXAM] 5급 공채 조건 체크 중 오류 발생: {e}")
+            return None
