@@ -2422,9 +2422,10 @@ class ChatbotService:
 
                 police_state_info = self._get_state_info("police")
                 police_narration = police_state_info.get("narration", "서가윤이 경찰에 신고했습니다.")
+                police_fixed_reply = police_state_info.get("fixed_reply", "...\n\n(서가윤이 당신의 욕설과 폭언에 견디다 못해 경찰에 신고했습니다.)")
 
                 return {
-                    'reply': "...\n\n(서가윤이 당신의 욕설과 폭언에 견디다 못해 경찰에 신고했습니다.)",
+                    'reply': police_fixed_reply,
                     'image': '/static/images/chatbot/end/신고.png',
                     'affection': current_affection,
                     'confidence': self._get_confidence(username),
@@ -2508,7 +2509,25 @@ class ChatbotService:
                     narration = f"{narration}\n\n{transition_narration}"
                 else:
                     narration = transition_narration
-            
+
+            # [1.6.1] 엔딩 state 체크 (fixed_reply 사용)
+            ending_processed = False
+            if state_changed or current_state != new_state:
+                state_info = self._get_state_info(new_state)
+                if state_info:
+                    # 엔딩 state인지 확인 (to_states가 비어있거나 fixed_reply가 있는 경우)
+                    to_states = state_info.get('to_states', [])
+                    fixed_reply = state_info.get('fixed_reply')
+
+                    if (not to_states or len(to_states) == 0) and fixed_reply:
+                        # 엔딩 state: LLM 사용하지 않고 fixed_reply 출력
+                        reply = fixed_reply
+                        game_ended = True
+                        ending_processed = True
+                        original_reply_on_game_end = fixed_reply
+                        print(f"[ENDING] {new_state} 엔딩 도달 - fixed_reply 사용: '{reply[:100]}...'")
+                        print(f"[ENDING] game_ended=True, LLM 호출 건너뛰기")
+
             # 학습시간표 관리 상태로 전이될 때 특별한 메시지 생성
             study_schedule_transition_reply = None
             if state_changed and new_state == "study_schedule":
@@ -3300,8 +3319,9 @@ class ChatbotService:
                 # mock_exam_feedback 또는 official_mock_exam_feedback에서 이미 처리된 경우 LLM 호출 건너뛰기
                 # 또는 6exam/9exam 상태에서 질문이 아닌 경우, 6exam_feedback/9exam_feedback에서 조언 처리 중인 경우
                 # 또는 게임이 종료된 경우 (university_application에서 합격 처리 완료)
+                # 또는 엔딩 state에서 fixed_reply를 사용하는 경우
                 processed = False
-                if game_ended:
+                if game_ended or ending_processed:
                     processed = True
                     # game_ended일 때는 handler의 reply를 사용 (이미 설정됨)
                     if not reply:

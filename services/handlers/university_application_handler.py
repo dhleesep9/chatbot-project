@@ -128,16 +128,26 @@ class UniversityApplicationHandler(BaseStateHandler):
         if not has_eligible:
             # 지원 가능한 대학이 없으면 3su_ending으로 전이
             print(f"[UNIVERSITY_APPLICATION] {username}의 지원 가능 대학 없음 - 3su_ending으로 전이 (평균 백분위: {avg_percentile:.1f}%)")
-            
+
+            # 3su_ending state의 fixed_reply 가져오기
+            ending_state_info = self.service._get_state_info('3su_ending')
+            ending_reply = None
+            if ending_state_info:
+                ending_reply = ending_state_info.get('fixed_reply')
+
+            # fixed_reply가 없으면 기본 메시지 사용
+            if not ending_reply:
+                ending_reply = "선생님 .... 저 이번에도 시험 망쳤어요 ... \n저번보다는 잘 봤는데 그래도 아쉬워서  ㅠㅠㅠㅠㅠ \n한 번 더하려구요.."
+
             narration = f"평균 백분위: {avg_percentile:.1f}%\n\n"
             narration += "📋 [지원 가능 대학/학과]\n"
             narration += "="*50 + "\n"
             narration += "\n지원 가능한 대학이 없습니다.\n"
             narration += "\n수능 성적이 기대에 미치지 못했습니다. 하지만 서가윤은 포기하지 않기로 했습니다. 다시 한 번, 더 높은 목표를 향해..."
-            
+
             return {
                 'skip_llm': True,  # LLM 호출 건너뛰기
-                'reply': None,
+                'reply': ending_reply,
                 'narration': narration,
                 'transition_to': '3su_ending',
                 'image': '/static/images/chatbot/end/삼수.png',
@@ -680,55 +690,38 @@ class UniversityApplicationHandler(BaseStateHandler):
                 
                 # 서가윤의 호감도 가져오기
                 affection = self.service._get_affection(username)
-                
-                # LLM을 통해 서가윤의 캐릭터에 맞는 감사 엔딩 메시지 생성
-                ending_prompt = f"""멘토님, 입학을 선택했어요. 이제 정말로 {final_university} {final_department}에 입학하는 거예요!
 
-입학 선택 결과:
-- 대학: {final_university}
-- 학과: {final_department}
-- 이름: 서가윤
+                # 서강대학교 입학 확인
+                is_sogang = '서강대학교' in final_university or '서강대' in final_university
 
-서가윤이 지금 {final_university} {final_department}에 입학할 것을 결정했고, 이 모든 과정에서 멘토님의 도움이 정말 컸다는 것을 깨달았습니다.
+                # 엔딩 state info 가져오기
+                if is_sogang:
+                    if affection >= 80:
+                        # 캠퍼스 커플 엔딩
+                        ending_state = 'campus_couple'
+                        ending_image = '/static/images/chatbot/end/서강대2.png'
+                    else:
+                        # 서강대 입학 엔딩
+                        ending_state = 'sogang'
+                        ending_image = '/static/images/chatbot/end/서강대.png'
+                else:
+                    # 일반 대학 입학 엔딩 (fixed_reply 없음)
+                    ending_state = None
+                    ending_image = None
 
-서가윤의 성격:
-- 불안하고 감정 기복이 심하지만, 진심 어린 지지와 격려를 받으면 다시 용기를 얻는 성격
-- 멘토에 대한 신뢰는 아직 완전하지 않아 방어적이지만, 동시에 진심으로 의지하고 싶어함
-- 원래 목표는 서강대학교였지만, 지금 {final_university} {final_department}에 합격하고 입학할 수 있게 되어 감사함을 느끼고 있습니다
+                # 엔딩 state의 fixed_reply 가져오기
+                seogayoon_reply = None
+                if ending_state:
+                    ending_state_info = self.service._get_state_info(ending_state)
+                    if ending_state_info:
+                        seogayoon_reply = ending_state_info.get('fixed_reply')
 
-현재 호감도: {affection}/100
-
-서가윤의 반응을 자연스럽게 표현해주세요:
-1. 입학을 선택한 후 안도감과 기쁨
-2. 멘토님에 대한 진심 어린 감사 표현 ("정말 고마워요", "멘토님 덕분이에요" 등)
-3. 이 모든 과정에서 멘토님이 옆에 있어줘서 힘이 됐다는 표현
-4. 앞으로 대학생활에 대한 기대와 설렘
-5. 호감도에 따라 감정 표현의 차이 (낮으면 조금 어색하거나, 높으면 더 진심 어린 감사)
-6. 서가윤의 특유의 불안한 성격이지만, 이제는 조금 더 자신감을 갖게 되었다는 표현
-
-서가윤의 말투로, 3-4문장으로 자연스럽게 응답해주세요. 반드시 멘토님에 대한 감사와 {final_university} {final_department}에 입학할 수 있게 된 기쁨을 표현해주세요."""
-                
-                try:
-                    if not self.service.client:
-                        raise ValueError("OpenAI Client가 초기화되지 않았습니다.")
-                    
-                    response = self.service.client.chat.completions.create(
-                        model="gpt-4o-mini",
-                        messages=[
-                            {"role": "system", "content": self.service._build_system_prompt(username)},
-                            {"role": "user", "content": ending_prompt}
-                        ],
-                        temperature=0.9,
-                        max_tokens=200
-                    )
-                    
-                    seogayoon_reply = response.choices[0].message.content.strip()
-                    print(f"[UNIVERSITY_APPLICATION] LLM이 생성한 서가윤의 엔딩 메시지: {seogayoon_reply}")
-                    
-                except Exception as e:
-                    print(f"[UNIVERSITY_APPLICATION] LLM 호출 실패, 기본 메시지 사용: {e}")
+                # fixed_reply가 없으면 기본 메시지 사용
+                if not seogayoon_reply:
                     seogayoon_reply = f"멘토님... 정말 고마워요. 제가 {final_university} {final_department}에 합격하고 입학할 수 있게 된 건 전부 멘토님 덕분이에요. 멘토님이 옆에 있어줘서 힘들 때도 포기하지 않고 여기까지 올 수 있었어요. 정말 감사드려요...! 앞으로도 멘토님과 함께라면 자신있게 새로운 시작을 할 수 있을 것 같아요!"
-                
+
+                print(f"[UNIVERSITY_APPLICATION] {username}의 입학 엔딩 - fixed_reply 사용: '{seogayoon_reply[:50]}...'")
+
                 # 엔딩 나레이션 생성
                 narration = f"📋 입학 선택 완료\n\n"
                 narration += f"서가윤이 {final_university} {final_department}에 입학할 것을 선택했습니다.\n\n"
@@ -739,12 +732,6 @@ class UniversityApplicationHandler(BaseStateHandler):
                 narration += f"수능 성적: {score_text}\n\n"
                 narration += f"🎉 축하합니다! 서가윤이 {final_university} {final_department}에 입학합니다!\n\n"
                 narration += f"수고하셨습니다. 게임을 완료하셨습니다."
-                
-                if not seogayoon_reply:
-                    seogayoon_reply = f"멘토님... 정말 고마워요. 제가 {final_university} {final_department}에 합격하고 입학할 수 있게 된 건 전부 멘토님 덕분이에요. 멘토님이 옆에 있어줘서 힘들 때도 포기하지 않고 여기까지 올 수 있었어요. 정말 감사드려요...! 앞으로도 멘토님과 함께라면 자신있게 새로운 시작을 할 수 있을 것 같아요!"
-
-                # 서강대학교 입학 확인
-                is_sogang = '서강대학교' in final_university or '서강대' in final_university
 
                 if is_sogang:
                     # 서강대학교 입학 - 호감도에 따라 엔딩 결정
