@@ -2515,23 +2515,30 @@ class ChatbotService:
                 else:
                     narration = transition_narration
 
-            # [1.6.1] 엔딩 state 체크 (fixed_reply 사용)
+            # [1.6.1] fixed_reply 체크 (state JSON에 fixed_reply가 있으면 항상 사용)
             ending_processed = False
-            if state_changed or current_state != new_state:
-                state_info = self._get_state_info(new_state)
-                if state_info:
-                    # 엔딩 state인지 확인 (to_states가 비어있거나 fixed_reply가 있는 경우)
-                    to_states = state_info.get('to_states', [])
-                    fixed_reply = state_info.get('fixed_reply')
+            state_info = self._get_state_info(new_state)
+            if state_info:
+                fixed_reply = state_info.get('fixed_reply')
+                to_states = state_info.get('to_states', [])
 
-                    if (not to_states or len(to_states) == 0) and fixed_reply:
-                        # 엔딩 state: LLM 사용하지 않고 fixed_reply 출력
-                        reply = fixed_reply
+                # fixed_reply가 있으면 무조건 사용 (state 전환 여부와 관계없이)
+                if fixed_reply:
+                    reply = fixed_reply
+                    ending_processed = True
+
+                    # to_states가 비어있으면 엔딩 state
+                    if not to_states or len(to_states) == 0:
                         game_ended = True
-                        ending_processed = True
                         original_reply_on_game_end = fixed_reply
-                        print(f"[ENDING] {new_state} 엔딩 도달 - fixed_reply 사용: '{reply[:100]}...'")
-                        print(f"[ENDING] game_ended=True, LLM 호출 건너뛰기")
+                        if state_changed:
+                            print(f"[ENDING] {new_state} 엔딩 도달 - fixed_reply 사용: '{reply[:100]}...'")
+                        else:
+                            print(f"[ENDING] {new_state} 엔딩 state에서 계속 - fixed_reply 사용")
+                    else:
+                        print(f"[FIXED_REPLY] {new_state} state - fixed_reply 사용: '{reply[:100]}...'")
+
+                    print(f"[FIXED_REPLY] LLM 호출 건너뛰기")
 
             # 학습시간표 관리 상태로 전이될 때 특별한 메시지 생성
             study_schedule_transition_reply = None
