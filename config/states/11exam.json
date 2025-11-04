@@ -2,7 +2,7 @@
   "name": "수능",
   "description": "수능 응시 상태",
   "from_states": ["daily_routine"],
-  "to_states": ["military_ending", "athlete_ending", "love_ending", "3su_ending", "youtuber_ending", "university_application", "public_agent"],
+  "to_states": ["military_ending", "athlete_ending", "love_ending", "3su_ending", "youtuber_ending", "university_application", "public_agent", "world_await"],
   "narration": "수능이 끝났습니다.",
   "context": "[게임 상태: 수능]\n- 수능이 끝났습니다.\n- '대학지원하기'를 입력하면 대학 지원 단계로 넘어갑니다.\n- 성적과 능력치에 따라 다양한 엔딩이 있을 수 있습니다.",
   "transitions": [

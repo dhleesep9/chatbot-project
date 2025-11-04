@@ -196,8 +196,10 @@ class CSATExamHandler(OfficialExamHandlerBase):
 
                 print(f"[{self.EXAM_NAME.upper()}] {username}의 {self.EXAM_DISPLAY_NAME} 성적 발표 완료")
 
-                # 5급 공채 엔딩 조건 체크
+                # 엔딩 조건 체크 (우선순위: 5급 공채 > 유학)
                 transition_to = self._check_public_agent_ending(username, exam_scores)
+                if not transition_to:
+                    transition_to = self._check_world_await_ending(username, exam_scores)
             else:
                 transition_to = None
 
@@ -346,4 +348,53 @@ class CSATExamHandler(OfficialExamHandlerBase):
 
         except Exception as e:
             print(f"[11EXAM] 5급 공채 조건 체크 중 오류 발생: {e}")
+            return None
+
+    def _check_world_await_ending(self, username: str, exam_scores: Dict[str, Any]) -> Optional[str]:
+        """
+        유학 엔딩 조건 체크
+
+        조건:
+        - 수능 평균 4등급 이하
+        - 자신감 80점 이상
+
+        Args:
+            username: 사용자 이름
+            exam_scores: 수능 성적
+
+        Returns:
+            Optional[str]: 조건 만족 시 'world_await', 아니면 None
+        """
+        try:
+            # 각 과목 등급 가져오기
+            korean_grade = exam_scores.get('국어', {}).get('grade', 9)
+            math_grade = exam_scores.get('수학', {}).get('grade', 9)
+            english_grade = exam_scores.get('영어', {}).get('grade', 9)
+            tamgu1_grade = exam_scores.get('탐구1', {}).get('grade', 9)
+            tamgu2_grade = exam_scores.get('탐구2', {}).get('grade', 9)
+
+            # 평균 등급 계산
+            avg_grade = (korean_grade + math_grade + english_grade + tamgu1_grade + tamgu2_grade) / 5.0
+
+            # 자신감 가져오기
+            confidence = self.service._get_confidence(username)
+
+            # 조건 체크
+            is_low_grade = avg_grade >= 4.0  # 평균 4등급 이하 (4, 5, 6...)
+            is_high_confidence = confidence >= 80  # 자신감 80 이상
+
+            print(f"[11EXAM] {username}의 유학 엔딩 조건 체크:")
+            print(f"  - 평균 등급: {avg_grade:.2f} (4등급 이하 필요): {is_low_grade}")
+            print(f"  - 자신감: {confidence} (80 이상 필요): {is_high_confidence}")
+
+            # 모든 조건 만족 시
+            if is_low_grade and is_high_confidence:
+                print(f"[11EXAM] {username}의 유학 엔딩 조건 만족! world_await로 전이")
+                return 'world_await'
+            else:
+                print(f"[11EXAM] {username}의 유학 엔딩 조건 미충족")
+                return None
+
+        except Exception as e:
+            print(f"[11EXAM] 유학 엔딩 조건 체크 중 오류 발생: {e}")
             return None

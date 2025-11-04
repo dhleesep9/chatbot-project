@@ -90,7 +90,9 @@
       "broken_body",
       "sogang",
       "campus_couple",
-      "public_agent"
+      "public_agent",
+      "police",
+      "world_await"
     ]
   },
   "prompt_injection_detection": {

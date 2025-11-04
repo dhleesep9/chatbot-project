@@ -2403,7 +2403,42 @@ class ChatbotService:
                     'current_date': self._get_game_date(username),
                     'stamina': self._get_stamina(username)
                 }
-            
+
+            # [1.4] 욕설 감지 및 경찰 신고 엔딩 처리
+            profanity_keywords = [
+                '개새', '개새끼', '씨발', '시발', '십팔', '좆', '병신', '븅신',
+                '엿같', '좆같', '존나', '존내', '졸라', '미친놈', '미친년', '또라이',
+                '개같', '꺼져', '꺼지라', '닥쳐', '꺼졋', '조까', '엿먹', '엿이나',
+                '죽어', '디져라', '디질래', '뒤져', '뒤질래', '뒈져'
+            ]
+
+            # 욕설 키워드 체크
+            has_profanity = any(keyword in user_message for keyword in profanity_keywords)
+
+            if has_profanity:
+                # 경찰 신고 엔딩으로 즉시 전환
+                self._set_game_state(username, "police")
+                print(f"[PROFANITY_DETECTED] {username}의 메시지에서 욕설 감지 -> police 엔딩")
+
+                police_state_info = self._get_state_info("police")
+                police_narration = police_state_info.get("narration", "서가윤이 경찰에 신고했습니다.")
+
+                return {
+                    'reply': "...\n\n(서가윤이 당신의 욕설과 폭언에 견디다 못해 경찰에 신고했습니다.)",
+                    'image': '/static/images/chatbot/end/신고.png',
+                    'affection': current_affection,
+                    'confidence': self._get_confidence(username),
+                    'game_state': 'police',
+                    'selected_subjects': self._get_selected_subjects(username),
+                    'narration': police_narration,
+                    'abilities': self._get_abilities(username),
+                    'schedule': self._get_schedule(username),
+                    'current_date': self._get_game_date(username),
+                    'stamina': self._get_stamina(username),
+                    'mental': self._get_mental(username),
+                    'game_ended': True
+                }
+
             # [1.5] LLM으로 사용자 메시지의 긍정/부정 분석하여 호감도 변화 계산
             try:
                 affection_change = self._analyze_sentiment_with_llm(user_message)
