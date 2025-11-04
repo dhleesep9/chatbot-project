@@ -56,26 +56,6 @@ async function sendMessage(isInitial = false) {
       throw new Error("서버 응답이 올바르지 않습니다.");
     }
 
-    // 엔딩 상태 감지: 이미지가 있거나 game_state에 'ending'이 포함된 경우
-    const isEndingByImage = data.image ? true : false;
-    const isEndingByState =
-      data.game_state && data.game_state.toLowerCase().includes("ending")
-        ? true
-        : false;
-
-    if (isEndingByImage || isEndingByState) {
-      isEndingState = true;
-      console.log("[ENDING_STATE] 엔딩 상태 진입:", {
-        image: data.image,
-        game_state: data.game_state,
-        reason: isEndingByImage ? "이미지" : "상태",
-      });
-      // 엔딩 상태일 때 입력 필드 비활성화
-      disableChatInput();
-    } else {
-      isEndingState = false;
-    }
-
     // 능력치 업데이트
     if (data.abilities !== undefined) {
       updateAbilitiesDisplay(data.abilities);
@@ -228,11 +208,6 @@ function updateAffectionDisplay(affection) {
   // 현재 호감도 저장
   currentAffection = affection;
 
-  // 엔딩 상태에서는 이미지 변경 금지
-  if (isEndingState) {
-    return;
-  }
-
   // 호감도 변경 시 기본 이미지 업데이트 (애니메이션 중이 아닐 때만, 비정상 상태가 아닐 때만)
   if (!speakingAnimationInterval) {
     const sideImage = document.querySelector(".side-image");
@@ -267,11 +242,6 @@ function updateConfidenceDisplay(confidence) {
 
   // 현재 자신감 저장
   currentConfidence = confidence;
-
-  // 엔딩 상태에서는 이미지 변경 금지
-  if (isEndingState) {
-    return;
-  }
 
   // 모든 상태이상 체크 (우선순위: 질병 > 번아웃 > 자신감)
   const sideImage = document.querySelector(".side-image");
@@ -423,11 +393,6 @@ function updateCharacterStatus(stamina, mental, confidence) {
       .join(" ");
   } else {
     statusDescription.textContent = mainStatus.description;
-  }
-
-  // 엔딩 상태에서는 이미지 변경 금지
-  if (isEndingState) {
-    return;
   }
 
   // 이미지 업데이트
@@ -589,14 +554,6 @@ function loadGameState() {
       );
       messageIdCounter = messageElements.length;
 
-      // 엔딩 이미지가 있는지 확인 (복원된 채팅 로그에서)
-      const hasEndingImage = chatLog.querySelector(".bot-big-img");
-      if (hasEndingImage) {
-        isEndingState = true;
-        disableChatInput();
-        console.log("[LOAD] 엔딩 상태 감지 - 채팅 입력 비활성화");
-      }
-
       console.log(
         "[LOAD] 채팅 로그 복원 완료 (메시지 수:",
         messageIdCounter,
@@ -647,19 +604,6 @@ function loadGameState() {
       // 게임 날짜 복원
       if (gameState.current_date) {
         updateGameDate(gameState.current_date);
-      }
-
-      // 엔딩 상태 확인: game_state에 'ending'이 포함된 경우
-      if (
-        gameState.game_state &&
-        gameState.game_state.toLowerCase().includes("ending")
-      ) {
-        isEndingState = true;
-        disableChatInput();
-        console.log(
-          "[LOAD] 엔딩 game_state 감지 - 채팅 입력 비활성화:",
-          gameState.game_state
-        );
       }
 
       console.log("[LOAD] 게임 상태 복원 완료");
@@ -723,7 +667,6 @@ let currentAffection = 5; // 현재 호감도 저장
 let currentStamina = 30; // 현재 체력 저장
 let currentMental = 40; // 현재 멘탈 저장
 let currentConfidence = 50; // 현재 자신감 저장
-let isEndingState = false; // 엔딩 상태 플래그 (엔딩 상태에서는 이미지 변경 금지)
 
 // 호감도에 따른 이미지 프리픽스 반환
 function getImagePrefixByAffection(affection) {
@@ -911,38 +854,6 @@ document.querySelectorAll(".modal").forEach((modal) => {
     }
   });
 });
-
-// 엔딩 상태일 때 채팅 입력 비활성화
-function disableChatInput() {
-  if (userMessageInput) {
-    userMessageInput.disabled = true;
-    userMessageInput.placeholder = "게임이 종료되었습니다.";
-    userMessageInput.style.opacity = "0.5";
-    userMessageInput.style.cursor = "not-allowed";
-  }
-  if (sendBtn) {
-    sendBtn.disabled = true;
-    sendBtn.style.opacity = "0.5";
-    sendBtn.style.cursor = "not-allowed";
-  }
-  console.log("[ENDING_STATE] 채팅 입력 비활성화 완료");
-}
-
-// 채팅 입력 활성화 (게임 초기화 시 사용)
-function enableChatInput() {
-  if (userMessageInput) {
-    userMessageInput.disabled = false;
-    userMessageInput.placeholder = "메시지를 입력하세요...";
-    userMessageInput.style.opacity = "1";
-    userMessageInput.style.cursor = "text";
-  }
-  if (sendBtn) {
-    sendBtn.disabled = false;
-    sendBtn.style.opacity = "1";
-    sendBtn.style.cursor = "pointer";
-  }
-  console.log("[RESET] 채팅 입력 활성화 완료");
-}
 
 // F5 키 입력 감지 및 게임 상태 초기화
 document.addEventListener("keydown", (event) => {
