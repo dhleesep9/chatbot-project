@@ -2424,9 +2424,14 @@ class ChatbotService:
                 police_narration = police_state_info.get("narration", "서가윤이 경찰에 신고했습니다.")
                 police_fixed_reply = police_state_info.get("fixed_reply", "...\n\n(서가윤이 당신의 욕설과 폭언에 견디다 못해 경찰에 신고했습니다.)")
 
+                # police state의 image 가져오기
+                police_image = police_state_info.get("image")
+                if police_image and not police_image.startswith('/'):
+                    police_image = '/' + police_image
+
                 return {
                     'reply': police_fixed_reply,
-                    'image': '/static/images/chatbot/end/신고.png',
+                    'image': police_image,
                     'affection': current_affection,
                     'confidence': self._get_confidence(username),
                     'game_state': 'police',
@@ -3828,27 +3833,28 @@ class ChatbotService:
                 )
 
             # [5.5] 상태별 이미지 설정
-            # handler에서 반환한 이미지가 있으면 우선 사용
+            # 우선순위: state의 image > handler의 image
             response_image = None
-            if handler_image:
+
+            # 1순위: state에 image가 있으면 무조건 사용
+            try:
+                state_info = self._get_state_info(new_state)
+                if state_info:
+                    state_image = state_info.get('image')
+                    if state_image:
+                        # 이미지 경로 앞에 /가 없으면 추가
+                        if not state_image.startswith('/'):
+                            response_image = '/' + state_image
+                        else:
+                            response_image = state_image
+                        print(f"[IMAGE] {new_state} state 이미지 사용 (최우선): {response_image}")
+            except Exception as e:
+                print(f"[WARN] state 이미지 설정 중 오류: {e}")
+
+            # 2순위: state에 image가 없을 때만 handler_image 사용
+            if not response_image and handler_image:
                 response_image = handler_image
-                print(f"[IMAGE] handler에서 반환한 이미지 사용: {response_image}")
-            else:
-                # 모든 state에서 image 필드가 있으면 자동으로 사용
-                try:
-                    state_info = self._get_state_info(new_state)
-                    if state_info:
-                        state_image = state_info.get('image')
-                        if state_image:
-                            # 이미지 경로 앞에 /가 없으면 추가
-                            if not state_image.startswith('/'):
-                                response_image = '/' + state_image
-                            else:
-                                response_image = state_image
-                            print(f"[IMAGE] {new_state} state 이미지 자동 설정: {response_image}")
-                except Exception as e:
-                    print(f"[WARN] state 이미지 설정 중 오류: {e}")
-                    response_image = None
+                print(f"[IMAGE] handler 이미지 사용 (fallback): {response_image}")
 
             # [6] 응답 반환 (호감도, 자신감, 게임 상태, 선택과목, 나레이션, 능력치, 시간표, 날짜, 체력 포함)
             return {

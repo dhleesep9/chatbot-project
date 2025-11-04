@@ -150,7 +150,6 @@ class UniversityApplicationHandler(BaseStateHandler):
                 'reply': ending_reply,
                 'narration': narration,
                 'transition_to': '3su_ending',
-                'image': '/static/images/chatbot/end/삼수.png',
                 'game_ended': True  # 게임 종료 플래그
             }
         
@@ -743,7 +742,6 @@ class UniversityApplicationHandler(BaseStateHandler):
                             'reply': seogayoon_reply,
                             'narration': narration,
                             'transition_to': 'campus_couple',
-                            'image': '/static/images/chatbot/end/서강대2.png',
                             'game_ended': True
                         }
                     else:
@@ -754,7 +752,6 @@ class UniversityApplicationHandler(BaseStateHandler):
                             'reply': seogayoon_reply,
                             'narration': narration,
                             'transition_to': 'sogang',
-                            'image': '/static/images/chatbot/end/서강대.png',
                             'game_ended': True
                         }
                 else:
