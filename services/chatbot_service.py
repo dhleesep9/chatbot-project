@@ -2515,30 +2515,9 @@ class ChatbotService:
                 else:
                     narration = transition_narration
 
-            # [1.6.1] fixed_reply 체크 (state JSON에 fixed_reply가 있으면 항상 사용)
+            # [1.6.1] fixed_reply 체크는 모든 핸들러 실행 후로 이동 (핸들러가 상태를 변경할 수 있으므로)
+            # 이 변수들은 나중에 사용됨
             ending_processed = False
-            state_info = self._get_state_info(new_state)
-            if state_info:
-                fixed_reply = state_info.get('fixed_reply')
-                to_states = state_info.get('to_states', [])
-
-                # fixed_reply가 있으면 무조건 사용 (state 전환 여부와 관계없이)
-                if fixed_reply:
-                    reply = fixed_reply
-                    ending_processed = True
-
-                    # to_states가 비어있으면 엔딩 state
-                    if not to_states or len(to_states) == 0:
-                        game_ended = True
-                        original_reply_on_game_end = fixed_reply
-                        if state_changed:
-                            print(f"[ENDING] {new_state} 엔딩 도달 - fixed_reply 사용: '{reply[:100]}...'")
-                        else:
-                            print(f"[ENDING] {new_state} 엔딩 state에서 계속 - fixed_reply 사용")
-                    else:
-                        print(f"[FIXED_REPLY] {new_state} state - fixed_reply 사용: '{reply[:100]}...'")
-
-                    print(f"[FIXED_REPLY] LLM 호출 건너뛰기")
 
             # 학습시간표 관리 상태로 전이될 때 특별한 메시지 생성
             study_schedule_transition_reply = None
@@ -3250,7 +3229,32 @@ class ChatbotService:
                         else:
                             # 시험이 없는 경우
                             narration = f"{current_week}주차가 완료되었습니다. 다시 일상 루틴 단계입니다. 다음 중 하나를 입력하여 다음 행동을 선택하세요. '학습시간표 관리','사설모의고사 응시','멘토링 종료'"
-            
+
+            # [1.9] fixed_reply 체크 (모든 핸들러 실행 후 최종 상태에서 체크)
+            # 핸들러들이 상태를 변경할 수 있으므로, 모든 핸들러 실행 후 최종 new_state로 체크
+            state_info = self._get_state_info(new_state)
+            if state_info:
+                fixed_reply = state_info.get('fixed_reply')
+                to_states = state_info.get('to_states', [])
+
+                # fixed_reply가 있으면 무조건 사용 (state 전환 여부와 관계없이)
+                if fixed_reply:
+                    reply = fixed_reply
+                    ending_processed = True
+
+                    # to_states가 비어있으면 엔딩 state
+                    if not to_states or len(to_states) == 0:
+                        game_ended = True
+                        original_reply_on_game_end = fixed_reply
+                        if state_changed:
+                            print(f"[ENDING] {new_state} 엔딩 도달 - fixed_reply 사용: '{reply[:100]}...'")
+                        else:
+                            print(f"[ENDING] {new_state} 엔딩 state에서 계속 - fixed_reply 사용")
+                    else:
+                        print(f"[FIXED_REPLY] {new_state} state - fixed_reply 사용: '{reply[:100]}...'")
+
+                    print(f"[FIXED_REPLY] LLM 호출 건너뛰기")
+
             # [2] RAG 검색
             try:
                 context, similarity, metadata = self._search_similar(
@@ -3284,10 +3288,10 @@ class ChatbotService:
             if new_state in ["icebreak", "mentoring"] and ("탐구과목" in user_message or "선택과목" in user_message or "과목 선택" in user_message or "과목 목록" in user_message):
                 subjects_list = self._get_subject_list_text()
                 prompt += f"\n\n[선택과목 목록]\n{subjects_list}\n\n사용자가 위 목록 중에서 선택과목을 고를 수 있도록 안내하세요. (최대 2개)"
-            
-            # reply 변수 초기화
-            reply = None
-            
+
+            # reply 변수는 함수 시작 시 이미 초기화됨 (line 2471)
+            # fixed_reply나 핸들러에서 설정된 reply 값을 보존하기 위해 여기서는 초기화하지 않음
+
             # [3.5] 대화 5번 후 자동 처리 - 공부하러 가는 메시지 준비 (LLM 호출 후 추가)
             auto_study_message = None
             if week_passed:
