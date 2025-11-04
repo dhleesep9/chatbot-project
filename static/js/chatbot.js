@@ -273,34 +273,37 @@ function updateConfidenceDisplay(confidence) {
     return;
   }
 
-  // 자신감에 따른 상태이상 처리
+  // 모든 상태이상 체크 (우선순위: 질병 > 번아웃 > 자신감)
   const sideImage = document.querySelector(".side-image");
   if (sideImage && !speakingAnimationInterval) {
-    // 의기소침 상태 (자신감 10 이하)
-    if (confidence <= 10) {
+    const isDisease = currentStamina !== undefined && currentStamina <= 10;
+    const isBurnout = currentMental !== undefined && currentMental <= 10;
+    const isDiscouraged = confidence <= 10;
+    const isArrogant = confidence >= 90;
+
+    // 질병 최우선
+    if (isDisease) {
+      sideImage.src = "/static/images/chatbot/질병-0.png";
+    }
+    // 번아웃 우선
+    else if (isBurnout) {
+      sideImage.src = "/static/images/chatbot/번아웃-0.png";
+    }
+    // 의기소침
+    else if (isDiscouraged) {
       sideImage.src = "/static/images/chatbot/기죽음-0.png";
-      updateCharacterStatus(currentStamina, currentMental, confidence);
-      return;
     }
-    // 오만 상태 (자신감 90 이상)
-    else if (confidence >= 90) {
+    // 오만
+    else if (isArrogant) {
       sideImage.src = "/static/images/chatbot/오만-0.png";
-      updateCharacterStatus(currentStamina, currentMental, confidence);
-      return;
     }
-    // 정상 상태: 다른 상태이상 체크
+    // 정상: 호감도 이미지
     else {
-      // 체력이나 멘탈 상태이상이 없으면 호감도 이미지로 복귀
-      const isDisease = currentStamina !== undefined && currentStamina <= 10;
-      const isBurnout = currentMental !== undefined && currentMental <= 10;
-
-      if (!isDisease && !isBurnout) {
-        const defaultImage = getDefaultImageByAffection(currentAffection);
-        sideImage.src = defaultImage;
-      }
-
-      updateCharacterStatus(currentStamina, currentMental, confidence);
+      const defaultImage = getDefaultImageByAffection(currentAffection);
+      sideImage.src = defaultImage;
     }
+
+    updateCharacterStatus(currentStamina, currentMental, confidence);
   }
 }
 
@@ -353,30 +356,10 @@ function updateCharacterStatus(stamina, mental, confidence) {
     return;
   }
 
-  // 상태 정보 배열 (우선순위 순)
+  // 상태 정보 배열 (우선순위 순: 질병 > 번아웃 > 자신감)
   const statuses = [];
 
-  // 자신감이 10 이하일 때 의기소침 (최우선)
-  if (confidence !== undefined && confidence <= 10) {
-    statuses.push({
-      name: "의기소침",
-      description: "자신감이 너무 낮아 기가 죽은 상태입니다.",
-      class: "status-discouraged",
-      image: "/static/images/chatbot/기죽음-0.png",
-    });
-  }
-
-  // 자신감이 90 이상일 때 오만
-  if (confidence !== undefined && confidence >= 90) {
-    statuses.push({
-      name: "오만",
-      description: "자신감이 너무 높아 오만한 상태입니다.",
-      class: "status-arrogant",
-      image: "/static/images/chatbot/오만-0.png",
-    });
-  }
-
-  // 체력이 10 이하일 때 질병
+  // 체력이 10 이하일 때 질병 (최우선)
   if (stamina !== undefined && stamina <= 10) {
     statuses.push({
       name: "질병",
@@ -393,6 +376,26 @@ function updateCharacterStatus(stamina, mental, confidence) {
       description: "멘탈이 너무 낮아 지쳤습니다. 휴식이 필요해요.",
       class: "status-burnout",
       image: "/static/images/chatbot/번아웃-0.png",
+    });
+  }
+
+  // 자신감이 10 이하일 때 의기소침
+  if (confidence !== undefined && confidence <= 10) {
+    statuses.push({
+      name: "의기소침",
+      description: "자신감이 너무 낮아 기가 죽은 상태입니다.",
+      class: "status-discouraged",
+      image: "/static/images/chatbot/기죽음-0.png",
+    });
+  }
+
+  // 자신감이 90 이상일 때 오만
+  if (confidence !== undefined && confidence >= 90) {
+    statuses.push({
+      name: "오만",
+      description: "자신감이 너무 높아 오만한 상태입니다.",
+      class: "status-arrogant",
+      image: "/static/images/chatbot/오만-0.png",
     });
   }
 
@@ -448,20 +451,21 @@ function updateCharacterStatus(stamina, mental, confidence) {
         const defaultImage = getDefaultImageByAffection(currentAffection);
         sideImage.src = defaultImage;
       }
-      // 자신감 상태이상 우선
-      else if (isActuallyDiscouraged) {
-        sideImage.src = "/static/images/chatbot/기죽음-0.png";
-      }
-      else if (isActuallyArrogant) {
-        sideImage.src = "/static/images/chatbot/오만-0.png";
-      }
-      // 실제로 질병 상태면 질병 이미지 유지
+      // 질병 최우선
       else if (isActuallyDisease) {
         sideImage.src = "/static/images/chatbot/질병-0.png";
       }
-      // 실제로 번아웃 상태면 번아웃 이미지 유지
+      // 번아웃 우선
       else if (isActuallyBurnout) {
         sideImage.src = "/static/images/chatbot/번아웃-0.png";
+      }
+      // 의기소침
+      else if (isActuallyDiscouraged) {
+        sideImage.src = "/static/images/chatbot/기죽음-0.png";
+      }
+      // 오만
+      else if (isActuallyArrogant) {
+        sideImage.src = "/static/images/chatbot/오만-0.png";
       }
     }
   }
@@ -747,11 +751,11 @@ function startSpeakingAnimation(affection = null) {
   const sideImage = document.querySelector(".side-image");
   if (!sideImage) return;
 
-  // 모든 상태이상을 우선적으로 확인
-  const isDiscouraged = currentConfidence !== undefined && currentConfidence <= 10;
-  const isArrogant = currentConfidence !== undefined && currentConfidence >= 90;
+  // 모든 상태이상을 우선적으로 확인 (우선순위: 질병 > 번아웃 > 자신감)
   const isDisease = currentStamina !== undefined && currentStamina <= 10;
   const isBurnout = currentMental !== undefined && currentMental <= 10;
+  const isDiscouraged = currentConfidence !== undefined && currentConfidence <= 10;
+  const isArrogant = currentConfidence !== undefined && currentConfidence >= 90;
 
   // 호감도가 전달되지 않으면 현재 저장된 호감도 사용
   const targetAffection = affection !== null ? affection : currentAffection;
@@ -759,24 +763,24 @@ function startSpeakingAnimation(affection = null) {
   // 기존 애니메이션 중지
   stopSpeakingAnimation(targetAffection);
 
-  // 비정상 상태에 따라 이미지 프리픽스 결정 (자신감 상태이상이 최우선)
+  // 비정상 상태에 따라 이미지 프리픽스 결정 (질병이 최우선)
   let prefix;
   let basePath;
-  if (isDiscouraged) {
-    // 의기소침 상태: 무조건 기죽음 이미지 사용 (최우선)
-    prefix = "기죽음";
-    basePath = "/static/images/chatbot/";
-  } else if (isArrogant) {
-    // 오만 상태: 무조건 오만 이미지 사용
-    prefix = "오만";
-    basePath = "/static/images/chatbot/";
-  } else if (isDisease) {
-    // 질병 상태: 무조건 질병 이미지 사용
+  if (isDisease) {
+    // 질병 상태: 무조건 질병 이미지 사용 (최우선)
     prefix = "질병";
     basePath = "/static/images/chatbot/";
   } else if (isBurnout) {
     // 번아웃 상태: 무조건 번아웃 이미지 사용
     prefix = "번아웃";
+    basePath = "/static/images/chatbot/";
+  } else if (isDiscouraged) {
+    // 의기소침 상태: 무조건 기죽음 이미지 사용
+    prefix = "기죽음";
+    basePath = "/static/images/chatbot/";
+  } else if (isArrogant) {
+    // 오만 상태: 무조건 오만 이미지 사용
+    prefix = "오만";
     basePath = "/static/images/chatbot/";
   } else {
     // 정상 상태: 호감도에 따른 이미지 프리픽스 결정
@@ -828,22 +832,22 @@ function stopSpeakingAnimation(affection = null) {
     speakingAnimationTimeout = null;
   }
 
-  // 애니메이션 종료 후 모든 상태이상 확인하여 이미지 업데이트
+  // 애니메이션 종료 후 모든 상태이상 확인하여 이미지 업데이트 (우선순위: 질병 > 번아웃 > 자신감)
   const sideImage = document.querySelector(".side-image");
   if (sideImage) {
-    // 자신감 상태이상이 최우선
-    if (currentConfidence !== undefined && currentConfidence <= 10) {
-      // 의기소침 이미지 표시
-      sideImage.src = "/static/images/chatbot/기죽음-0.png";
-    } else if (currentConfidence !== undefined && currentConfidence >= 90) {
-      // 오만 이미지 표시
-      sideImage.src = "/static/images/chatbot/오만-0.png";
-    } else if (currentStamina !== undefined && currentStamina <= 10) {
+    // 질병 최우선
+    if (currentStamina !== undefined && currentStamina <= 10) {
       // 질병 이미지 표시
       sideImage.src = "/static/images/chatbot/질병-0.png";
     } else if (currentMental !== undefined && currentMental <= 10) {
       // 번아웃 이미지 표시
       sideImage.src = "/static/images/chatbot/번아웃-0.png";
+    } else if (currentConfidence !== undefined && currentConfidence <= 10) {
+      // 의기소침 이미지 표시
+      sideImage.src = "/static/images/chatbot/기죽음-0.png";
+    } else if (currentConfidence !== undefined && currentConfidence >= 90) {
+      // 오만 이미지 표시
+      sideImage.src = "/static/images/chatbot/오만-0.png";
     } else {
       // 정상 상태: 호감도에 따른 이미지로 복원
       const targetAffection = affection !== null ? affection : currentAffection;
