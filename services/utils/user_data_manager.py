@@ -24,11 +24,12 @@ def save_user_data(
     get_stamina: Callable[[], int],
     get_mental: Callable[[], int],
     get_mock_exam_last_week: Callable[[], int],
-    get_career: Callable[[], Optional[str]]
+    get_career: Callable[[], Optional[str]],
+    get_confidence: Callable[[], int]
 ):
     """
     사용자 게임 데이터를 JSON 파일로 저장
-    
+
     Args:
         username: 사용자 이름
         get_*: 각 데이터를 가져오는 콜백 함수들
@@ -46,7 +47,8 @@ def save_user_data(
             "stamina": get_stamina(),
             "mental": get_mental(),
             "mock_exam_last_week": get_mock_exam_last_week(),
-            "career": get_career()
+            "career": get_career(),
+            "confidence": get_confidence()
         }
 
         user_file = BASE_DIR / f"data/users/{username}.json"
@@ -73,15 +75,16 @@ def load_user_data(
     set_stamina: Callable[[int], None],
     set_mental: Callable[[int], None],
     set_mock_exam_last_week: Callable[[int], None],
-    set_career: Callable[[Optional[str]], None]
+    set_career: Callable[[Optional[str]], None],
+    set_confidence: Callable[[int], None]
 ) -> bool:
     """
     사용자 게임 데이터를 JSON 파일에서 로드
-    
+
     Args:
         username: 사용자 이름
         set_*: 각 데이터를 설정하는 콜백 함수들
-    
+
     Returns:
         bool: 로드 성공 여부
     """
@@ -107,7 +110,8 @@ def load_user_data(
         set_stamina(user_data.get("stamina", 30))
         set_mental(user_data.get("mental", 40))
         set_mock_exam_last_week(user_data.get("mock_exam_last_week", -1))
-        
+        set_confidence(user_data.get("confidence", 50))
+
         # 진로 로드 (없으면 None)
         existing_career = user_data.get("career")
         if existing_career and set_career:

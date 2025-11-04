@@ -86,6 +86,11 @@ async function sendMessage(isInitial = false) {
       updateAffectionDisplay(data.affection);
     }
 
+    // 자신감 업데이트
+    if (data.confidence !== undefined) {
+      updateConfidenceDisplay(data.confidence);
+    }
+
     // 체력 업데이트
     if (data.stamina !== undefined) {
       currentStamina = data.stamina;
@@ -250,6 +255,14 @@ function updateAffectionDisplay(affection) {
         sideImage.src = "/static/images/chatbot/번아웃-0.png";
       }
     }
+  }
+}
+
+// 자신감 표시 업데이트
+function updateConfidenceDisplay(confidence) {
+  const confidenceValue = document.getElementById("confidence-value");
+  if (confidenceValue) {
+    confidenceValue.textContent = confidence;
   }
 }
 

@@ -408,39 +408,39 @@
       /* 호감도 표시 (레이아웃 내부용) */
       .affection-display {
         position: relative;
-        width: 100%;
-        padding: 12px 16px;
+        flex: 1;
+        padding: 10px 12px;
         background: rgba(255, 255, 255, 0.98);
         border: 2px solid #764ba2;
         border-radius: 12px;
-        box-shadow: 0 4px 16px rgba(118, 75, 162, 0.2);
+        box-shadow: 0 2px 8px rgba(118, 75, 162, 0.15);
         text-align: center;
         font-family: "IBM Plex Sans KR", sans-serif;
-        /* 텍스트 선택 활성화 */
-        user-select: text;
-        -webkit-user-select: text;
-        -moz-user-select: text;
-        -ms-user-select: text;
-        cursor: default;
-        box-sizing: border-box; /* border, padding 포함한 너비 계산 */
+        transition: box-shadow 0.3s ease;
+        box-sizing: border-box;
+        overflow: hidden;
+        word-wrap: break-word;
+        min-width: 0;
       }
       .affection-display:hover {
         box-shadow: 0 6px 20px rgba(118, 75, 162, 0.3);
       }
       .affection-label {
-        font-size: 0.9rem;
+        font-size: 0.85rem;
         color: #666;
         margin-bottom: 4px;
-        /* 드래그 핸들 스타일 */
         cursor: move;
-        cursor: grab;
         user-select: none;
         -webkit-user-select: none;
         -moz-user-select: none;
         -ms-user-select: none;
-        padding: 4px;
-        border-radius: 4px;
+        padding: 2px 6px;
+        border-radius: 6px;
         transition: background 0.2s;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        text-align: center;
       }
       .affection-label:hover {
         background: rgba(118, 75, 162, 0.1);
@@ -449,9 +449,63 @@
         cursor: grabbing;
       }
       .affection-value {
-        font-size: 1.5rem;
+        font-size: 1.3rem;
         font-weight: bold;
         color: #764ba2;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+        text-align: center;
+      }
+      /* 자신감 표시 */
+      .confidence-display {
+        position: relative;
+        flex: 1;
+        padding: 10px 12px;
+        background: rgba(255, 255, 255, 0.98);
+        border: 2px solid #3498db;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(52, 152, 219, 0.15);
+        text-align: center;
+        font-family: "IBM Plex Sans KR", sans-serif;
+        transition: box-shadow 0.3s ease;
+        box-sizing: border-box;
+        overflow: hidden;
+        word-wrap: break-word;
+        min-width: 0;
+      }
+      .confidence-display:hover {
+        box-shadow: 0 6px 20px rgba(52, 152, 219, 0.3);
+      }
+      .confidence-label {
+        font-size: 0.85rem;
+        color: #666;
+        margin-bottom: 4px;
+        cursor: move;
+        user-select: none;
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        padding: 2px 6px;
+        border-radius: 6px;
+        transition: background 0.2s;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        text-align: center;
+      }
+      .confidence-label:hover {
+        background: rgba(52, 152, 219, 0.1);
+      }
+      .confidence-label:active {
+        cursor: grabbing;
+      }
+      .confidence-value {
+        font-size: 1.3rem;
+        font-weight: bold;
+        color: #3498db;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+        text-align: center;
       }
       /* 체력 및 멘탈 컨테이너 */
       .stats-container {
@@ -639,13 +693,12 @@
         font-weight: 600;
         color: #28a745;
       }
+      /* 능력치는 항상 숨김 */
+      .abilities-display {
+        display: none !important;
+      }
       @media (max-width: 1600px) {
-        .abilities-display {
-          display: none;
-        }
-        .affection-display {
-          display: none;
-        }
+        /* 1600px 이하에서도 호감도/자신감 표시 유지 */
       }
       /* 시간표 표시 (레이아웃 내부용) */
       .schedule-display {
@@ -863,10 +916,16 @@
             현재 날짜: 2023년 11월 17일
           </div>
         </div>
-        <!-- 호감도 표시 -->
-        <div class="affection-display" id="affection-display">
-          <div class="affection-label">호감도</div>
-          <div class="affection-value" id="affection-value">5</div>
+        <!-- 호감도 및 자신감 표시 (나란히) -->
+        <div class="stats-container">
+          <div class="affection-display" id="affection-display">
+            <div class="affection-label">호감도</div>
+            <div class="affection-value" id="affection-value">5</div>
+          </div>
+          <div class="confidence-display" id="confidence-display">
+            <div class="confidence-label">자신감</div>
+            <div class="confidence-value" id="confidence-value">50</div>
+          </div>
         </div>
         <!-- 체력 및 멘탈 표시 (나란히) -->
         <div class="stats-container">

@@ -241,7 +241,11 @@ class ChatbotService:
         # 9.5. 멘탈 저장 (기본값 40)
         self.mentals = {}  # {username: mental_value}
         print("[ChatbotService] 멘탈 시스템 초기화 완료")
-        
+
+        # 9.7. 자신감 저장 (기본값 50)
+        self.confidences = {}  # {username: confidence_value}
+        print("[ChatbotService] 자신감 시스템 초기화 완료")
+
         # 9.9. 대학 지원 정보 저장
         self.university_application_info = {}  # {username: {"eligible_universities": [...], "avg_percentile": float, "exam_scores": {...}}}
         print("[ChatbotService] 대학 지원 정보 저장 시스템 초기화 완료")
@@ -658,7 +662,8 @@ class ChatbotService:
             lambda: self._get_stamina(username),
             lambda: self._get_mental(username),
             lambda: self.mock_exam_last_week.get(username, -1),
-            lambda: self._get_career(username)
+            lambda: self._get_career(username),
+            lambda: self._get_confidence(username)
         )
 
     def _load_user_data(self, username: str):
@@ -677,7 +682,8 @@ class ChatbotService:
             lambda v: self._set_stamina(username, v),
             lambda v: self._set_mental(username, v),
             lambda v: self.mock_exam_last_week.__setitem__(username, v),
-            lambda v: self._set_career(username, v) if v else None
+            lambda v: self._set_career(username, v) if v else None,
+            lambda v: self._set_confidence(username, v)
         )
 
     def _get_abilities(self, username: str) -> dict:
@@ -729,7 +735,20 @@ class ChatbotService:
         """
         self.mentals[username] = max(0, min(100, mental))  # 멘탈은 0~100
         self._save_user_data(username)  # 변경사항 저장
-    
+
+    def _get_confidence(self, username: str) -> int:
+        """
+        사용자의 현재 자신감 반환 (없으면 기본값 50)
+        """
+        return self.confidences.get(username, 50)
+
+    def _set_confidence(self, username: str, confidence: int):
+        """
+        사용자의 자신감 설정 (0~100 범위)
+        """
+        self.confidences[username] = max(0, min(100, confidence))  # 자신감은 0~100
+        self._save_user_data(username)  # 변경사항 저장
+
     def _calculate_stamina_efficiency(self, stamina: int) -> float:
         """체력에 따른 능력치 증가 효율 계산"""
         from services.utils.efficiency_calculator import calculate_stamina_efficiency
@@ -3789,11 +3808,12 @@ class ChatbotService:
                     print(f"[WARN] 엔딩 이미지 설정 중 오류: {e}")
                     response_image = None
 
-            # [6] 응답 반환 (호감도, 게임 상태, 선택과목, 나레이션, 능력치, 시간표, 날짜, 체력 포함)
+            # [6] 응답 반환 (호감도, 자신감, 게임 상태, 선택과목, 나레이션, 능력치, 시간표, 날짜, 체력 포함)
             return {
                 'reply': reply,
                 'image': response_image,
                 'affection': new_affection,
+                'confidence': self._get_confidence(username),
                 'game_state': new_state,
                 'selected_subjects': self._get_selected_subjects(username),
                 'narration': narration,
@@ -3832,6 +3852,7 @@ class ChatbotService:
                 'reply': f"죄송해요, 일시적인 오류가 발생했어요. 다시 시도해주세요.",
                 'image': None,
                 'affection': current_affection,
+                'confidence': self._get_confidence(username),
                 'game_state': current_state,
                 'selected_subjects': selected_subjects,
                 'narration': None,
