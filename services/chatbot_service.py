@@ -631,13 +631,13 @@ class ChatbotService:
         if affection < 10:
             return "저... 이제 공부하러 가볼게요..."
         elif affection < 30:
-            return "선생님, 이제 공부하러 가볼게요."
+            return "쌤, 이제 공부하러 가볼게요."
         elif affection < 50:
-            return "선생님, 저는 이제 공부하러 가볼게요!"
+            return "쌤, 저는 이제 공부하러 가볼게요!"
         elif affection < 70:
-            return "선생님, 저 이제 공부하러 가볼게요. 오늘도 열심히 할게요!"
+            return "쌤, 저 이제 공부하러 가볼게요. 오늘도 열심히 할게요!"
         else:
-            return "선생님, 저 이제 공부하러 가볼게요! 선생님 덕분에 공부가 즐거워요!"
+            return "쌤, 저 이제 공부하러 가볼게요! 쌤 덕분에 공부가 즐거워요!"
     
     def _set_affection(self, username: str, affection: int):
         """
@@ -1883,7 +1883,7 @@ class ChatbotService:
             if base_mood == "well" or grade <= 2:
                 thought_templates.extend([
                     f"{subject} 전략대로 잘 풀었어.",
-                    f"{subject} 선생님이 알려주신 대로 했더니 쉬웠어."
+                    f"{subject} 쌤이 알려주신 대로 했더니 쉬웠어."
                 ])
         elif strategy_quality == "POOR":
             # 나쁜 전략: 확신 감소
@@ -2090,7 +2090,7 @@ class ChatbotService:
             return 0
         
         try:
-            sentiment_prompt = f"""다음 사용자 메시지를 분석하여 선생님(멘토)에 대한 태도가 얼마나 긍정적인지 판단해주세요.
+            sentiment_prompt = f"""다음 사용자 메시지를 분석하여 쌤(멘토)에 대한 태도가 얼마나 긍정적인지 판단해주세요.
 
 사용자 메시지: "{user_message}"
 
@@ -2652,7 +2652,7 @@ class ChatbotService:
                 # 멘토링 종료 시 특별 메시지 (자동 전이되지 않는 경우에만)
                 # new_state가 daily_routine이거나 state_changed가 False인 경우에만 메시지 표시
                 if not state_changed:
-                    mentoring_end_reply = "선생님, 저 그럼 공부하러 갈게요."
+                    mentoring_end_reply = "쌤, 저 그럼 공부하러 갈게요."
                     print(f"[MENTORING_END] 멘토링 종료 메시지 설정: {mentoring_end_reply}")
             
             # [1.7] 선택과목 선택 처리 (icebreak 단계에서만)
@@ -3348,7 +3348,7 @@ class ChatbotService:
                     # game_ended일 때는 handler의 reply를 사용 (이미 설정됨)
                     if not reply:
                         print(f"[WARN] [GAME_ENDED] 게임 종료되었지만 reply가 없습니다. 기본 메시지 사용.")
-                        reply = "감사합니다. 멘토 덕분에 여기까지 올 수 있었어요."
+                        reply = "고마워여ㅠㅠ 쌤 덕분에 여기까지 올 수 있었어요."
                     print(f"[GAME_ENDED] 게임 종료 - LLM 호출 건너뛰기 (reply: '{reply[:50] if reply else 'None'}...')")
                 elif mock_exam_processed or official_mock_exam_processed or june_exam_processed or september_exam_processed:
                     processed = True
@@ -3369,8 +3369,8 @@ class ChatbotService:
                     else:
                         try:
                             # 전략에 대한 자연스러운 응답 생성
-                            system_prompt = "당신은 서가윤입니다. 선생님(멘토)이 시험 전략을 알려주면 그 전략을 이해하고 확신하거나 확인하는 것처럼 자연스럽게 응답하세요."
-                            strategy_prompt = f"선생님이 '{exam_strategy_user_input}'라고 시험 전략을 알려주셨습니다. 이 전략을 이해했다는 의미의 자연스러운 응답을 해주세요. (30자 이내로 간단히)"
+                            system_prompt = "당신은 서가윤입니다. 쌤(멘토)이 시험 전략을 알려주면 그 전략을 이해하고 확신하거나 확인하는 것처럼 자연스럽게 응답하세요."
+                            strategy_prompt = f"쌤이 '{exam_strategy_user_input}'라고 시험 전략을 알려주셨습니다. 이 전략을 이해했다는 의미의 자연스러운 응답을 해주세요. (30자 이내로 간단히)"
                             
                             response = self.client.chat.completions.create(
                                 model="gpt-4o-mini",
@@ -3406,11 +3406,11 @@ class ChatbotService:
                         try:
                             # 조언에 대한 자연스러운 응답 생성
                             if mock_exam_advice_is_good:
-                                system_prompt = "당신은 서가윤입니다. 선생님(멘토)의 좋은 조언을 듣고 감사하고 기뻐하는 반응을 자연스럽게 표현하세요."
-                                advice_prompt = f"선생님이 '{mock_exam_advice_user_input}'라고 조언을 해주셨고, 이 조언이 도움이 되었습니다. 감사하고 기뻐하는 반응을 해주세요. (30자 이내로 간단히)"
+                                system_prompt = "당신은 서가윤입니다. 쌤(멘토)의 좋은 조언을 듣고 감사하고 기뻐하는 반응을 자연스럽게 표현하세요."
+                                advice_prompt = f"쌤이 '{mock_exam_advice_user_input}'라고 조언을 해주셨고, 이 조언이 도움이 되었습니다. 감사하고 기뻐하는 반응을 해주세요. (30자 이내로 간단히)"
                             else:
-                                system_prompt = "당신은 서가윤입니다. 선생님(멘토)의 부적절한 조언을 듣고 당황하거나 어색해하는 반응을 자연스럽게 표현하세요."
-                                advice_prompt = f"선생님이 '{mock_exam_advice_user_input}'라고 조언을 해주셨지만, 이 조언이 도움이 되지 않았습니다. 당황하거나 어색해하는 반응을 해주세요. (30자 이내로 간단히)"
+                                system_prompt = "당신은 서가윤입니다. 쌤(멘토)의 부적절한 조언을 듣고 당황하거나 어색해하는 반응을 자연스럽게 표현하세요."
+                                advice_prompt = f"쌤이 '{mock_exam_advice_user_input}'라고 조언을 해주셨지만, 이 조언이 도움이 되지 않았습니다. 당황하거나 어색해하는 반응을 해주세요. (30자 이내로 간단히)"
                             
                             response = self.client.chat.completions.create(
                                 model="gpt-4o-mini",
@@ -3446,11 +3446,11 @@ class ChatbotService:
                         try:
                             # 조언에 대한 자연스러운 응답 생성
                             if official_mock_exam_advice_is_good:
-                                system_prompt = "당신은 서가윤입니다. 선생님(멘토)의 좋은 조언을 듣고 감사하고 기뻐하는 반응을 자연스럽게 표현하세요."
-                                advice_prompt = f"선생님이 '{official_mock_exam_advice_user_input}'라고 조언을 해주셨고, 이 조언이 도움이 되었습니다. 감사하고 기뻐하는 반응을 해주세요. (30자 이내로 간단히)"
+                                system_prompt = "당신은 서가윤입니다. 쌤(멘토)의 좋은 조언을 듣고 감사하고 기뻐하는 반응을 자연스럽게 표현하세요."
+                                advice_prompt = f"쌤이 '{official_mock_exam_advice_user_input}'라고 조언을 해주셨고, 이 조언이 도움이 되었습니다. 감사하고 기뻐하는 반응을 해주세요. (30자 이내로 간단히)"
                             else:
-                                system_prompt = "당신은 서가윤입니다. 선생님(멘토)의 부적절한 조언을 듣고 당황하거나 어색해하는 반응을 자연스럽게 표현하세요."
-                                advice_prompt = f"선생님이 '{official_mock_exam_advice_user_input}'라고 조언을 해주셨지만, 이 조언이 도움이 되지 않았습니다. 당황하거나 어색해하는 반응을 해주세요. (30자 이내로 간단히)"
+                                system_prompt = "당신은 서가윤입니다. 쌤(멘토)의 부적절한 조언을 듣고 당황하거나 어색해하는 반응을 자연스럽게 표현하세요."
+                                advice_prompt = f"쌤이 '{official_mock_exam_advice_user_input}'라고 조언을 해주셨지만, 이 조언이 도움이 되지 않았습니다. 당황하거나 어색해하는 반응을 해주세요. (30자 이내로 간단히)"
                             
                             response = self.client.chat.completions.create(
                                 model="gpt-4o-mini",
