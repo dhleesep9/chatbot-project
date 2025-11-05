@@ -71,8 +71,8 @@ class OfficialExamHandlerBase(BaseStateHandler):
 
                 # 성적표가 비어있지 않은 경우에만 나레이션 생성
                 if score_parts:
-                    # 나레이션에는 성적표만 포함
-                    narration = f"{self.EXAM_DISPLAY_NAME} 성적이 발표 되었습니다: " + " ".join(score_parts)
+                    # 나레이션에는 성적 발표 안내와 성적표 포함
+                    narration = f"[{self.EXAM_DISPLAY_NAME} 성적이 발표되었습니다.]\n" + " ".join(score_parts)
                     print(f"[{self.EXAM_NAME.upper()}] 생성된 나레이션: {narration}")
                 else:
                     print(f"[{self.EXAM_NAME.upper()}] 오류: 성적표가 비어있습니다!")
@@ -165,6 +165,32 @@ class SeptemberExamHandler(OfficialExamHandlerBase):
     FEEDBACK_STATE = "9exam_feedback"
     PROBLEM_STORAGE_ATTR = "september_exam_problems"
 
+    def on_enter(self, username: str, context: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        9exam state 진입 시 챗봇 메시지와 나래이션 설정
+
+        Args:
+            username: 사용자 이름
+            context: 실행 컨텍스트
+
+        Returns:
+            Dict: 처리 결과
+        """
+        # 고정 메시지
+        reply = "쌤, 이번엔 진짜 잡을 거예요.\n9평은… 절대 안 망할꺼에요!!!!"
+
+        print(f"[9EXAM] {username} - 메시지: '{reply[:50]}...'")
+
+        # narration 설정
+        narration = "[9월 모의고사가 끝났습니다.]"
+
+        return {
+            'skip_llm': True,  # LLM 호출 건너뛰기
+            'reply': reply,
+            'narration': narration,
+            'transition_to': None
+        }
+
 
 class CSATExamHandler(OfficialExamHandlerBase):
     """11exam state handler (수능) - 피드백 없이 성적 발표만"""
@@ -217,12 +243,12 @@ class CSATExamHandler(OfficialExamHandlerBase):
     def handle(self, username: str, user_message: str, context: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
         수능 성적 발표 로직 처리 (피드백 없음)
-        
+
         Args:
             username: 사용자 이름
             user_message: 사용자 입력 메시지
             context: 실행 컨텍스트
-            
+
         Returns:
             Dict: 처리 결과
         """
@@ -230,25 +256,33 @@ class CSATExamHandler(OfficialExamHandlerBase):
         if "대학지원하기" in user_message or "대학 지원하기" in user_message:
             print(f"[{self.EXAM_NAME.upper()}] 대학지원하기 감지 - transition으로 처리하도록 None 반환")
             return None  # transition이 처리하도록 None 반환
-        
+
         # 지원 가능 대학 보기 키워드 확인
         if "지원가능대학" in user_message or "지원 가능 대학" in user_message or "합격 가능 대학" in user_message:
             print(f"[{self.EXAM_NAME.upper()}] 지원 가능 대학 확인 요청 감지: {user_message}")
             return self._handle_university_check(username, user_message)
-        
+
         # 질문 키워드 확인
         user_message_lower = user_message.lower()
         is_asking = any(keyword in user_message_lower for keyword in self.QUESTION_KEYWORDS)
-        
+
         # 성적 정보 확인
         score_storage = getattr(self.service, self.PROBLEM_STORAGE_ATTR, {})
         scores_already_shown = score_storage.get(username, {}).get("scores")
-        
-        # 질문이 들어왔거나 성적이 아직 발표되지 않은 경우 성적 발표
-        if is_asking or not scores_already_shown:
+
+        # 응원 키워드 확인 (성적이 아직 발표되지 않았고, 질문 키워드가 아닌 경우)
+        encouragement_keywords = [
+            "화이팅", "파이팅", "잘하고", "잘 보고", "응원", "힘내", "잘할 수", "할 수 있",
+            "믿어", "수고", "좋은 결과", "좋은결과", "기도", "잘되", "잘 되", "최선", "열심히",
+            "잘봐", "잘 봐", "화이팅!", "파이팅!", "good luck", "goodluck", "파이팅하고"
+        ]
+        is_encouragement = any(keyword in user_message_lower for keyword in encouragement_keywords)
+
+        # 성적이 발표되지 않았고, 응원 메시지인 경우 → 수능 끝 나래이션 + 성적 발표
+        if not scores_already_shown and (is_encouragement or not is_asking):
             # 성적 계산 (전략 보너스 없음)
             exam_scores = self.service._calculate_mock_exam_scores(username)
-            
+
             # 성적표 나레이션 생성 (한 번만)
             narration = None
             if not scores_already_shown:
@@ -257,9 +291,9 @@ class CSATExamHandler(OfficialExamHandlerBase):
                     if subject in exam_scores:
                         score_data = exam_scores[subject]
                         score_parts.append(f"{subject} {score_data['grade']}등급 (백분위 {score_data['percentile']}%)")
-                
-                # 나레이션에는 성적표만 포함
-                narration = f"{self.EXAM_DISPLAY_NAME} 성적이 발표 되었습니다: " + " ".join(score_parts)
+
+                # 나레이션: 수능 끝 안내 + 성적표
+                narration = f"[수능이 끝났습니다.]\n\n{self.EXAM_DISPLAY_NAME} 성적이 발표되었습니다:\n" + " ".join(score_parts)
                 
                 # 성적 정보 저장
                 if not hasattr(self.service, self.PROBLEM_STORAGE_ATTR):
@@ -281,6 +315,28 @@ class CSATExamHandler(OfficialExamHandlerBase):
                 'reply': None,  # LLM이 생성
                 'narration': narration,
                 'transition_to': transition_to,  # 조건 만족 시 public_agent로 전이
+                'data': {
+                    'exam_scores': exam_scores
+                }
+            }
+        # 질문이 들어왔고 성적이 이미 발표된 경우 (재확인)
+        elif is_asking and scores_already_shown:
+            # 이미 발표된 성적을 다시 보여줌
+            exam_scores = scores_already_shown
+
+            score_parts = []
+            for subject in ["국어", "수학", "영어", "탐구1", "탐구2"]:
+                if subject in exam_scores:
+                    score_data = exam_scores[subject]
+                    score_parts.append(f"{subject} {score_data['grade']}등급 (백분위 {score_data['percentile']}%)")
+
+            narration = f"{self.EXAM_DISPLAY_NAME} 성적: " + " ".join(score_parts)
+
+            return {
+                'skip_llm': False,  # LLM 호출 진행
+                'reply': None,  # LLM이 생성
+                'narration': narration,
+                'transition_to': None,
                 'data': {
                     'exam_scores': exam_scores
                 }

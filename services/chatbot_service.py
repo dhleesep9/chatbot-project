@@ -2799,10 +2799,19 @@ class ChatbotService:
             
             # 9exam 상태 처리 (Handler 사용)
             if new_state == "9exam":
-                handler_result = self.handler_registry.call_handle(
-                    '9exam', username, user_message,
-                    {'current_state': current_state, 'new_state': new_state}
-                )
+                # state 진입 시 on_enter 호출 (첫 메시지 표시)
+                if state_changed:
+                    handler_result = self.handler_registry.call_on_enter(
+                        '9exam', username,
+                        {'current_state': current_state, 'new_state': new_state}
+                    )
+                else:
+                    # state 진입 이후에는 handle 호출
+                    handler_result = self.handler_registry.call_handle(
+                        '9exam', username, user_message,
+                        {'current_state': current_state, 'new_state': new_state}
+                    )
+
                 if handler_result:
                     if handler_result.get('skip_llm'):
                         september_exam_processed = True
