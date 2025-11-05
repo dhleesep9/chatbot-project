@@ -2,6 +2,29 @@
 시스템 프롬프트와 사용자 프롬프트를 구성합니다.
 """
 from typing import Optional, List, Dict
+
+
+def should_include_full_character_info(conversation_count: int) -> bool:
+    """
+    전체 캐릭터 정보를 포함할지 여부를 결정
+
+    Args:
+        conversation_count: 현재 대화 카운트
+
+    Returns:
+        bool: True면 전체 캐릭터 정보 포함, False면 제외
+    """
+    # 1, 5, 11, 21일 때
+    if conversation_count in [1, 5, 11, 21]:
+        return True
+
+    # 31, 41, 51, 61, ... (1 + 10n 형태)
+    if conversation_count >= 31 and (conversation_count - 1) % 10 == 0:
+        return True
+
+    return False
+
+
 def get_affection_tone(config: Dict, affection: int) -> str:
     """
     호감도 구간에 따른 말투 지시사항 반환 (chatbot_config.json에서만 읽어옴)
@@ -42,20 +65,29 @@ def get_affection_tone(config: Dict, affection: int) -> str:
     else:
         print(f"[WARN] tone 필드 형식이 올바르지 않습니다. (affection: {affection})")
         return ""
-def build_system_prompt(config: Optional[Dict], current_scores: Optional[Dict] = None) -> str:
+def build_system_prompt(config: Optional[Dict], current_scores: Optional[Dict] = None, conversation_count: int = 1) -> str:
     """
     시스템 프롬프트 생성 (캐릭터 설정, 역할 지침, 대화 예시 포함)
+
     Args:
         config: chatbot_config.json 설정
         current_scores: 현재 성적 정보 {"avg_percentile": float, "avg_grade": float} 또는 None
+        conversation_count: 현재 대화 카운트 (1, 5, 11, 21, 31, 41, ... 일 때만 전체 캐릭터 정보 포함)
+
+    Returns:
         str: 시스템 프롬프트
     """
     if not config:
         return "당신은 재수생입니다."
+
     system_parts = []
-    # 1. 기본 캐릭터 정보
+
+    # 전체 캐릭터 정보를 포함할지 여부 결정
+    include_full_info = should_include_full_character_info(conversation_count)
+
+    # 1. 기본 캐릭터 정보 (조건부 포함)
     character = config.get("character", {})
-    if character:
+    if character and include_full_info:
         bot_name = config.get("name", "챗봇")
         system_parts.append(f"## 캐릭터 정보")
         system_parts.append(f"당신은 '{bot_name}'입니다.")
@@ -70,6 +102,22 @@ def build_system_prompt(config: Optional[Dict], current_scores: Optional[Dict] =
         if character.get("personality"):
             system_parts.append(f"\n### 성격")
             system_parts.append(character.get("personality"))
+        # 배경
+        if character.get("background"):
+            system_parts.append(f"\n### 배경")
+            system_parts.append(character.get("background"))
+        # 주요 고민사항
+        concerns = character.get("major_concerns", [])
+        if concerns:
+            system_parts.append(f"\n### 주요 고민사항")
+            for concern in concerns:
+                system_parts.append(f"- {concern}")
+        # 도움이 필요한 부분
+        needs_help = character.get("needs_help_with", [])
+        if needs_help:
+            system_parts.append(f"\n### 도움이 필요한 부분")
+            for need in needs_help:
+                system_parts.append(f"- {need}")
         # 역할 지침
         role_directives = character.get("role_directives", {})
         if role_directives:
@@ -77,18 +125,18 @@ def build_system_prompt(config: Optional[Dict], current_scores: Optional[Dict] =
             # 반드시 따라야 할 규칙
             must_follow = role_directives.get("must_follow_rules", [])
             if must_follow:
-                system_parts.append(f"\n###반드시 따라야 할 규칙:")
+                system_parts.append(f"\n### ✅ 반드시 따라야 할 규칙:")
                 for i, rule in enumerate(must_follow, 1):
                     system_parts.append(f"{i}. {rule}")
             # 절대 하지 말아야 할 것
             must_not = role_directives.get("must_not_do", [])
             if must_not:
-                system_parts.append(f"\n###🚫절대 하지 말아야 할 것:")
+                system_parts.append(f"\n### 🚫 절대 하지 말아야 할 것:")
                 for i, rule in enumerate(must_not, 1):
                     system_parts.append(f"{i}. {rule}")
 
-    # 2. 현재 성적에 따른 말투 지시사항
-    if current_scores and current_scores.get("avg_percentile") is not None:
+    # 2. 현재 성적에 따른 말투 지시사항 (조건부 포함)
+    if include_full_info and current_scores and current_scores.get("avg_percentile") is not None:
         avg_percentile = current_scores.get("avg_percentile", 0.0)
         avg_grade = current_scores.get("avg_grade", 9.0)
         system_parts.append(f"\n##중요: 현재 성적 상태에 따른 말투 강제 조정")
@@ -140,9 +188,9 @@ def build_system_prompt(config: Optional[Dict], current_scores: Optional[Dict] =
 ###말투 강제 지시사항
 - 절망적이고 패닉에 빠진 어조를 최대한 강하게 사용하세요
 """)
-    # 3. 대화 예시
+    # 3. 대화 예시 (조건부 포함)
     dialogue_examples = config.get("dialogue_examples", {})
-    if dialogue_examples:
+    if include_full_info and dialogue_examples:
         system_parts.append(f"\n## 대화 예시")
         # 도움 요청 시
         asking = dialogue_examples.get("asking_for_help", [])

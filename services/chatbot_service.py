@@ -2173,19 +2173,22 @@ class ChatbotService:
         """시스템 프롬프트 생성 (캐릭터 설정, 역할 지침, 대화 예시 포함)"""
         from services.utils.prompt_builder import build_system_prompt
         from services.utils.exam_score_calculator import calculate_percentile, calculate_grade_from_percentile
-        
+
+        # 현재 conversation_count 가져오기
+        conversation_count = self._get_conversation_count(username)
+
         # 능력치 기반으로 실시간 평균 백분위 계산
         current_scores = None
-        
+
         try:
             # 현재 능력치 가져오기
             abilities = self._get_abilities(username)
-            
+
             if abilities:
                 # 각 과목별 백분위 계산
                 percentiles = []
                 grades = []
-                
+
                 subjects = ["국어", "수학", "영어", "탐구1", "탐구2"]
                 for subject in subjects:
                     if subject in abilities:
@@ -2194,28 +2197,29 @@ class ChatbotService:
                         percentile = calculate_percentile(ability)
                         # 백분위를 등급으로 변환
                         grade = calculate_grade_from_percentile(percentile)
-                        
+
                         percentiles.append(percentile)
                         grades.append(grade)
-                
+
                 # 평균 백분위 계산
                 if percentiles:
                     avg_percentile = sum(percentiles) / len(percentiles)
-                    
+
                     # 평균 등급 계산
                     avg_grade = sum(grades) / len(grades) if grades else 9.0
-                    
+
                     current_scores = {
                         "avg_percentile": avg_percentile,
                         "avg_grade": avg_grade
                     }
-                    
+
                     print(f"[SYSTEM_PROMPT] {username}의 능력치 기반 실시간 성적: 평균 백분위 {avg_percentile:.1f}%, 평균 등급 {avg_grade:.1f}등급")
         except Exception as e:
             print(f"[WARN] 능력치 기반 백분위 계산 실패: {e}")
             # 에러 발생 시 current_scores는 None으로 유지 (말투 조정 없음)
-        
-        return build_system_prompt(self.config, current_scores)
+
+        # conversation_count를 전달하여 조건부로 캐릭터 정보 포함
+        return build_system_prompt(self.config, current_scores, conversation_count)
 
     def _build_prompt(self, user_message: str, context: str = None, username: str = "사용자", affection: int = 5, game_state: str = "ice_break", selected_subjects: list = None, subject_selected: bool = False, schedule_set: bool = False, official_mock_exam_grade_info: dict = None):
         """LLM 프롬프트 구성 (호감도 및 게임 상태 반영)"""
