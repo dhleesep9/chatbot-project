@@ -1,0 +1,17 @@
+{
+  "name": "시험 전략 수립",
+  "description": "멘토로부터 과목별 시험 전략을 받고, 전략을 평가받아 저장하는 단계",
+  "from_states": ["daily_routine"],
+  "to_states": ["daily_routine"],
+  "narration": "시험전략수립이 시작되었습니다. 자유롭게 당신의 시험전략을 서가윤 한테 알려주세요.",
+  "context": "멘토(유저)로부터 과목을 명시한 전략을 받아야 합니다.",
+  "transitions": [
+    {
+      "name": "전략 수집 완료",
+      "trigger_type": "exam_strategy_complete",
+      "conditions": {},
+      "next_state": "daily_routine",
+      "transition_narration": "전략 수집 완료. 일상 루틴으로 돌아갑니다."
+    }
+  ]
+}

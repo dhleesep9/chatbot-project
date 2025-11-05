@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{ bot.name }} - 캐릭터 챗봇</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="{{ url_for('static', filename='css/style.css') }}"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        font-family: "IBM Plex Sans KR", sans-serif;
+        min-height: 100vh;
+        background: #f7f7f7;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .main-container {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        display: flex;
+        padding: 0;
+        gap: 0;
+        align-items: center;
+        justify-content: flex-start;
+        z-index: 100000;
+        pointer-events: none;
+      }
+      .main-container::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 65%;
+        height: 100%;
+        background: linear-gradient(
+          to right,
+          rgba(255, 255, 255, 1) 0%,
+          rgba(255, 255, 255, 0.95) 40%,
+          rgba(255, 255, 255, 0.8) 60%,
+          rgba(255, 255, 255, 0) 100%
+        );
+        pointer-events: none;
+        z-index: 1;
+      }
+      .main-container > * {
+        pointer-events: auto;
+        position: relative;
+        z-index: 2;
+      }
+      .left-section {
+        flex: 0 0 50%;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        position: relative;
+        padding: 40px 60px;
+        max-width: none;
+        transform: translate(8%, -3%);
+      }
+      .text-label {
+        font-family: "Black Han Sans", sans-serif;
+        font-size: 3.5rem;
+        font-weight: 400;
+        color: #764ba2;
+        transform: rotate(-20deg);
+        margin-bottom: 10px;
+        text-align: left;
+        text-shadow: 2px 2px 0px rgba(0, 0, 0, 0.2),
+          1px 1px 0px rgba(0, 0, 0, 0.3), -1px -1px 0px rgba(0, 0, 0, 0.1);
+        -webkit-text-stroke: 1px rgba(118, 75, 162, 0.3);
+        position: absolute;
+        top: -40px;
+        left: 0;
+      }
+      .character-name {
+        font-family: "Black Han Sans", sans-serif;
+        font-size: 8rem;
+        font-weight: 100;
+        color: #3498db;
+        margin: 0;
+        text-align: left;
+        line-height: 1.1;
+        position: relative;
+        transform: translateX(5%);
+        display: inline-block;
+      }
+      .score-badge {
+        position: absolute;
+        top: -130px;
+        left: 290px;
+        width: 200px;
+        height: 200px;
+        z-index: 10;
+        object-fit: contain;
+        max-width: 200px;
+        max-height: 200px;
+        min-width: 200px;
+        min-height: 200px;
+        flex-shrink: 0;
+        box-sizing: border-box;
+        transform: none;
+      }
+      @keyframes float {
+        0%, 100% {
+          transform: translateY(0px);
+        }
+        50% {
+          transform: translateY(-10px);
+        }
+      }
+      .character-name::before {
+        content: "";
+        display: none;
+      }
+      .sub-text {
+        font-family: "Black Han Sans", sans-serif;
+        font-size: 2.5rem;
+        font-weight: 400;
+        color: #555;
+        margin-top: 10px;
+        text-align: left;
+        transform: translateX(30%) translateY(-20px);
+        text-shadow: 2px 2px 0px rgba(0, 0, 0, 0.2),
+          1px 1px 0px rgba(0, 0, 0, 0.3), -1px -1px 0px rgba(0, 0, 0, 0.1);
+        -webkit-text-stroke: 1px rgba(85, 85, 85, 0.3);
+      }
+      .start-button {
+        margin-top: 40px;
+        padding: 16px 32px;
+        background: white;
+        color: #764ba2;
+        text-decoration: none;
+        border-radius: 25px;
+        font-size: 1.1rem;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 20px;
+        transition: transform 0.2s, box-shadow 0.2s;
+        box-shadow: 0 4px 15px rgba(118, 75, 162, 0.5);
+        width: fit-content;
+        min-width: 400px;
+        border: 2px solid rgba(118, 75, 162, 0.3);
+        transform: translateX(-10%);
+      }
+      .start-button:hover {
+        transform: translateX(-10%) translateY(-3px);
+        box-shadow: 0 6px 25px rgba(118, 75, 162, 0.6);
+        background: #f5f5f5;
+      }
+      .arrow-icon {
+        width: 32px;
+        height: 32px;
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.2rem;
+        flex-shrink: 0;
+      }
+      @media (max-width: 768px) {
+        .main-container {
+          flex-direction: column;
+          gap: 30px;
+          padding: 20px;
+        }
+        .character-name {
+          font-size: 5rem;
+        }
+        .text-label {
+          font-size: 3rem;
+        }
+        .sub-text {
+          font-size: 2rem;
+        }
+        .start-button {
+          min-width: auto;
+          width: 100%;
+          padding: 14px 24px;
+        }
+        .score-badge {
+          width: 150px !important;
+          height: 150px !important;
+          max-width: 150px !important;
+          max-height: 150px !important;
+          min-width: 150px !important;
+          min-height: 150px !important;
+          left: 1000px !important;
+          top: -200px !important;
+          transform: none !important;
+        }
+      }
+      .right-section {
+        display: none; /* 서가윤 이미지 숨김 */
+      }
+      .character-image {
+        display: none; /* 서가윤 이미지 숨김 */
+      }
+      /* 오프닝 비디오 - 화면 전체 */
+      .opening-video-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: #000;
+        z-index: 99999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 1;
+        transition: opacity 0.5s ease-out;
+        overflow: hidden;
+      }
+      .opening-video-overlay.hidden {
+        opacity: 0;
+        pointer-events: none;
+        visibility: hidden;
+      }
+      .opening-video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        transform: translateX(27%);
+      }
+    </style>
+  </head>
+  <body>
+    <!-- 오프닝 비디오 오버레이 -->
+    <div class="opening-video-overlay" id="opening-video-overlay">
+      <video
+        class="opening-video"
+        id="opening-video"
+        autoplay
+        muted
+        playsinline
+        preload="auto"
+        loop="false"
+      >
+        <source
+          src="{{ url_for('static', filename='images/chatbot/서가윤오프닝.mp4') }}"
+          type="video/mp4"
+        />
+        브라우저가 비디오를 지원하지 않습니다.
+      </video>
+    </div>
+    <!-- 오프닝 비디오 위에 표시될 콘텐츠 -->
+    <div class="main-container" id="main-content-overlay">
+      <div class="left-section">
+        <div class="text-label">수만휘 중독</div>
+        <h1 class="character-name">
+          재수생
+          <img
+            src="{{ url_for('static', filename='images/chatbot/100점.png') }}"
+            alt="100점"
+            class="score-badge"
+          />
+        </h1>
+        <div class="sub-text">키우기</div>
+        <a href="{{ url_for('detail') }}" class="start-button">
+          <span>서가윤을 가르쳐서 대입 성공시키기!</span>
+          <span class="arrow-icon">↩</span>
+        </a>
+      </div>
+      <div class="right-section">
+        <img
+          src="{{ url_for('static', filename='images/chatbot/서가윤.png') }}"
+          alt="서가윤"
+          class="character-image"
+        />
+      </div>
+    </div>
+
+    <script>
+      // 오프닝 비디오 처리
+      console.log("[VIDEO] 오프닝 비디오 스크립트 로드");
+
+      window.addEventListener("load", function () {
+        console.log("[VIDEO] 페이지 로드 완료");
+
+        const videoOverlay = document.getElementById("opening-video-overlay");
+        const video = document.getElementById("opening-video");
+
+        if (!videoOverlay || !video) {
+          console.error("[VIDEO] 요소를 찾을 수 없음!");
+          return;
+        }
+
+        console.log("[VIDEO] 요소 확인 완료");
+
+        // 오버레이 강제 표시
+        videoOverlay.style.cssText =
+          "position: fixed !important; top: 0 !important; left: 0 !important; width: 100vw !important; height: 100vh !important; background: #000 !important; z-index: 99999 !important; display: flex !important; align-items: center !important; justify-content: center !important; visibility: visible !important; opacity: 1 !important;";
+        console.log("[VIDEO] 오버레이 강제 표시 완료");
+
+        // 비디오 스타일 강제 설정
+        video.style.cssText =
+          "width: 100% !important; height: 100% !important; object-fit: cover !important; display: block !important; transform: translateX(20%) !important;";
+        console.log("[VIDEO] 비디오 스타일 설정 완료");
+
+        // 비디오 메타데이터 로드
+        video.addEventListener("loadedmetadata", function () {
+          console.log("[VIDEO] 메타데이터 로드:", {
+            duration: video.duration,
+            src: video.currentSrc,
+            readyState: video.readyState,
+          });
+        });
+
+        // 비디오 재생
+        video.addEventListener("canplay", function () {
+          console.log("[VIDEO] 재생 가능, 재생 시도");
+          video
+            .play()
+            .then(() => {
+              console.log("[VIDEO] 재생 성공");
+            })
+            .catch((err) => {
+              console.error("[VIDEO] 재생 실패:", err);
+            });
+        });
+
+        // 재생 완료
+        video.addEventListener("ended", function () {
+          console.log("[VIDEO] 재생 완료");
+          hideOverlay();
+        });
+
+        // 에러 처리
+        video.addEventListener("error", function (e) {
+          console.error("[VIDEO] 에러:", {
+            error: video.error,
+            code: video.error ? video.error.code : null,
+            message: video.error ? video.error.message : null,
+            src: video.currentSrc,
+          });
+        });
+
+        // 비디오 로드 강제
+        console.log("[VIDEO] 비디오 로드 시작");
+        video.load();
+
+        function hideOverlay() {
+          videoOverlay.style.opacity = "0";
+          setTimeout(() => {
+            videoOverlay.style.display = "none";
+            // 비디오가 사라진 후에도 메인 콘텐츠는 유지
+            const mainContent = document.getElementById("main-content-overlay");
+            if (mainContent) {
+              mainContent.style.position = "relative";
+              mainContent.style.zIndex = "1";
+            }
+          }, 500);
+        }
+
+        // 비디오 재생 중에도 메인 콘텐츠가 보이도록 설정
+        const mainContent = document.getElementById("main-content-overlay");
+        if (mainContent) {
+          mainContent.style.opacity = "1";
+          mainContent.style.visibility = "visible";
+        }
+      });
+
+      // DOMContentLoaded도 대비
+      document.addEventListener("DOMContentLoaded", function () {
+        console.log("[VIDEO] DOMContentLoaded");
+      });
+    </script>
+  </body>
+</html>

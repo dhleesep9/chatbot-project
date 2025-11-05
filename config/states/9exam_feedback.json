@@ -1,0 +1,26 @@
+{
+  "name": "9월 모의고사 문제점 파악",
+  "description": "9월 모의고사 후 과목별 문제점을 파악하고 해결방안을 제시하는 단계",
+  "from_states": ["9exam"],
+  "to_states": ["daily_routine"],
+  "narration": "",
+  "image": "/static/images/chatbot/9평.png",
+  "context": "당신의 9월 모의고사 성적이 발표되었습니다.",
+  "transitions": [
+    {
+      "name": "첫 번째 과목 문제점 제시",
+      "trigger_type": "september_exam_subject_problem",
+      "conditions": {},
+      "next_state": "9exam_feedback",
+      "transition_narration": ""
+    },
+    {
+      "name": "조언 제시 및 판단",
+      "trigger_type": "september_exam_advice_given",
+      "conditions": {},
+      "next_state": "9exam_feedback",
+      "transition_narration": ""
+    }
+  ]
+}
+

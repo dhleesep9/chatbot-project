@@ -1,0 +1,62 @@
+{
+  "name": "수능",
+  "description": "수능 응시 상태",
+  "from_states": ["11exam_pre"],
+  "to_states": ["military_ending", "athlete_ending", "love_ending", "3su_ending", "youtuber_ending", "university_application", "public_agent", "world_await"],
+  "narration": "수능이 끝났습니다.",
+  "context": "시험을 끝낸 당신은 홀가분합니다.",
+  "transitions": [
+    {
+      "trigger_type": "exam_ending_trigger",
+      "conditions": {
+        "average_grade_max": 3.0,
+        "stamina_min": 80
+      },
+      "next_state": "military_ending",
+      "transition_narration": "우수한 성적과 뛰어난 체력... 당신은 사관학교의 길을 선택했습니다."
+    },
+    {
+      "trigger_type": "exam_ending_trigger",
+      "conditions": {
+        "average_grade_min": 4.0,
+        "stamina_min": 90
+      },
+      "next_state": "athlete_ending",
+      "transition_narration": "체력이 당신의 진짜 재능이었습니다. 체육대학으로의 길이 열렸습니다."
+    },
+    {
+      "trigger_type": "exam_ending_trigger",
+      "conditions": {
+        "average_grade_min": 4.0,
+        "affection_min": 80
+      },
+      "next_state": "love_ending",
+      "transition_narration": "수능이 끝나고, 당신은 더 이상 감정을 숨길 수 없었습니다."
+    },
+    {
+      "trigger_type": "exam_ending_trigger",
+      "conditions": {
+        "average_grade_min": 3.0,
+        "average_grade_max": 4.0
+      },
+      "next_state": "3su_ending",
+      "transition_narration": "아쉬운 성적... 하지만 포기하지 않겠습니다. 다시 한번 도전합니다."
+    },
+    {
+      "trigger_type": "exam_ending_trigger",
+      "conditions": {
+        "average_grade_min": 5.0,
+        "average_grade_max": 6.0
+      },
+      "next_state": "youtuber_ending",
+      "transition_narration": "대학보다는 나만의 길을 걷기로 했습니다. 유튜버의 꿈을 향해..."
+    },
+    {
+      "trigger_type": "user_input",
+      "conditions": {
+        "input_contains": "대학지원하기"
+      },
+      "next_state": "university_application"
+    }
+  ]
+}
