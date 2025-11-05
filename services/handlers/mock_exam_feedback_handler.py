@@ -24,7 +24,7 @@ class MockExamFeedbackHandlerBase(BaseStateHandler):
     def on_enter(self, username: str, context: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
         mock_exam_feedback 상태 진입 시 처리
-        취약점 메시지와 안내를 표시
+        첫 번째 과목의 문제점을 표시
 
         Args:
             username: 사용자 이름
@@ -35,44 +35,48 @@ class MockExamFeedbackHandlerBase(BaseStateHandler):
         """
         print(f"[{self.EXAM_NAME.upper()}] {username}이(가) {self.EXAM_NAME} 상태에 진입했습니다.")
 
-        # 취약점 정보 가져오기
+        # 피드백 정보 가져오기
         weakness_storage = getattr(self.service, self.WEAKNESS_STORAGE_ATTR)
         weakness_info = weakness_storage.get(username, {})
-        weak_subject = weakness_info.get("subject")
-        weakness_message = weakness_info.get("message")
-        mock_exam_scores = weakness_info.get("scores", {})
 
-        if not weak_subject or not weakness_message:
-            print(f"[{self.EXAM_NAME.upper()}_WARN] 취약점 정보가 없습니다.")
-            # 취약점 정보가 없으면 기본 메시지
+        subject_problems = weakness_info.get("subject_problems", {})
+        subject_order = weakness_info.get("subject_order", [])
+        current_index = weakness_info.get("current_index", 0)
+
+        if not subject_problems or not subject_order:
+            print(f"[{self.EXAM_NAME.upper()}_WARN] 과목별 문제점 정보가 없습니다.")
             return {
                 'skip_llm': False,
                 'reply': None,
                 'narration': f"{self.EXAM_DISPLAY_NAME} 성적표를 확인하고 조언을 주세요."
             }
 
-        # state 정보 가져오기
-        state_info = self.service._get_state_info(self.EXAM_NAME)
-        state_name = state_info.get("name", self.EXAM_DISPLAY_NAME) if state_info else self.EXAM_DISPLAY_NAME
+        # 첫 번째 과목 문제점 표시
+        if current_index < len(subject_order):
+            current_subject = subject_order[current_index]
+            problem_message = subject_problems.get(current_subject, "")
 
-        # 취약점 메시지와 안내 표시
-        guidance_message = f"\n\n성적표를 확인하고, {weak_subject} 과목에 대한 조언을 해주세요."
+            # state 정보 가져오기
+            state_info = self.service._get_state_info(self.EXAM_NAME)
+            state_name = state_info.get("name", self.EXAM_DISPLAY_NAME) if state_info else self.EXAM_DISPLAY_NAME
 
-        print(f"[{self.EXAM_NAME.upper()}] 취약점 메시지 표시: {weakness_message}")
+            # 진행 상황 표시
+            progress_info = f"({current_index + 1}/{len(subject_order)} 과목)"
 
-        # 성적표 narration 생성 (저장된 scores 사용)
-        score_narration = None
-        if mock_exam_scores:
-            score_lines = []
-            for subject, score_data in mock_exam_scores.items():
-                score_lines.append(f"- {subject}: {score_data['grade']}등급 (백분위 {score_data['percentile']}%)")
-            score_narration = "사설모의고사 성적표가 발표되었습니다:\n" + "\n".join(score_lines)
-            print(f"[{self.EXAM_NAME.upper()}] 성적표 narration 생성 완료: {score_narration[:100]}...")
+            print(f"[{self.EXAM_NAME.upper()}] {current_subject} 문제점 표시: {problem_message}")
 
+            return {
+                'skip_llm': True,
+                'reply': f"[{state_name}] {progress_info} {current_subject} 과목:\n{problem_message}\n\n이 과목에 대한 조언을 해주세요.",
+                'narration': None
+            }
+
+        # 모든 과목 완료 (이 경우는 on_enter에서는 발생하지 않음)
         return {
-            'skip_llm': True,  # 이미 완성된 메시지이므로 LLM 호출 불필요
-            'reply': f"[{state_name}] {weakness_message}{guidance_message}",
-            'narration': score_narration  # 성적표 narration 직접 반환
+            'skip_llm': True,
+            'reply': "모든 과목에 대한 피드백이 완료되었습니다.",
+            'narration': None,
+            'transition_to': 'daily_routine'
         }
 
     def _parse_subject_from_weakness_message(self, user_message: str) -> Optional[str]:
@@ -233,7 +237,7 @@ class MockExamFeedbackHandlerBase(BaseStateHandler):
 
     def handle(self, username: str, user_message: str, context: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
-        모의고사 피드백 로직 처리
+        모의고사 피드백 로직 처리 - 순차적으로 모든 과목에 대해 조언 처리
 
         Args:
             username: 사용자 이름
@@ -250,7 +254,7 @@ class MockExamFeedbackHandlerBase(BaseStateHandler):
             # 한 주에 한 번만 보도록 체크
             current_week = self.service._get_current_week(username)
             last_week = self.service.mock_exam_last_week.get(username, -1)
-            
+
             if current_week == last_week and last_week >= 0:
                 print(f"[{self.EXAM_NAME.upper()}] 재응시 차단: {username}이(가) 이미 {current_week}주차에 사설모의고사를 봤습니다.")
                 return {
@@ -259,7 +263,7 @@ class MockExamFeedbackHandlerBase(BaseStateHandler):
                     'narration': None,
                     'transition_to': None  # 전이하지 않음
                 }
-            
+
             print(f"[{self.EXAM_NAME.upper()}] {self.RETEST_KEYWORD} 감지 - mock_exam으로 전환")
             return {
                 'skip_llm': True,
@@ -269,48 +273,31 @@ class MockExamFeedbackHandlerBase(BaseStateHandler):
                 'retest': True
             }
 
-        # [2] 취약점 정보 가져오기
+        # [2] 피드백 정보 가져오기
         weakness_storage = getattr(self.service, self.WEAKNESS_STORAGE_ATTR)
         weakness_info = weakness_storage.get(username, {})
-        current_weak_subject = weakness_info.get("subject")
-        current_weakness_message = weakness_info.get("message")
 
-        # 취약점 정보가 없으면 사용자 메시지에서 새 취약점 파싱 시도
-        if not current_weak_subject or not current_weakness_message:
-            print(f"[{self.EXAM_NAME.upper()}] 취약점 정보가 없습니다. 새 취약점 파싱 시도...")
-            
-            # 사용자 메시지에서 과목명과 취약점 추출
-            parsed_subject = self._parse_subject_from_weakness_message(user_message)
-            
-            if parsed_subject:
-                # 새 취약점 정보로 저장
-                weakness_message = user_message
-                # "과목명은/는 이랬어요:" 또는 "과목명에서" 같은 패턴 제거
-                import re
-                pattern = rf"{parsed_subject}(은|는|에서|이|가)?\s*(이랬어요|이렇게|이런|이건|이것은|이것이)?\s*[:：]?\s*"
-                weakness_message = re.sub(pattern, "", weakness_message, flags=re.IGNORECASE).strip()
-                
-                if not weakness_message:
-                    weakness_message = f"{parsed_subject}에서 어려운 부분이 있었어요."
-                
-                weakness_storage[username] = {
-                    "subject": parsed_subject,
-                    "message": weakness_message
-                }
-                current_weak_subject = parsed_subject
-                current_weakness_message = weakness_message
-                print(f"[{self.EXAM_NAME.upper()}] 새 취약점 파싱 성공: {parsed_subject} - {weakness_message[:50]}...")
-            else:
-                # 조언을 주었는지 확인 (있으면 일상 루틴으로)
-                if self.service._check_if_advice_given(user_message):
-                    print(f"[{self.EXAM_NAME.upper()}] 취약점 정보 없지만 조언 감지 - daily_routine으로 전환")
-                    return {
-                        'skip_llm': True,
-                        'reply': "조언 감사합니다!",
-                        'narration': "일상 루틴으로 돌아갑니다.",
-                        'transition_to': 'daily_routine'
-                    }
-                return None
+        subject_problems = weakness_info.get("subject_problems", {})
+        subject_order = weakness_info.get("subject_order", [])
+        current_index = weakness_info.get("current_index", 0)
+        completed_subjects = weakness_info.get("completed_subjects", [])
+
+        if not subject_problems or not subject_order:
+            print(f"[{self.EXAM_NAME.upper()}] 과목별 문제점 정보가 없습니다.")
+            return None
+
+        # 현재 처리 중인 과목
+        if current_index >= len(subject_order):
+            print(f"[{self.EXAM_NAME.upper()}] 모든 과목 완료")
+            return {
+                'skip_llm': True,
+                'reply': "모든 과목에 대한 피드백이 완료되었습니다!",
+                'narration': "일상 루틴으로 돌아갑니다.",
+                'transition_to': 'daily_routine'
+            }
+
+        current_subject = subject_order[current_index]
+        current_problem_message = subject_problems.get(current_subject, "")
 
         # [3] 조언 감지 확인
         advice_given = self.service._check_if_advice_given(user_message)
@@ -320,42 +307,35 @@ class MockExamFeedbackHandlerBase(BaseStateHandler):
             # 조언이 감지되지 않으면 LLM 호출
             return None
 
-        # [4] 조언 품질 판단 (각 핸들러에서 정의한 범위로 직접 평가)
-        advice_score = self._judge_advice_quality_with_range(username, user_message, current_weak_subject, current_weakness_message)
+        # [4] 조언 품질 판단
+        advice_score = self._judge_advice_quality_with_range(username, user_message, current_subject, current_problem_message)
         score_range = self._get_advice_score_range()
-        print(f"[{self.EXAM_NAME.upper()}] 조언 점수: {advice_score}점 ({score_range[0]}~{score_range[1]})")
+        print(f"[{self.EXAM_NAME.upper()}] {current_subject} 조언 점수: {advice_score}점 ({score_range[0]}~{score_range[1]})")
 
-        # [5] 능력치/멘탈/호감도 변경 (점수에 따라)
-        narration = None
-        
-        # 점수 범위에 따라 기준점 계산 (비율로 변환)
-        score_range = self._get_advice_score_range()
+        # [5] 능력치/멘탈/호감도 변경
         min_score, max_score = score_range
         score_range_size = max_score - min_score
-        
-        # 점수를 0~20 범위로 정규화하여 기존 기준 적용
+
+        # 점수를 0~20 범위로 정규화
         if score_range_size > 0:
             normalized_score = ((advice_score - min_score) / score_range_size) * 20
         else:
-            normalized_score = 10  # 기본값
-        
+            normalized_score = 10
+
         # 정규화된 점수에 따라 호감도와 멘탈 변화 결정
         if normalized_score >= 11:
-            # 적절한 조언: 호감도 +2, 멘탈 +5
             affection_change = 2
             mental_change = 5
             advice_quality_text = "좋은"
         elif normalized_score >= 6:
-            # 보통 조언: 호감도 +1, 멘탈 +2
             affection_change = 1
             mental_change = 2
             advice_quality_text = "보통"
         else:
-            # 부적절한 조언: 호감도 -2, 멘탈 -2
             affection_change = -2
             mental_change = -2
             advice_quality_text = "부적절한"
-        
+
         current_affection = self.service._get_affection(username)
         new_affection = max(0, min(100, current_affection + affection_change))
         self.service._set_affection(username, new_affection)
@@ -364,34 +344,61 @@ class MockExamFeedbackHandlerBase(BaseStateHandler):
         new_mental = max(0, min(100, current_mental + mental_change))
         self.service._set_mental(username, new_mental)
 
-        # 능력치 증가: 각 핸들러에서 오버라이드된 메서드 호출
+        # 능력치 증가
         abilities = self.service._get_abilities(username)
         increased_amount = 0.0
-        if current_weak_subject in abilities:
-            increased_amount = self._calculate_ability_increase(username, current_weak_subject, advice_score)
-            abilities[current_weak_subject] = min(2500, abilities[current_weak_subject] + increased_amount)
+        if current_subject in abilities:
+            increased_amount = self._calculate_ability_increase(username, current_subject, advice_score)
+            abilities[current_subject] = min(2500, abilities[current_subject] + increased_amount)
             self.service._set_abilities(username, abilities)
 
-        if advice_score >= 6:
-            narration = f"{advice_quality_text} 조언이었어요! {current_weak_subject} 능력치가 {increased_amount:.0f} 증가, 호감도 {affection_change:+.0f}, 멘탈 {mental_change:+.0f} 변화했습니다.\n\n일상 루틴으로 돌아갑니다."
+        print(f"[{self.EXAM_NAME.upper()}] {current_subject} 조언 평가 완료: 점수={advice_score}, 호감도 {affection_change:+.0f}, 멘탈 {mental_change:+.0f}, 능력치 +{increased_amount:.2f}")
+
+        # [6] 다음 과목으로 진행 또는 완료
+        # 현재 과목을 완료 목록에 추가
+        completed_subjects.append(current_subject)
+        current_index += 1
+
+        # 정보 업데이트
+        weakness_info['current_index'] = current_index
+        weakness_info['completed_subjects'] = completed_subjects
+        weakness_storage[username] = weakness_info
+
+        # 다음 과목이 있는지 확인
+        if current_index < len(subject_order):
+            # 다음 과목으로 진행
+            next_subject = subject_order[current_index]
+            next_problem_message = subject_problems.get(next_subject, "")
+            progress_info = f"({current_index + 1}/{len(subject_order)} 과목)"
+
+            # state 정보 가져오기
+            state_info = self.service._get_state_info(self.EXAM_NAME)
+            state_name = state_info.get("name", self.EXAM_DISPLAY_NAME) if state_info else self.EXAM_DISPLAY_NAME
+
+            feedback_message = f"{advice_quality_text} 조언이었어요! {current_subject} 능력치 +{increased_amount:.0f}, 호감도 {affection_change:+.0f}, 멘탈 {mental_change:+.0f}\n\n"
+            next_subject_message = f"{progress_info} {next_subject} 과목:\n{next_problem_message}\n\n이 과목에 대한 조언을 해주세요."
+
+            return {
+                'skip_llm': True,
+                'reply': f"[{state_name}] {feedback_message}{next_subject_message}",
+                'narration': None
+            }
         else:
-            narration = f"{advice_quality_text} 조언이었어요. 호감도 {affection_change:+.0f}, 멘탈 {mental_change:+.0f} 변화했습니다.\n\n일상 루틴으로 돌아갑니다."
-        
-        print(f"[{self.EXAM_NAME.upper()}] 조언 점수: {advice_score}점 - 호감도 {affection_change:+.0f}, 멘탈 {mental_change:+.0f}, {current_weak_subject} +{increased_amount:.2f}")
+            # 모든 과목 완료
+            print(f"[{self.EXAM_NAME.upper()}] 모든 과목 피드백 완료")
 
-        # [6] 취약점 정보 삭제
-        if username in weakness_storage:
-            del weakness_storage[username]
+            # 피드백 정보 삭제
+            if username in weakness_storage:
+                del weakness_storage[username]
 
-        # [7] 조언에 대한 반응 생성 (나중에 LLM으로 생성)
-        return {
-            'skip_llm': False,  # LLM으로 반응 생성
-            'reply': None,  # LLM이 생성
-            'narration': narration,
-            'transition_to': 'daily_routine',
-            'advice_user_input': user_message,
-            'advice_score': advice_score
-        }
+            return {
+                'skip_llm': False,  # LLM으로 마무리 메시지 생성
+                'reply': None,
+                'narration': "모든 과목에 대한 피드백이 완료되었습니다.\n\n일상 루틴으로 돌아갑니다.",
+                'transition_to': 'daily_routine',
+                'advice_user_input': user_message,
+                'advice_score': advice_score
+            }
 
 
 class MockExamFeedbackHandler(MockExamFeedbackHandlerBase):

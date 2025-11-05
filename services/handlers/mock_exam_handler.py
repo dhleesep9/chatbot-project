@@ -29,7 +29,7 @@ class MockExamHandler(BaseStateHandler):
         current_week = self.service._get_current_week(username)
         self.service.mock_exam_last_week[username] = current_week
         print(f"[MOCK_EXAM] {username}의 사설모의고사 응시 주차 기록: {current_week}주차")
-        
+
         # 사설모의고사 응시 후 체력과 멘탈 감소
         current_stamina = self.service._get_stamina(username)
         current_mental = self.service._get_mental(username)
@@ -38,16 +38,9 @@ class MockExamHandler(BaseStateHandler):
         self.service._set_stamina(username, new_stamina)
         self.service._set_mental(username, new_mental)
         print(f"[MOCK_EXAM] {username}의 체력 {current_stamina} → {new_stamina} (-10), 멘탈 {current_mental} → {new_mental} (-10)")
-        
+
         # 사설모의고사 응시 - 성적표 생성
         mock_exam_scores = self.service._calculate_mock_exam_scores(username)
-        weak_subject = self.service._identify_weak_subject(mock_exam_scores)
-        weakness_message = self.service._generate_weakness_message(weak_subject, mock_exam_scores.get(weak_subject, {}))
-
-        # 취약점 메시지 검증 (비어있으면 기본 메시지 사용)
-        if not weakness_message or len(weakness_message.strip()) == 0:
-            weakness_message = f"{weak_subject}에서 어려운 부분이 많았어요. 특히 응용 문제가 어려웠어요."
-            print(f"[MOCK_EXAM_WARN] 취약점 메시지가 비어있어 기본 메시지 사용: {weakness_message}")
 
         # 성적표 나레이션 생성
         score_lines = []
@@ -61,15 +54,28 @@ class MockExamHandler(BaseStateHandler):
         # 나레이션에는 성적표만 포함
         mock_exam_narration = "사설모의고사 성적표가 발표되었습니다:\n" + "\n".join(score_lines)
 
-        # 취약점 정보 저장 (피드백에서 사용)
+        # 각 과목별 문제점 생성
+        subject_problems = {}
+        for subject, score_data in mock_exam_scores.items():
+            problem_message = self.service._generate_weakness_message(subject, score_data)
+            if not problem_message or len(problem_message.strip()) == 0:
+                problem_message = f"{subject}에서 어려운 부분이 많았어요. 특히 응용 문제가 어려웠어요."
+            subject_problems[subject] = problem_message
+
+        # 과목 순서 정의 (고정 순서)
+        subject_order = list(mock_exam_scores.keys())
+
+        # 피드백 처리를 위한 정보 저장
         self.service.mock_exam_weakness[username] = {
-            "subject": weak_subject,
-            "message": weakness_message,
-            "scores": mock_exam_scores  # 성적표도 함께 저장
+            "scores": mock_exam_scores,
+            "subject_problems": subject_problems,
+            "subject_order": subject_order,
+            "current_index": 0,  # 현재 처리 중인 과목 인덱스
+            "completed_subjects": []  # 완료된 과목 목록
         }
 
-        print(f"[MOCK_EXAM] {username}의 사설모의고사 성적표 생성 완료. 취약 과목: {weak_subject}")
-        print(f"[MOCK_EXAM] 취약점 메시지 즉시 표시: {weakness_message}")
+        print(f"[MOCK_EXAM] {username}의 사설모의고사 성적표 생성 완료.")
+        print(f"[MOCK_EXAM] 과목별 문제점 생성 완료: {list(subject_problems.keys())}")
 
         # state 정보 가져오기
         state_info = self.service._get_state_info("mock_exam")
@@ -84,8 +90,6 @@ class MockExamHandler(BaseStateHandler):
             'transition_to': 'mock_exam_feedback',
             'data': {
                 'mock_exam_scores': mock_exam_scores,
-                'weak_subject': weak_subject,
-                'weakness_message': weakness_message,
                 'grade_reaction': grade_reaction
             }
         }
