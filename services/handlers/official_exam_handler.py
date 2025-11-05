@@ -125,6 +125,38 @@ class JuneExamHandler(OfficialExamHandlerBase):
     FEEDBACK_STATE = "6exam_feedback"
     PROBLEM_STORAGE_ATTR = "june_exam_problems"
 
+    def on_enter(self, username: str, context: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        6exam state 진입 시 호감도에 따라 다른 fixed_reply 설정
+
+        Args:
+            username: 사용자 이름
+            context: 실행 컨텍스트
+
+        Returns:
+            Dict: 처리 결과
+        """
+        # 호감도 가져오기
+        affection = self.service._get_affection(username)
+
+        # 호감도에 따른 메시지 선택
+        if affection >= 50:
+            reply = "쌤 ... 너무 떨려용..\n재수 시작하고 제대로 치는 첫 평가원 모의고사에요...\n저 잘 할 수 있겠죠 ..??  응원해주세요 ㅠㅠ"
+        else:
+            reply = "썜 .. 잘하고 올게요.. ㅠ"
+
+        print(f"[6EXAM] {username}의 호감도: {affection} - 메시지: '{reply[:50]}...'")
+
+        # narration 설정
+        narration = "[6월 모의고사가 끝났습니다.]"
+
+        return {
+            'skip_llm': True,  # LLM 호출 건너뛰기
+            'reply': reply,
+            'narration': narration,
+            'transition_to': None
+        }
+
 
 class SeptemberExamHandler(OfficialExamHandlerBase):
     """9exam state handler"""
@@ -140,7 +172,48 @@ class CSATExamHandler(OfficialExamHandlerBase):
     EXAM_DISPLAY_NAME = "수능"
     FEEDBACK_STATE = None  # 피드백 없음
     PROBLEM_STORAGE_ATTR = "csat_exam_scores"
-    
+
+    def on_enter(self, username: str, context: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        11exam state 진입 시 호감도와 멘탈에 따라 다른 fixed_reply 설정
+
+        Args:
+            username: 사용자 이름
+            context: 실행 컨텍스트
+
+        Returns:
+            Dict: 처리 결과
+        """
+        # 호감도와 멘탈 가져오기
+        affection = self.service._get_affection(username)
+        mental = self.service._get_mental(username)
+
+        # 우선순위대로 메시지 선택
+        if mental < 30:
+            # 멘탈 30 미만 (최우선)
+            reply = "선생님 ㅠㅠㅠㅠ 저 잘 볼 수 있겠죠?? 너무 불안하고 떨려요 ... 아는 것도 다 실수 할 거 같아요 ...."
+        elif affection < 20:
+            # 호감도 20 미만
+            reply = "....."
+        elif affection < 50:
+            # 호감도 50 미만
+            reply = "선생님 저 잘 보고 올게요 .."
+        else:
+            # 호감도 50 이상
+            reply = "쌤,  최선을 다해서 잘 보고 올게요...! 저 위해서 꼭 기도해주셔야 해요 !!"
+
+        print(f"[11EXAM] {username}의 호감도: {affection}, 멘탈: {mental} - 메시지: '{reply[:50]}...'")
+
+        # narration 설정
+        narration = "[오늘은 수능 날입니다. 가윤이 시험을 잘 보고 올 수 있도록 응원해주세요.]"
+
+        return {
+            'skip_llm': True,  # LLM 호출 건너뛰기
+            'reply': reply,
+            'narration': narration,
+            'transition_to': None
+        }
+
     def handle(self, username: str, user_message: str, context: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
         수능 성적 발표 로직 처리 (피드백 없음)

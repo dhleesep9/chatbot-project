@@ -2766,11 +2766,19 @@ class ChatbotService:
             
             # 6exam 상태 처리 (질문 시 바로 성적 발표 → 피드백)
             if new_state == "6exam":
-                # Handler로 처리
-                handler_result = self.handler_registry.call_handle(
-                    '6exam', username, user_message,
-                    {'current_state': current_state, 'new_state': new_state}
-                )
+                # state 진입 시 on_enter 호출 (첫 메시지 표시)
+                if state_changed:
+                    handler_result = self.handler_registry.call_on_enter(
+                        '6exam', username,
+                        {'current_state': current_state, 'new_state': new_state}
+                    )
+                else:
+                    # state 진입 이후에는 handle 호출
+                    handler_result = self.handler_registry.call_handle(
+                        '6exam', username, user_message,
+                        {'current_state': current_state, 'new_state': new_state}
+                    )
+
                 if handler_result:
                     if handler_result.get('skip_llm'):
                         june_exam_processed = True
@@ -2882,16 +2890,26 @@ class ChatbotService:
             csat_exam_processed = False
             if new_state == "11exam":
                 print(f"[DEBUG] 11exam 핸들러 호출: user_message={user_message}")
-                handler_result = self.handler_registry.call_handle(
-                    '11exam', username, user_message,
-                    {'current_state': current_state, 'new_state': new_state}
-                )
+
+                # state 진입 시 on_enter 호출 (첫 메시지 표시)
+                if state_changed:
+                    handler_result = self.handler_registry.call_on_enter(
+                        '11exam', username,
+                        {'current_state': current_state, 'new_state': new_state}
+                    )
+                else:
+                    # state 진입 이후에는 handle 호출
+                    handler_result = self.handler_registry.call_handle(
+                        '11exam', username, user_message,
+                        {'current_state': current_state, 'new_state': new_state}
+                    )
+
                 print(f"[DEBUG] 11exam 핸들러 결과: handler_result={handler_result}")
                 if handler_result:
                     if handler_result.get('skip_llm'):
                         csat_exam_processed = True
                         reply = handler_result.get('reply')
-                    
+
                     # 헬퍼로 narration 및 전이 처리
                     narration, transition_to, handler_state_changed = self._process_handler_result(handler_result, narration)
                     if transition_to:
