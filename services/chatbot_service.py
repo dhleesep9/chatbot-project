@@ -205,14 +205,28 @@ class ChatbotService:
             print(f"[ERROR][ChatbotService] ChromaDB 초기화 실패: {e}")
             self.collection = None
 
-        # 4. LangChain Memory (optional, 실제 사용시 확장)
+        # 4. LangChain Memory - Hybrid Memory 사용 (BufferWindow + Summary)
         try:
-            from langchain.memory import ConversationSummaryBufferMemory
-            self.memory = None  # 추후 필요시 ConversationSummaryBufferMemory로 초기화
-            print("[ChatbotService] LangChain Memory 준비 (미사용)")
+            from services.utils.hybrid_memory import HybridMemoryManager
+            from langchain_openai import ChatOpenAI
+
+            # LangChain LLM 인스턴스 생성 (메모리 요약용)
+            api_key = os.getenv("OPENAI_API_KEY")
+            if api_key:
+                memory_llm = ChatOpenAI(
+                    model="gpt-4o-mini",
+                    temperature=0.3,
+                    api_key=api_key
+                )
+                # LLM 인스턴스를 메모리 관리자에 전달 (요약용)
+                self.memory_manager = HybridMemoryManager(llm=memory_llm, window_size=4)
+                print("[ChatbotService] Hybrid Memory 시스템 초기화 완료 (BufferWindow 4턴 + Summary)")
+            else:
+                print("[WARN][ChatbotService] OPENAI_API_KEY가 없어 메모리 시스템을 초기화할 수 없습니다.")
+                self.memory_manager = None
         except Exception as e:
-            print(f"[WARN][ChatbotService] LangChain Memory 사용 불가: {e}")
-            self.memory = None
+            print(f"[WARN][ChatbotService] Hybrid Memory 초기화 실패: {e}")
+            self.memory_manager = None
 
         # 5. 호감도 저장 (username을 키로 하는 딕셔너리)
         self.affections = {}  # {username: affection_value}
@@ -2207,13 +2221,13 @@ class ChatbotService:
         """LLM 프롬프트 구성 (호감도 및 게임 상태 반영)"""
         from services.utils.prompt_builder import build_user_prompt, get_affection_tone
         from services.utils.career_manager import get_career_description
-        
+
         if selected_subjects is None:
             selected_subjects = []
 
         # 호감도 말투 추가
         affection_tone = get_affection_tone(self.config, affection)
-        
+
         # 진로 정보 추가
         career = self._get_career(username)
         career_info = ""
@@ -2223,7 +2237,17 @@ class ChatbotService:
 
         # 게임 상태 컨텍스트
         state_context = self._get_state_context(game_state)
-        
+
+        # 대화 메모리 컨텍스트 가져오기
+        memory_context = None
+        if self.memory_manager:
+            try:
+                memory_context = self.memory_manager.get_formatted_memory(username)
+                if memory_context:
+                    print(f"[MEMORY] {username}의 대화 메모리 로드 완료 (길이: {len(memory_context)} 문자)")
+            except Exception as e:
+                print(f"[WARN] 메모리 로드 실패: {e}")
+
         # 프롬프트 빌드
         user_prompt = build_user_prompt(
             user_message=user_message,
@@ -2235,16 +2259,17 @@ class ChatbotService:
             schedule_set=schedule_set,
             official_mock_exam_grade_info=official_mock_exam_grade_info,
             current_week=self._get_current_week(username),
-            last_mock_exam_week=self.mock_exam_last_week.get(username, -1)
+            last_mock_exam_week=self.mock_exam_last_week.get(username, -1),
+            memory_context=memory_context
         )
-        
+
         # 호감도 말투와 진로 정보를 앞에 추가
         prompt_parts = []
         if affection_tone.strip():
             prompt_parts.append(affection_tone.strip())
         if career_info:
             prompt_parts.append(career_info)
-        
+
         # 기존 프롬프트와 결합
         if prompt_parts:
             return "\n\n".join(prompt_parts) + "\n\n" + user_prompt
@@ -2284,6 +2309,13 @@ class ChatbotService:
                     existing_career = self._get_career(username)
                     career = initialize_career_for_user(username, existing_career)
                     self._set_career(username, career)
+                    # 메모리 초기화
+                    if self.memory_manager:
+                        try:
+                            self.memory_manager.clear_memory(username)
+                            print(f"[MEMORY] {username}의 대화 메모리 초기화 완료")
+                        except Exception as e:
+                            print(f"[WARN] 메모리 초기화 실패: {e}")
                     # 호감도 확인 (초기값 5)
                     current_affection = self._get_affection(username)
                     # 나레이션 생성 (start state의 narration 사용)
@@ -2364,6 +2396,13 @@ class ChatbotService:
                 self._reset_conversation_count(username)
                 self.current_weeks[username] = 0
                 self._set_game_date(username, "2023-11-17")
+                # 메모리 초기화
+                if self.memory_manager:
+                    try:
+                        self.memory_manager.clear_memory(username)
+                        print(f"[MEMORY] {username}의 대화 메모리 초기화 완료 (게임 리셋)")
+                    except Exception as e:
+                        print(f"[WARN] 메모리 초기화 실패: {e}")
                 # 진로 재초기화 (랜덤 생성)
                 from services.utils.career_manager import initialize_career_for_user
                 career = initialize_career_for_user(username, None)
@@ -4019,12 +4058,17 @@ class ChatbotService:
             print(f"[BOT] {reply}")
             print(f"{'='*50}\n")
             
-            # [5] 메모리 저장(선택)
-            if self.memory:
-                self.memory.save_context(
-                    {"input": user_message},
-                    {"output": reply}
-                )
+            # [5] 메모리 저장 - Hybrid Memory에 저장
+            if self.memory_manager:
+                try:
+                    self.memory_manager.save_context(
+                        username=username,
+                        inputs={"input": user_message},
+                        outputs={"output": reply}
+                    )
+                    print(f"[MEMORY] {username}의 대화 저장 완료")
+                except Exception as e:
+                    print(f"[WARN] 메모리 저장 실패: {e}")
 
             # [5.5] 상태별 이미지 설정
             # 우선순위: state의 image > handler의 image

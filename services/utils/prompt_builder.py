@@ -174,10 +174,12 @@ def build_user_prompt(
     schedule_set: bool = False,
     official_mock_exam_grade_info: dict = None,
     current_week: int = 0,
-    last_mock_exam_week: int = -1
+    last_mock_exam_week: int = -1,
+    memory_context: str = None
 ) -> str:
     """
     사용자 프롬프트 생성
+
     Args:
         user_message: 사용자 메시지
         context: 추가 컨텍스트 (RAG 검색 결과 등)
@@ -189,11 +191,13 @@ def build_user_prompt(
         official_mock_exam_grade_info: 공식 모의고사 성적 정보
         current_week: 현재 주차
         last_mock_exam_week: 마지막 사설모의고사 주차
+        memory_context: 대화 메모리 컨텍스트 (과거 대화 요약 + 최근 대화)
+
     Returns:
         str: 사용자 프롬프트
     """
     prompt_parts = []
-    
+
     if state_context:
         prompt_parts.append(state_context)
     # 사설모의고사 한 주에 한 번 제한 안내
@@ -207,6 +211,11 @@ def build_user_prompt(
     sys_prompt = "\n\n".join(prompt_parts)
 
     prompt = sys_prompt.strip() + "\n\n"
+
+    # 대화 메모리 추가 (과거 대화 요약 + 최근 대화)
+    if memory_context and memory_context.strip():
+        prompt += "[대화 기록]\n" + memory_context.strip() + "\n\n"
+
     if context:
         prompt += "[참고 정보]\n" + context.strip() + "\n\n"
     prompt += f"{username}: {user_message.strip()}"
