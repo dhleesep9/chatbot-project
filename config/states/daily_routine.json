@@ -1,0 +1,47 @@
+{
+  "name": "일상루틴단계",
+  "description": "학습 시간표를 관리하고 주차별로 공부하는 단계",
+  "from_states": [
+    "selection",
+    "study_schedule",
+    "mock_exam_feedback",
+    "official_mock_exam_feedback",
+    "6exam",
+    "6exam_feedback",
+    "9exam",
+    "9exam_feedback"
+  ],
+  "to_states": ["study_schedule", "mock_exam", "exam_strategy"],
+  "narration": "[일상 루틴 단계입니다. 다음 중 하나를 입력하여 다음 행동을 선택하세요.\n'학습시간표 관리','사설모의고사 응시','멘토링 종료','시험전략수립']",
+  "fixed_reply": "쌤. 저도 체계적으로 공부해야 할 거 같아요.\n수만휘 보니까 다들 자기 루틴이 있는 거 같아서....\n쌤이 제 루틴 좀 같이 세워주세요.",
+  "context": "[게임 상태: 일상 루프 단계]\n- 이제 재수생의 하루 루틴을 관리하는 단계입니다.\n- 대화를 5번 하면 자동으로 1주일이 지나며 설정된 시간표에 따라 능력치가 증가합니다.",
+  "transitions": [
+    {
+      "name": "학습 시간표 관리",
+      "trigger_type": "study_schedule",
+      "conditions": {
+        "input_contains": "학습시간표관리"
+      },
+      "next_state": "study_schedule",
+      "transition_narration": "학습 시간표 관리 모드로 들어갑니다."
+    },
+    {
+      "name": "사설모의고사 응시",
+      "trigger_type": "mock_exam",
+      "conditions": {
+        "input_contains": "사설모의고사 응시"
+      },
+      "next_state": "mock_exam",
+      "transition_narration": "사설모의고사를 응시합니다."
+    },
+    {
+      "name": "시험 전략 수립",
+      "trigger_type": "user_input",
+      "conditions": {
+        "input_contains": "시험전략수립"
+      },
+      "next_state": "exam_strategy",
+      "transition_narration": "시험 전략 수립 단계로 들어갑니다."
+    }
+  ]
+}

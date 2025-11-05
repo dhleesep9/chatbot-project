@@ -1,0 +1,25 @@
+{
+  "name": "6월 모의고사 문제점 파악",
+  "description": "6월 모의고사 후 과목별 문제점을 파악하고 해결방안을 제시하는 단계",
+  "from_states": ["6exam"],
+  "to_states": ["daily_routine"],
+  "narration": "",
+  "image": "/static/images/chatbot/6평.png",
+  "context": "[게임 상태: 6월 모의고사 문제점 파악]\n- 6월 모의고사 성적이 발표되었습니다.\n- 서가윤은 각 과목별(국어, 수학, 영어, 탐구1, 탐구2)로 순서대로 하나씩만 문제점을 얘기합니다.\n- 절대로 여러 과목을 한 번에 말하지 말고, 현재 대화하고 있는 과목 하나만 얘기하세요.\n- 멘토는 각 과목의 문제점에 대해 적절한 해결방안을 제시해야 합니다.\n- 모든 과목의 문제점과 해결방안을 논의하면 일상 루틴으로 돌아갑니다.",
+  "transitions": [
+    {
+      "name": "첫 번째 과목 문제점 제시",
+      "trigger_type": "june_exam_subject_problem",
+      "conditions": {},
+      "next_state": "6exam_feedback",
+      "transition_narration": ""
+    },
+    {
+      "name": "조언 제시 및 판단",
+      "trigger_type": "june_exam_advice_given",
+      "conditions": {},
+      "next_state": "6exam_feedback",
+      "transition_narration": ""
+    }
+  ]
+}
