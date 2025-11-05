@@ -24,7 +24,7 @@ class MockExamFeedbackHandlerBase(BaseStateHandler):
     def on_enter(self, username: str, context: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
         mock_exam_feedback 상태 진입 시 처리
-        첫 번째 과목의 문제점을 표시
+        성적표 narration과 첫 번째 과목의 문제점을 표시
 
         Args:
             username: 사용자 이름
@@ -42,6 +42,7 @@ class MockExamFeedbackHandlerBase(BaseStateHandler):
         subject_problems = weakness_info.get("subject_problems", {})
         subject_order = weakness_info.get("subject_order", [])
         current_index = weakness_info.get("current_index", 0)
+        mock_exam_scores = weakness_info.get("scores", {})
 
         if not subject_problems or not subject_order:
             print(f"[{self.EXAM_NAME.upper()}_WARN] 과목별 문제점 정보가 없습니다.")
@@ -50,6 +51,15 @@ class MockExamFeedbackHandlerBase(BaseStateHandler):
                 'reply': None,
                 'narration': f"{self.EXAM_DISPLAY_NAME} 성적표를 확인하고 조언을 주세요."
             }
+
+        # 성적표 narration 생성 (mock_display에서 생성된 것을 재생성)
+        score_narration = None
+        if mock_exam_scores:
+            score_lines = []
+            for subject, score_data in mock_exam_scores.items():
+                score_lines.append(f"- {subject}: {score_data['grade']}등급 (백분위 {score_data['percentile']}%)")
+            score_narration = "사설모의고사 성적표가 발표되었습니다:\n" + "\n".join(score_lines)
+            print(f"[{self.EXAM_NAME.upper()}] 성적표 narration 재생성: {score_narration[:100]}...")
 
         # 첫 번째 과목 문제점 표시
         if current_index < len(subject_order):
@@ -68,7 +78,7 @@ class MockExamFeedbackHandlerBase(BaseStateHandler):
             return {
                 'skip_llm': True,
                 'reply': f"[{state_name}] {progress_info} {current_subject} 과목:\n{problem_message}\n\n이 과목에 대한 조언을 해주세요.",
-                'narration': None
+                'narration': score_narration  # 성적표 narration 명시적으로 반환
             }
 
         # 모든 과목 완료 (이 경우는 on_enter에서는 발생하지 않음)
