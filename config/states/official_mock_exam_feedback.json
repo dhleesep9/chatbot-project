@@ -1,0 +1,9 @@
+{
+  "name": "정규모의고사 피드백",
+  "description": "정규모의고사 취약점에 대한 조언을 받는 상태",
+  "from_states": ["official_mock_exam"],
+  "to_states": ["daily_routine"],
+  "narration": "정규모의고사 결과를 확인했습니다.",
+  "context": "[게임 상태: 정규모의고사 피드백]\n- 정규모의고사에서 취약점이 발견되었습니다.\n- 멘토의 조언을 기다리고 있습니다.",
+  "transitions": []
+}

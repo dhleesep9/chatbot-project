@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{ bot.name }} - 상세 정보</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        font-family: "IBM Plex Sans KR", sans-serif;
+        background: rgba(0, 0, 0, 0.3);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+      }
+      .modal-container {
+        max-width: 500px;
+        width: 90%;
+        margin: 20px auto;
+        background: #fff;
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+      }
+      .modal-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 15px 20px;
+      }
+      .modal-header h2 {
+        margin: 0;
+        flex: 1;
+        text-align: center;
+        font-size: 1.5rem;
+        color: #333;
+      }
+      .close-btn {
+        background: none;
+        border: none;
+        font-size: 1.5rem;
+        cursor: pointer;
+        color: #666;
+      }
+      .modal-content {
+        padding: 0 30px 30px;
+      }
+      /* 캐릭터 사진 - 세로형 큰 사각형 */
+      .character-photo {
+        width: 100%;
+        max-width: 400px;
+        height: 500px;
+        object-fit: cover;
+        border-radius: 12px;
+        display: block;
+        margin: 0 auto 30px;
+        background: #f5f5f5;
+      }
+      /* 메인 제목 */
+      .main-title {
+        text-align: center;
+        margin: 0 0 20px 0;
+        font-size: 2.5rem;
+        font-weight: bold;
+        color: #333;
+      }
+      /* 해시태그 영역 */
+      .tags {
+        text-align: center;
+        margin: 0 0 30px 0;
+      }
+      .tag {
+        display: inline-block;
+        background: #e0e0e0;
+        color: #555;
+        padding: 8px 16px;
+        border-radius: 20px;
+        margin: 4px;
+        font-size: 1rem;
+      }
+      /* 소개글 섹션 */
+      .description-section {
+        margin: 30px 0;
+      }
+      .description-label {
+        font-size: 1.2rem;
+        font-weight: bold;
+        color: #333;
+        margin-bottom: 15px;
+      }
+      .description-content {
+        font-size: 1rem;
+        color: #666;
+        line-height: 1.8;
+        padding: 20px;
+        background: #f9f9f9;
+        border-radius: 8px;
+        min-height: 100px;
+        white-space: pre-wrap;
+      }
+      /* 사용자명 입력 및 채팅 시작 */
+      .username-area {
+        margin: 30px 0 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+      }
+      .username-area label {
+        font-size: 1rem;
+        color: #333;
+      }
+      .username-area input {
+        padding: 10px 15px;
+        font-size: 1rem;
+        border: 2px solid #ddd;
+        border-radius: 8px;
+        width: 50%;
+        transition: border 0.2s;
+      }
+      .username-area input:focus {
+        outline: none;
+        border-color: #764ba2;
+      }
+      .start-chat {
+        display: block;
+        margin: 20px 0;
+        padding: 14px 24px;
+        background: #764ba2;
+        color: #fff;
+        text-decoration: none;
+        border-radius: 8px;
+        font-size: 1.1rem;
+        text-align: center;
+        cursor: pointer;
+        transition: transform 0.2s;
+      }
+      .start-chat:hover {
+        transform: translateY(-2px);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="modal-container">
+      <div class="modal-header">
+        <h2>{{ bot.name }}</h2>
+        <button
+          class="close-btn"
+          onclick="window.location.href='{{ url_for('index') }}'"
+        >
+          &times;
+        </button>
+      </div>
+
+      <div class="modal-content">
+        <!-- 캐릭터 사진 -->
+        <img
+          src="{{ bot.image }}"
+          alt="{{ bot.name }}"
+          class="character-photo"
+        />
+
+        <!-- 메인 제목 -->
+        <h1 class="main-title">{{ bot.name }}</h1>
+
+        <!-- 해시태그 -->
+        <div class="tags">
+          {% for tag in bot.tags %}
+          <span class="tag">{{ tag }}</span>
+          {% endfor %}
+        </div>
+
+        <!-- 소개글 -->
+        <div class="description-section">
+          <div class="description-label">소개글</div>
+          <div class="description-content">{{ bot.description }}</div>
+        </div>
+
+        <!-- 사용자명 입력 및 채팅 시작 -->
+        <div class="username-area">
+          <label for="username">이름:</label>
+          <input type="text" id="username" placeholder="이름을 입력하세요" />
+        </div>
+
+        <a href="#" class="start-chat" id="start-chat-btn">채팅 시작하기</a>
+      </div>
+    </div>
+
+    <script>
+      const startChatBtn = document.getElementById("start-chat-btn");
+      const usernameInput = document.getElementById("username");
+
+      startChatBtn.addEventListener("click", function (event) {
+        event.preventDefault();
+        const username = usernameInput.value.trim() || "사용자";
+        window.location.href = `/chat?username=${encodeURIComponent(username)}`;
+      });
+
+      usernameInput.addEventListener("keypress", function (event) {
+        if (event.key === "Enter") {
+          startChatBtn.click();
+        }
+      });
+    </script>
+  </body>
+</html>
