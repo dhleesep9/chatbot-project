@@ -2758,7 +2758,11 @@ class ChatbotService:
                         reply = handler_result.get('reply')
 
                     # 헬퍼로 narration 및 전이 처리
+                    print(f"[MOCK_EXAM_DEBUG] narration before _process_handler_result: {narration[:100] if narration else 'None'}...")
                     narration, transition_to, handler_state_changed = self._process_handler_result(handler_result, narration)
+                    print(f"[MOCK_EXAM_DEBUG] narration after _process_handler_result: {narration[:200] if narration else 'None'}...")
+                    print(f"[MOCK_EXAM_DEBUG] transition_to: {transition_to}, state_changed: {handler_state_changed}")
+
                     if transition_to:
                         self._set_game_state(username, transition_to)
                         new_state = transition_to
@@ -3057,7 +3061,9 @@ class ChatbotService:
                                 reply = on_enter_reply
 
                         # narration 처리
+                        print(f"[MOCK_EXAM_FEEDBACK_DEBUG] narration before _process_handler_result: {narration[:200] if narration else 'None'}...")
                         narration, transition_to, handler_state_changed = self._process_handler_result(handler_result, narration)
+                        print(f"[MOCK_EXAM_FEEDBACK_DEBUG] narration after _process_handler_result: {narration[:200] if narration else 'None'}...")
                         if transition_to:
                             self._set_game_state(username, transition_to)
                             new_state = transition_to
@@ -4000,6 +4006,11 @@ class ChatbotService:
                 print(f"[IMAGE] handler 이미지 사용 (fallback): {response_image}")
 
             # [6] 응답 반환 (호감도, 자신감, 게임 상태, 선택과목, 나레이션, 능력치, 시간표, 날짜, 체력 포함)
+            print(f"[FINAL_RESPONSE_DEBUG] game_state: {new_state}")
+            print(f"[FINAL_RESPONSE_DEBUG] narration length: {len(narration) if narration else 0}")
+            if narration:
+                print(f"[FINAL_RESPONSE_DEBUG] narration content: {narration[:300]}...")
+
             return {
                 'reply': reply,
                 'image': response_image,

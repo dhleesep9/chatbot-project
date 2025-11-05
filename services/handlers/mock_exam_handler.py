@@ -64,7 +64,8 @@ class MockExamHandler(BaseStateHandler):
         # 취약점 정보 저장 (피드백에서 사용)
         self.service.mock_exam_weakness[username] = {
             "subject": weak_subject,
-            "message": weakness_message
+            "message": weakness_message,
+            "scores": mock_exam_scores  # 성적표도 함께 저장
         }
 
         print(f"[MOCK_EXAM] {username}의 사설모의고사 성적표 생성 완료. 취약 과목: {weak_subject}")
@@ -127,7 +128,8 @@ class MockExamHandler(BaseStateHandler):
             # 취약점 정보 저장
             self.service.mock_exam_weakness[username] = {
                 "subject": weak_subject,
-                "message": weakness_message
+                "message": weakness_message,
+                "scores": mock_exam_scores  # 성적표도 함께 저장
             }
 
             print(f"[MOCK_EXAM] 성적표 재생성 완료. 취약 과목: {weak_subject}")

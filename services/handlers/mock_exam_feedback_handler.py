@@ -40,6 +40,7 @@ class MockExamFeedbackHandlerBase(BaseStateHandler):
         weakness_info = weakness_storage.get(username, {})
         weak_subject = weakness_info.get("subject")
         weakness_message = weakness_info.get("message")
+        mock_exam_scores = weakness_info.get("scores", {})
 
         if not weak_subject or not weakness_message:
             print(f"[{self.EXAM_NAME.upper()}_WARN] 취약점 정보가 없습니다.")
@@ -59,10 +60,19 @@ class MockExamFeedbackHandlerBase(BaseStateHandler):
 
         print(f"[{self.EXAM_NAME.upper()}] 취약점 메시지 표시: {weakness_message}")
 
+        # 성적표 narration 생성 (저장된 scores 사용)
+        score_narration = None
+        if mock_exam_scores:
+            score_lines = []
+            for subject, score_data in mock_exam_scores.items():
+                score_lines.append(f"- {subject}: {score_data['grade']}등급 (백분위 {score_data['percentile']}%)")
+            score_narration = "사설모의고사 성적표가 발표되었습니다:\n" + "\n".join(score_lines)
+            print(f"[{self.EXAM_NAME.upper()}] 성적표 narration 생성 완료: {score_narration[:100]}...")
+
         return {
             'skip_llm': True,  # 이미 완성된 메시지이므로 LLM 호출 불필요
             'reply': f"[{state_name}] {weakness_message}{guidance_message}",
-            'narration': None  # narration은 이미 mock_exam에서 설정되었음
+            'narration': score_narration  # 성적표 narration 직접 반환
         }
 
     def _parse_subject_from_weakness_message(self, user_message: str) -> Optional[str]:
