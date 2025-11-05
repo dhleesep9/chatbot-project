@@ -2736,12 +2736,22 @@ class ChatbotService:
             official_mock_exam_advice_user_input = None  # 정규모의고사 사용자의 조언 내용
             official_mock_exam_advice_is_good = None  # 정규모의고사 조언 적절성 플래그
             
-            if new_state == "mock_exam" and current_state != "mock_exam":
-                # Handler로 처리 (on_enter 사용)
-                handler_result = self.handler_registry.call_on_enter(
-                    'mock_exam', username,
-                    {'current_state': current_state, 'new_state': new_state}
-                )
+            if new_state == "mock_exam":
+                # state 진입 시 on_enter 호출, 이미 mock_exam 상태라면 handle 호출
+                if current_state != "mock_exam":
+                    # Handler로 처리 (on_enter 사용)
+                    handler_result = self.handler_registry.call_on_enter(
+                        'mock_exam', username,
+                        {'current_state': current_state, 'new_state': new_state}
+                    )
+                else:
+                    # 이미 mock_exam 상태인 경우 handle 호출 (성적표 재표시 및 전환)
+                    print(f"[MOCK_EXAM] {username}이(가) 이미 mock_exam 상태입니다. handle() 호출")
+                    handler_result = self.handler_registry.call_handle(
+                        'mock_exam', username, user_message,
+                        {'current_state': current_state, 'new_state': new_state}
+                    )
+
                 if handler_result:
                     if handler_result.get('skip_llm'):
                         mock_exam_processed = True
