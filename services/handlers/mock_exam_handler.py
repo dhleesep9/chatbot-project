@@ -74,9 +74,11 @@ class MockExamHandler(BaseStateHandler):
         state_info = self.service._get_state_info("mock_exam")
         state_name = state_info.get("name", "사설모의고사 응시") if state_info else "사설모의고사 응시"
 
+        # mock_exam에서는 성적표 narration만 표시하고,
+        # reply는 mock_exam_feedback의 on_enter에서 표시
         return {
             'skip_llm': True,  # LLM 호출 건너뛰기
-            'reply': f"[{state_name}] {weakness_message}",
+            'reply': None,  # mock_exam_feedback의 on_enter에서 표시
             'narration': mock_exam_narration,
             'transition_to': 'mock_exam_feedback',
             'data': {

@@ -21,6 +21,50 @@ class MockExamFeedbackHandlerBase(BaseStateHandler):
     RETEST_KEYWORD = None  # "사설모의고사 응시" (mock only, official은 None)
     ABILITY_SCALE = None  # 능력치 스케일 팩터 (6월: 10, 9월: 20)
 
+    def on_enter(self, username: str, context: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        mock_exam_feedback 상태 진입 시 처리
+        취약점 메시지와 안내를 표시
+
+        Args:
+            username: 사용자 이름
+            context: 실행 컨텍스트
+
+        Returns:
+            Dict: 처리 결과
+        """
+        print(f"[{self.EXAM_NAME.upper()}] {username}이(가) {self.EXAM_NAME} 상태에 진입했습니다.")
+
+        # 취약점 정보 가져오기
+        weakness_storage = getattr(self.service, self.WEAKNESS_STORAGE_ATTR)
+        weakness_info = weakness_storage.get(username, {})
+        weak_subject = weakness_info.get("subject")
+        weakness_message = weakness_info.get("message")
+
+        if not weak_subject or not weakness_message:
+            print(f"[{self.EXAM_NAME.upper()}_WARN] 취약점 정보가 없습니다.")
+            # 취약점 정보가 없으면 기본 메시지
+            return {
+                'skip_llm': False,
+                'reply': None,
+                'narration': f"{self.EXAM_DISPLAY_NAME} 성적표를 확인하고 조언을 주세요."
+            }
+
+        # state 정보 가져오기
+        state_info = self.service._get_state_info(self.EXAM_NAME)
+        state_name = state_info.get("name", self.EXAM_DISPLAY_NAME) if state_info else self.EXAM_DISPLAY_NAME
+
+        # 취약점 메시지와 안내 표시
+        guidance_message = f"\n\n성적표를 확인하고, {weak_subject} 과목에 대한 조언을 해주세요."
+
+        print(f"[{self.EXAM_NAME.upper()}] 취약점 메시지 표시: {weakness_message}")
+
+        return {
+            'skip_llm': True,  # 이미 완성된 메시지이므로 LLM 호출 불필요
+            'reply': f"[{state_name}] {weakness_message}{guidance_message}",
+            'narration': None  # narration은 이미 mock_exam에서 설정되었음
+        }
+
     def _parse_subject_from_weakness_message(self, user_message: str) -> Optional[str]:
         """
         사용자 메시지에서 과목명 추출

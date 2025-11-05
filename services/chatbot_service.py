@@ -3034,40 +3034,71 @@ class ChatbotService:
                         september_subject_problem_reply = handler_result['subject_problem_reply']
 
             # [1.7.6] 사설모의고사 피드백 처리 (Handler 사용)
-            if current_state == "mock_exam_feedback" and new_state != "mock_exam":
-                handler_result = self.handler_registry.call_handle(
-                    'mock_exam_feedback', username, user_message,
-                    {'current_state': current_state, 'new_state': new_state}
-                )
-                if handler_result:
-                    # 재응시 요청 처리
-                    if handler_result.get('retest'):
-                        self._set_game_state(username, 'mock_exam')
-                        new_state = 'mock_exam'
-                        state_changed = True
-                        mock_exam_processed = True
+            if new_state == "mock_exam_feedback":
+                # state 진입 시 on_enter 호출 (첫 메시지 표시)
+                if state_changed or current_state != "mock_exam_feedback":
+                    print(f"[MOCK_EXAM_FEEDBACK] {username}이(가) mock_exam_feedback 상태에 진입했습니다. on_enter() 호출")
+                    handler_result = self.handler_registry.call_on_enter(
+                        'mock_exam_feedback', username,
+                        {'current_state': current_state, 'new_state': new_state}
+                    )
 
-                    # LLM 호출 건너뛰기 설정
-                    if handler_result.get('skip_llm') is not None:
-                        if not handler_result.get('skip_llm'):
-                            # LLM으로 반응 생성해야 함
-                            mock_exam_advice_user_input = handler_result.get('advice_user_input')
-                            mock_exam_advice_is_good = handler_result.get('advice_is_good')
-                            mock_exam_advice_reply = None  # 나중에 LLM으로 생성
-                        else:
+                    if handler_result:
+                        # on_enter의 결과 처리
+                        if handler_result.get('skip_llm'):
                             mock_exam_processed = True
 
-                    # 즉시 reply가 있으면 설정
-                    if handler_result.get('reply'):
-                        reply = handler_result.get('reply')
-                        mock_exam_processed = True
+                        if handler_result.get('reply'):
+                            # reply가 있으면 기존 reply와 병합 또는 대체
+                            on_enter_reply = handler_result.get('reply')
+                            if reply:
+                                reply = f"{reply}\n\n{on_enter_reply}"
+                            else:
+                                reply = on_enter_reply
 
-                    # 헬퍼로 narration 및 전이 처리
-                    narration, transition_to, handler_state_changed = self._process_handler_result(handler_result, narration)
-                    if transition_to:
-                        self._set_game_state(username, transition_to)
-                        new_state = transition_to
-                        state_changed = handler_state_changed
+                        # narration 처리
+                        narration, transition_to, handler_state_changed = self._process_handler_result(handler_result, narration)
+                        if transition_to:
+                            self._set_game_state(username, transition_to)
+                            new_state = transition_to
+                            state_changed = handler_state_changed
+                else:
+                    # 이미 mock_exam_feedback 상태인 경우 handle 호출 (사용자 조언 처리)
+                    print(f"[MOCK_EXAM_FEEDBACK] {username}이(가) mock_exam_feedback 상태에서 입력했습니다. handle() 호출")
+                    handler_result = self.handler_registry.call_handle(
+                        'mock_exam_feedback', username, user_message,
+                        {'current_state': current_state, 'new_state': new_state}
+                    )
+
+                    if handler_result:
+                        # 재응시 요청 처리
+                        if handler_result.get('retest'):
+                            self._set_game_state(username, 'mock_exam')
+                            new_state = 'mock_exam'
+                            state_changed = True
+                            mock_exam_processed = True
+
+                        # LLM 호출 건너뛰기 설정
+                        if handler_result.get('skip_llm') is not None:
+                            if not handler_result.get('skip_llm'):
+                                # LLM으로 반응 생성해야 함
+                                mock_exam_advice_user_input = handler_result.get('advice_user_input')
+                                mock_exam_advice_is_good = handler_result.get('advice_is_good')
+                                mock_exam_advice_reply = None  # 나중에 LLM으로 생성
+                            else:
+                                mock_exam_processed = True
+
+                        # 즉시 reply가 있으면 설정
+                        if handler_result.get('reply'):
+                            reply = handler_result.get('reply')
+                            mock_exam_processed = True
+
+                        # 헬퍼로 narration 및 전이 처리
+                        narration, transition_to, handler_state_changed = self._process_handler_result(handler_result, narration)
+                        if transition_to:
+                            self._set_game_state(username, transition_to)
+                            new_state = transition_to
+                            state_changed = handler_state_changed
 
             # [1.7.7] 정규모의고사 피드백 처리 (Handler 사용)
             official_mock_exam_grade_info = None  # 등급 정보 저장 (프롬프트에 추가용)
