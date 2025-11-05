@@ -155,7 +155,10 @@ class ChatbotService:
         from services.handlers.exam_strategy_handler import ExamStrategyHandler
         from services.handlers.study_schedule_handler import StudyScheduleHandler
         from services.handlers.mock_exam_handler import MockExamHandler
-        from services.handlers.official_exam_handler import JuneExamHandler, SeptemberExamHandler, CSATExamHandler
+        from services.handlers.official_exam_handler import (
+            SixExamPreHandler, NineExamPreHandler, ElevenExamPreHandler,
+            JuneExamHandler, SeptemberExamHandler, CSATExamHandler
+        )
         from services.handlers.subject_selection_handler import SubjectSelectionHandler
         from services.handlers.exam_feedback_handler import JuneExamFeedbackHandler, SeptemberExamFeedbackHandler
         from services.handlers.mock_exam_feedback_handler import MockExamFeedbackHandler, OfficialMockExamFeedbackHandler
@@ -165,6 +168,9 @@ class ChatbotService:
         self.handler_registry.register('exam_strategy', ExamStrategyHandler(self))
         self.handler_registry.register('study_schedule', StudyScheduleHandler(self))
         self.handler_registry.register('mock_exam', MockExamHandler(self))
+        self.handler_registry.register('6exam_pre', SixExamPreHandler(self))
+        self.handler_registry.register('9exam_pre', NineExamPreHandler(self))
+        self.handler_registry.register('11exam_pre', ElevenExamPreHandler(self))
         self.handler_registry.register('6exam', JuneExamHandler(self))
         self.handler_registry.register('9exam', SeptemberExamHandler(self))
         self.handler_registry.register('11exam', CSATExamHandler(self))
@@ -174,7 +180,7 @@ class ChatbotService:
         self.handler_registry.register('mock_exam_feedback', MockExamFeedbackHandler(self))
         self.handler_registry.register('official_mock_exam_feedback', OfficialMockExamFeedbackHandler(self))
         self.handler_registry.register('university_application', UniversityApplicationHandler(self))
-        print(f"[ChatbotService] handler registry loaded: exam_strategy, study_schedule, mock_exam, 6exam, 9exam, 11exam, selection, 6exam_feedback, 9exam_feedback, mock_exam_feedback, official_mock_exam_feedback, university_application")
+        print(f"[ChatbotService] handler registry loaded: exam_strategy, study_schedule, mock_exam, 6exam_pre, 9exam_pre, 11exam_pre, 6exam, 9exam, 11exam, selection, 6exam_feedback, 9exam_feedback, mock_exam_feedback, official_mock_exam_feedback, university_application")
 
         # 2. OpenAI Client 초기화
         try:
@@ -2546,22 +2552,22 @@ class ChatbotService:
                         exam_month_str = exam_name.replace('월 모의고사', '').replace('월', '').zfill(2)
                         exam_month = f"2024-{exam_month_str}" if exam_month_str else None
                     
-                    # 11월 수능인 경우 11exam 상태로 전이
+                    # 11월 수능인 경우 11exam_pre 상태로 전이
                     if exam_month and exam_month.endswith("-11"):
                         # 11exam 성적 정보 초기화
                         self.csat_exam_scores[username] = {
                             "scores": None  # handler에서 계산
                         }
-                        
-                        # 상태를 11exam으로 전이
-                        self._set_game_state(username, "11exam")
-                        new_state = "11exam"
+
+                        # 상태를 11exam_pre로 전이
+                        self._set_game_state(username, "11exam_pre")
+                        new_state = "11exam_pre"
                         state_changed = True
-                        
-                        # 수능 완료 안내
-                        week_advance_narration = f"{week_result['week']}주차가 완료되었습니다. 수능이 끝났습니다."
-                        print(f"[11EXAM] 멘토링 종료로 인한 수능 - 11exam 상태로 전이")
-                    # 6월 모의고사인 경우 6exam 상태로 전이
+
+                        # 수능 응원 안내
+                        week_advance_narration = f"{week_result['week']}주차가 완료되었습니다. 오늘은 수능입니다."
+                        print(f"[11EXAM_PRE] 멘토링 종료로 인한 수능 - 11exam_pre 상태로 전이")
+                    # 6월 모의고사인 경우 6exam_pre 상태로 전이
                     elif exam_month and exam_month.endswith("-06"):
                         # 6exam 진행 정보 초기화 (전략 관련 정보 제거)
                         self.exam_progress[username] = {
@@ -2569,31 +2575,31 @@ class ChatbotService:
                             "subject_order": ["국어", "수학", "영어", "탐구1", "탐구2"],
                             "subjects_completed": []
                         }
-                        
-                        # 상태를 6exam으로 전이
-                        self._set_game_state(username, "6exam")
-                        new_state = "6exam"
+
+                        # 상태를 6exam_pre로 전이
+                        self._set_game_state(username, "6exam_pre")
+                        new_state = "6exam_pre"
                         state_changed = True
-                        
-                        # 6월 모의고사 완료 안내
-                        week_advance_narration = f"{week_result['week']}주차가 완료되었습니다. 6월 모의고사가 끝났습니다."
-                        print(f"[6EXAM] 멘토링 종료로 인한 6월 모의고사 - 6exam 상태로 전이")
+
+                        # 6월 모의고사 응원 안내
+                        week_advance_narration = f"{week_result['week']}주차가 완료되었습니다. 오늘은 6월 평가원 모의고사입니다."
+                        print(f"[6EXAM_PRE] 멘토링 종료로 인한 6월 모의고사 - 6exam_pre 상태로 전이")
                     elif exam_month and exam_month.endswith("-09"):
-                        # 9월 모의고사인 경우 9exam 상태로 전이
+                        # 9월 모의고사인 경우 9exam_pre 상태로 전이
                         self.september_exam_problems[username] = {
                             "current_subject": None,
                             "subject_order": ["국어", "수학", "영어", "탐구1", "탐구2"],
                             "subjects_completed": []
                         }
-                        
-                        # 상태를 9exam으로 전이
-                        self._set_game_state(username, "9exam")
-                        new_state = "9exam"
+
+                        # 상태를 9exam_pre로 전이
+                        self._set_game_state(username, "9exam_pre")
+                        new_state = "9exam_pre"
                         state_changed = True
-                        
-                        # 9월 모의고사 완료 안내
-                        week_advance_narration = f"{week_result['week']}주차가 완료되었습니다. 9월 모의고사가 끝났습니다."
-                        print(f"[9EXAM] 멘토링 종료로 인한 9월 모의고사 - 9exam 상태로 전이")
+
+                        # 9월 모의고사 응원 안내
+                        week_advance_narration = f"{week_result['week']}주차가 완료되었습니다. 오늘은 9월 평가원 모의고사입니다."
+                        print(f"[9EXAM_PRE] 멘토링 종료로 인한 9월 모의고사 - 9exam_pre 상태로 전이")
                     elif exam_month and self._is_official_mock_exam_month(exam_month):
                         # 취약점 식별
                         exam_scores = exam_result.get('scores', {})
@@ -2756,6 +2762,35 @@ class ChatbotService:
                         mock_exam_weakness_reply = weakness_message
                         mock_exam_grade_reaction_reply = handler_result['data'].get('grade_reaction')
             
+            # [1.7.5.4] 6exam_pre, 9exam_pre, 11exam_pre 상태 처리 (시험 응원)
+            # _pre 상태 핸들러 처리
+            if new_state in ["6exam_pre", "9exam_pre", "11exam_pre"]:
+                # state 진입 시 on_enter 호출 (첫 메시지 표시)
+                if state_changed:
+                    handler_result = self.handler_registry.call_on_enter(
+                        new_state, username,
+                        {'current_state': current_state, 'new_state': new_state}
+                    )
+                else:
+                    # state 진입 이후에는 handle 호출
+                    handler_result = self.handler_registry.call_handle(
+                        new_state, username, user_message,
+                        {'current_state': current_state, 'new_state': new_state}
+                    )
+
+                if handler_result:
+                    # handler에서 반환한 fixed_reply 저장 (state의 fixed_reply보다 우선)
+                    if handler_result.get('fixed_reply'):
+                        handler_fixed_reply = handler_result.get('fixed_reply')
+                        print(f"[{new_state.upper()}] handler에서 fixed_reply 반환: {handler_fixed_reply}")
+
+                    # 헬퍼로 narration 및 전이 처리
+                    narration, transition_to, handler_state_changed = self._process_handler_result(handler_result, narration)
+                    if transition_to:
+                        self._set_game_state(username, transition_to)
+                        new_state = transition_to
+                        state_changed = handler_state_changed
+
             # [1.7.5.5] 6exam 상태 처리 (전략 수집 → 시험 진행 → 피드백)
             # june_exam_intro_reply는 이미 위에서 선언됨
             june_subject_problem_reply = None  # 과목별 문제점 메시지
@@ -2764,7 +2799,7 @@ class ChatbotService:
             june_exam_advice_reply = None  # 조언에 대한 서가윤의 반응 (LLM 생성)
             mock_exam_grade_reaction_reply = None  # 사설모의고사 등급대별 반응 (서가윤이 reply로 말함)
             official_mock_exam_grade_reaction_reply = None  # 정규모의고사 등급대별 반응 (서가윤이 reply로 말함)
-            
+
             # 6exam 상태 처리 (질문 시 바로 성적 발표 → 피드백)
             if new_state == "6exam":
                 # state 진입 시 on_enter 호출 (첫 메시지 표시)
@@ -3148,21 +3183,21 @@ class ChatbotService:
                         if exam_month:
                             exam_name = exam_result.get('name', '') if exam_result else ("수능" if exam_month.endswith("-11") else f"{exam_month[-2:]}월 모의고사")
                             
-                            # 11월 수능인 경우 11exam 상태로 전이
+                            # 11월 수능인 경우 11exam_pre 상태로 전이
                             if exam_month and exam_month.endswith("-11"):
                                 # 11exam 성적 정보 초기화
                                 self.csat_exam_scores[username] = {
                                     "scores": None  # handler에서 계산
                                 }
-                                
-                                # 상태를 11exam으로 전이
-                                self._set_game_state(username, "11exam")
-                                new_state = "11exam"
+
+                                # 상태를 11exam_pre로 전이
+                                self._set_game_state(username, "11exam_pre")
+                                new_state = "11exam_pre"
                                 state_changed = True
-                                
-                                # 수능 완료 안내
-                                print(f"[11EXAM] {username}의 수능 자동 진입 - 11exam 상태로 전이")
-                            # 6월 모의고사인 경우 6exam 상태로 전이
+
+                                # 수능 응원 안내
+                                print(f"[11EXAM_PRE] {username}의 수능 자동 진입 - 11exam_pre 상태로 전이")
+                            # 6월 모의고사인 경우 6exam_pre 상태로 전이
                             elif exam_month and exam_month.endswith("-06"):
                                 # 6exam 진행 정보 초기화 (전략 관련 정보 제거)
                                 self.exam_progress[username] = {
@@ -3170,29 +3205,29 @@ class ChatbotService:
                                     "subject_order": ["국어", "수학", "영어", "탐구1", "탐구2"],
                                     "subjects_completed": []
                                 }
-                                
-                                # 상태를 6exam으로 전이
-                                self._set_game_state(username, "6exam")
-                                new_state = "6exam"
+
+                                # 상태를 6exam_pre로 전이
+                                self._set_game_state(username, "6exam_pre")
+                                new_state = "6exam_pre"
                                 state_changed = True
-                                
-                                # 6월 모의고사 완료 안내
-                                print(f"[6EXAM] {username}의 6월 모의고사 자동 진입 - 6exam 상태로 전이")
+
+                                # 6월 모의고사 응원 안내
+                                print(f"[6EXAM_PRE] {username}의 6월 모의고사 자동 진입 - 6exam_pre 상태로 전이")
                             elif exam_month and exam_month.endswith("-09"):
-                                # 9월 모의고사인 경우 9exam 상태로 전이
+                                # 9월 모의고사인 경우 9exam_pre 상태로 전이
                                 self.september_exam_problems[username] = {
                                     "current_subject": None,
                                     "subject_order": ["국어", "수학", "영어", "탐구1", "탐구2"],
                                     "subjects_completed": []
                                 }
-                                
-                                # 상태를 9exam으로 전이
-                                self._set_game_state(username, "9exam")
-                                new_state = "9exam"
+
+                                # 상태를 9exam_pre로 전이
+                                self._set_game_state(username, "9exam_pre")
+                                new_state = "9exam_pre"
                                 state_changed = True
-                                
-                                # 9월 모의고사 완료 안내
-                                print(f"[9EXAM] {username}의 9월 모의고사 자동 진입 - 9exam 상태로 전이")
+
+                                # 9월 모의고사 응원 안내
+                                print(f"[9EXAM_PRE] {username}의 9월 모의고사 자동 진입 - 9exam_pre 상태로 전이")
                             # 정규 모의고사인 경우 자동으로 official_mock_exam_feedback으로 전이
                             elif self._is_official_mock_exam_month(exam_month):
                                 # 취약점 식별

@@ -1,13 +1,155 @@
 """Official Exam State Handler
 
-6월/9월 모의고사 state에서의 로직을 처리합니다.
-- 질문 키워드 확인
-- 성적 발표
-- feedback state로 자동 전이
+6exam_pre/9exam_pre/11exam_pre와 6exam/9exam/11exam state에서의 로직을 처리합니다.
+- _pre state: 시험 전 응원 메시지 표시
+- exam state: 성적 발표
 """
 
 from typing import Dict, Any, Optional
 from services.handlers.base_handler import BaseStateHandler
+
+
+class ExamPreHandlerBase(BaseStateHandler):
+    """6exam_pre, 9exam_pre, 11exam_pre의 공통 로직을 처리하는 base class"""
+
+    # 서브클래스에서 정의해야 할 속성
+    EXAM_NAME = None  # "6exam_pre" or "9exam_pre" or "11exam_pre"
+    EXAM_DISPLAY_NAME = None  # "6월 평가원 모의고사" or "9월 평가원 모의고사" or "수능"
+
+    def on_enter(self, username: str, context: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        시험 전 응원 메시지 표시
+
+        Args:
+            username: 사용자 이름
+            context: 실행 컨텍스트
+
+        Returns:
+            Dict: 처리 결과
+        """
+        raise NotImplementedError("Subclass must implement on_enter")
+
+
+class SixExamPreHandler(ExamPreHandlerBase):
+    """6exam_pre state handler"""
+    EXAM_NAME = "6exam_pre"
+    EXAM_DISPLAY_NAME = "6월 평가원 모의고사"
+
+    def on_enter(self, username: str, context: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        6월 모의고사 전 응원 메시지 표시
+
+        Args:
+            username: 사용자 이름
+            context: 실행 컨텍스트
+
+        Returns:
+            Dict: 처리 결과
+        """
+        # 호감도 가져오기
+        affection = self.service._get_affection(username)
+
+        # 호감도에 따른 메시지 선택 (배열로 분리)
+        if affection >= 50:
+            # \n으로 구분하여 별도의 말뭉치로 출력
+            fixed_reply = [
+                "쌤 ... 너무 떨려용..",
+                "재수 시작하고 제대로 치는 첫 평가원 모의고사에요...",
+                "저 잘 할 수 있겠죠 ..??  응원해주세요 ㅠㅠ"
+            ]
+        else:
+            fixed_reply = ["썜 .. 잘하고 올게요.. ㅠ"]
+
+        print(f"[{self.EXAM_NAME.upper()}] {username}의 호감도: {affection} - 메시지 개수: {len(fixed_reply)}")
+
+        # narration은 state JSON에 정의되어 있으므로 여기서는 None
+        return {
+            'skip_llm': True,  # LLM 호출 건너뛰기
+            'fixed_reply': fixed_reply,  # 배열로 반환
+            'narration': None,  # state JSON의 narration 사용
+            'transition_to': None
+        }
+
+
+class NineExamPreHandler(ExamPreHandlerBase):
+    """9exam_pre state handler"""
+    EXAM_NAME = "9exam_pre"
+    EXAM_DISPLAY_NAME = "9월 평가원 모의고사"
+
+    def on_enter(self, username: str, context: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        9월 모의고사 전 응원 메시지 표시
+
+        Args:
+            username: 사용자 이름
+            context: 실행 컨텍스트
+
+        Returns:
+            Dict: 처리 결과
+        """
+        # 고정 메시지 (배열로 분리)
+        fixed_reply = [
+            "쌤, 이번엔 진짜 잡을 거예요.",
+            "9평은… 절대 안 망할꺼에요!!!!"
+        ]
+
+        print(f"[{self.EXAM_NAME.upper()}] {username} - 메시지 개수: {len(fixed_reply)}")
+
+        # narration은 state JSON에 정의되어 있으므로 여기서는 None
+        return {
+            'skip_llm': True,  # LLM 호출 건너뛰기
+            'fixed_reply': fixed_reply,  # 배열로 반환
+            'narration': None,  # state JSON의 narration 사용
+            'transition_to': None
+        }
+
+
+class ElevenExamPreHandler(ExamPreHandlerBase):
+    """11exam_pre state handler"""
+    EXAM_NAME = "11exam_pre"
+    EXAM_DISPLAY_NAME = "수능"
+
+    def on_enter(self, username: str, context: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        수능 전 응원 메시지 표시
+
+        Args:
+            username: 사용자 이름
+            context: 실행 컨텍스트
+
+        Returns:
+            Dict: 처리 결과
+        """
+        # 호감도와 멘탈 가져오기
+        affection = self.service._get_affection(username)
+        mental = self.service._get_mental(username)
+
+        # 우선순위대로 메시지 선택 (배열로 분리)
+        if mental < 30:
+            # 멘탈 30 미만 (최우선)
+            fixed_reply = [
+                "선생님 ㅠㅠㅠㅠ 저 잘 볼 수 있겠죠??",
+                "너무 불안하고 떨려요 ... 아는 것도 다 실수 할 거 같아요 ...."
+            ]
+        elif affection < 20:
+            # 호감도 20 미만
+            fixed_reply = ["....."]
+        elif affection < 50:
+            # 호감도 50 미만
+            fixed_reply = ["선생님 저 잘 보고 올게요 .."]
+        else:
+            # 호감도 50 이상
+            fixed_reply = ["쌤,  최선을 다해서 잘 보고 올게요...! 저 위해서 꼭 기도해주셔야 해요 !!"]
+
+        print(f"[{self.EXAM_NAME.upper()}] {username}의 호감도: {affection}, 멘탈: {mental} - 메시지 개수: {len(fixed_reply)}")
+
+        # narration은 state JSON에 정의되어 있으므로 여기서는 None
+        return {
+            'skip_llm': True,  # LLM 호출 건너뛰기
+            'fixed_reply': fixed_reply,  # 배열로 반환
+            'narration': None,  # state JSON의 narration 사용
+            'transition_to': None
+        }
 
 
 class OfficialExamHandlerBase(BaseStateHandler):
@@ -125,43 +267,6 @@ class JuneExamHandler(OfficialExamHandlerBase):
     FEEDBACK_STATE = "6exam_feedback"
     PROBLEM_STORAGE_ATTR = "june_exam_problems"
 
-    def on_enter(self, username: str, context: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """
-        6exam state 진입 시 호감도에 따라 다른 fixed_reply 설정
-
-        Args:
-            username: 사용자 이름
-            context: 실행 컨텍스트
-
-        Returns:
-            Dict: 처리 결과
-        """
-        # 호감도 가져오기
-        affection = self.service._get_affection(username)
-
-        # 호감도에 따른 메시지 선택 (배열로 분리)
-        if affection >= 50:
-            # \n으로 구분하여 별도의 말뭉치로 출력
-            fixed_reply = [
-                "쌤 ... 너무 떨려용..",
-                "재수 시작하고 제대로 치는 첫 평가원 모의고사에요...",
-                "저 잘 할 수 있겠죠 ..??  응원해주세요 ㅠㅠ"
-            ]
-        else:
-            fixed_reply = ["썜 .. 잘하고 올게요.. ㅠ"]
-
-        print(f"[6EXAM] {username}의 호감도: {affection} - 메시지 개수: {len(fixed_reply)}")
-
-        # narration 설정
-        narration = "6월 모의고사가 끝났습니다."
-
-        return {
-            'skip_llm': True,  # LLM 호출 건너뛰기
-            'fixed_reply': fixed_reply,  # 배열로 반환
-            'narration': narration,
-            'transition_to': None
-        }
-
 
 class SeptemberExamHandler(OfficialExamHandlerBase):
     """9exam state handler"""
@@ -170,35 +275,6 @@ class SeptemberExamHandler(OfficialExamHandlerBase):
     FEEDBACK_STATE = "9exam_feedback"
     PROBLEM_STORAGE_ATTR = "september_exam_problems"
 
-    def on_enter(self, username: str, context: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """
-        9exam state 진입 시 챗봇 메시지와 나래이션 설정
-
-        Args:
-            username: 사용자 이름
-            context: 실행 컨텍스트
-
-        Returns:
-            Dict: 처리 결과
-        """
-        # 고정 메시지 (배열로 분리)
-        fixed_reply = [
-            "쌤, 이번엔 진짜 잡을 거예요.",
-            "9평은… 절대 안 망할꺼에요!!!!"
-        ]
-
-        print(f"[9EXAM] {username} - 메시지 개수: {len(fixed_reply)}")
-
-        # narration 설정
-        narration = "9월 모의고사가 끝났습니다."
-
-        return {
-            'skip_llm': True,  # LLM 호출 건너뛰기
-            'fixed_reply': fixed_reply,  # 배열로 반환
-            'narration': narration,
-            'transition_to': None
-        }
-
 
 class CSATExamHandler(OfficialExamHandlerBase):
     """11exam state handler (수능) - 피드백 없이 성적 발표만"""
@@ -206,50 +282,6 @@ class CSATExamHandler(OfficialExamHandlerBase):
     EXAM_DISPLAY_NAME = "수능"
     FEEDBACK_STATE = None  # 피드백 없음
     PROBLEM_STORAGE_ATTR = "csat_exam_scores"
-
-    def on_enter(self, username: str, context: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """
-        11exam state 진입 시 호감도와 멘탈에 따라 다른 fixed_reply 설정
-
-        Args:
-            username: 사용자 이름
-            context: 실행 컨텍스트
-
-        Returns:
-            Dict: 처리 결과
-        """
-        # 호감도와 멘탈 가져오기
-        affection = self.service._get_affection(username)
-        mental = self.service._get_mental(username)
-
-        # 우선순위대로 메시지 선택 (배열로 분리)
-        if mental < 30:
-            # 멘탈 30 미만 (최우선)
-            fixed_reply = [
-                "선생님 ㅠㅠㅠㅠ 저 잘 볼 수 있겠죠??",
-                "너무 불안하고 떨려요 ... 아는 것도 다 실수 할 거 같아요 ...."
-            ]
-        elif affection < 20:
-            # 호감도 20 미만
-            fixed_reply = ["....."]
-        elif affection < 50:
-            # 호감도 50 미만
-            fixed_reply = ["선생님 저 잘 보고 올게요 .."]
-        else:
-            # 호감도 50 이상
-            fixed_reply = ["쌤,  최선을 다해서 잘 보고 올게요...! 저 위해서 꼭 기도해주셔야 해요 !!"]
-
-        print(f"[11EXAM] {username}의 호감도: {affection}, 멘탈: {mental} - 메시지 개수: {len(fixed_reply)}")
-
-        # narration 설정
-        narration = "오늘은 수능 날입니다. 가윤이 시험을 잘 보고 올 수 있도록 응원해주세요."
-
-        return {
-            'skip_llm': True,  # LLM 호출 건너뛰기
-            'fixed_reply': fixed_reply,  # 배열로 반환
-            'narration': narration,
-            'transition_to': None
-        }
 
     def handle(self, username: str, user_message: str, context: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
@@ -273,53 +305,37 @@ class CSATExamHandler(OfficialExamHandlerBase):
             print(f"[{self.EXAM_NAME.upper()}] 지원 가능 대학 확인 요청 감지: {user_message}")
             return self._handle_university_check(username, user_message)
 
-        # 질문 키워드 확인
-        user_message_lower = user_message.lower()
-        is_asking = any(keyword in user_message_lower for keyword in self.QUESTION_KEYWORDS)
-
         # 성적 정보 확인
         score_storage = getattr(self.service, self.PROBLEM_STORAGE_ATTR, {})
         scores_already_shown = score_storage.get(username, {}).get("scores")
 
-        # 응원 키워드 확인 (성적이 아직 발표되지 않았고, 질문 키워드가 아닌 경우)
-        encouragement_keywords = [
-            "화이팅", "파이팅", "잘하고", "잘 보고", "응원", "힘내", "잘할 수", "할 수 있",
-            "믿어", "수고", "좋은 결과", "좋은결과", "기도", "잘되", "잘 되", "최선", "열심히",
-            "잘봐", "잘 봐", "화이팅!", "파이팅!", "good luck", "goodluck", "파이팅하고"
-        ]
-        is_encouragement = any(keyword in user_message_lower for keyword in encouragement_keywords)
-
-        # 성적이 발표되지 않았고, 응원 메시지인 경우 → 수능 끝 나래이션 + 성적 발표
-        if not scores_already_shown and (is_encouragement or not is_asking):
+        # 성적이 아직 발표되지 않은 경우 성적 발표
+        if not scores_already_shown:
             # 성적 계산 (전략 보너스 없음)
             exam_scores = self.service._calculate_mock_exam_scores(username)
 
-            # 성적표 나레이션 생성 (한 번만)
-            narration = None
-            if not scores_already_shown:
-                score_parts = []
-                for subject in ["국어", "수학", "영어", "탐구1", "탐구2"]:
-                    if subject in exam_scores:
-                        score_data = exam_scores[subject]
-                        score_parts.append(f"{subject} {score_data['grade']}등급 (백분위 {score_data['percentile']}%)")
+            # 성적표 나레이션 생성
+            score_parts = []
+            for subject in ["국어", "수학", "영어", "탐구1", "탐구2"]:
+                if subject in exam_scores:
+                    score_data = exam_scores[subject]
+                    score_parts.append(f"{subject} {score_data['grade']}등급 (백분위 {score_data['percentile']}%)")
 
-                # 나레이션: 수능 끝 안내 + 성적표
-                narration = f"수능이 끝났습니다.\n\n{self.EXAM_DISPLAY_NAME} 성적이 발표되었습니다.\n" + " ".join(score_parts)
-                
-                # 성적 정보 저장
-                if not hasattr(self.service, self.PROBLEM_STORAGE_ATTR):
-                    setattr(self.service, self.PROBLEM_STORAGE_ATTR, {})
-                score_storage = getattr(self.service, self.PROBLEM_STORAGE_ATTR)
-                score_storage[username] = {"scores": exam_scores}
+            # 나레이션: 성적표만 (수능 끝 안내는 transition_narration에서 처리)
+            narration = " ".join(score_parts)
 
-                print(f"[{self.EXAM_NAME.upper()}] {username}의 {self.EXAM_DISPLAY_NAME} 성적 발표 완료")
+            # 성적 정보 저장
+            if not hasattr(self.service, self.PROBLEM_STORAGE_ATTR):
+                setattr(self.service, self.PROBLEM_STORAGE_ATTR, {})
+            score_storage = getattr(self.service, self.PROBLEM_STORAGE_ATTR)
+            score_storage[username] = {"scores": exam_scores}
 
-                # 엔딩 조건 체크 (우선순위: 5급 공채 > 유학)
-                transition_to = self._check_public_agent_ending(username, exam_scores)
-                if not transition_to:
-                    transition_to = self._check_world_await_ending(username, exam_scores)
-            else:
-                transition_to = None
+            print(f"[{self.EXAM_NAME.upper()}] {username}의 {self.EXAM_DISPLAY_NAME} 성적 발표 완료")
+
+            # 엔딩 조건 체크 (우선순위: 5급 공채 > 유학)
+            transition_to = self._check_public_agent_ending(username, exam_scores)
+            if not transition_to:
+                transition_to = self._check_world_await_ending(username, exam_scores)
 
             return {
                 'skip_llm': False,  # LLM 호출 진행
@@ -330,8 +346,8 @@ class CSATExamHandler(OfficialExamHandlerBase):
                     'exam_scores': exam_scores
                 }
             }
-        # 질문이 들어왔고 성적이 이미 발표된 경우 (재확인)
-        elif is_asking and scores_already_shown:
+        # 성적이 이미 발표된 경우 (재확인)
+        elif scores_already_shown:
             # 이미 발표된 성적을 다시 보여줌
             exam_scores = scores_already_shown
 
