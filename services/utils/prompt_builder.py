@@ -25,6 +25,27 @@ def should_include_full_character_info(conversation_count: int) -> bool:
     return False
 
 
+def should_include_career_info(conversation_count: int) -> bool:
+    """
+    진로 정보를 포함할지 여부를 결정 (10n-9 패턴: 1, 11, 21, 31, 41, ...)
+
+    Args:
+        conversation_count: 현재 대화 카운트
+
+    Returns:
+        bool: True면 진로 정보 포함, False면 제외
+    """
+    # 1일 때
+    if conversation_count == 1:
+        return True
+
+    # 11, 21, 31, 41, ... (10n + 1 형태, 즉 10n-9 형태)
+    if conversation_count >= 11 and (conversation_count - 1) % 10 == 0:
+        return True
+
+    return False
+
+
 def get_affection_tone(config: Dict, affection: int) -> str:
     """
     호감도 구간에 따른 말투 지시사항 반환 (chatbot_config.json에서만 읽어옴)
@@ -223,12 +244,10 @@ def build_user_prompt(
     official_mock_exam_grade_info: dict = None,
     current_week: int = 0,
     last_mock_exam_week: int = -1,
-    memory_context: str = None,
-    career_info: str = None,
-    affection_tone: str = None
+    memory_context: str = None
 ) -> str:
     """
-    사용자 프롬프트 생성 (모든 프롬프트 요소는 평등하게 적용됨)
+    사용자 프롬프트 생성
 
     Args:
         user_message: 사용자 메시지
@@ -242,62 +261,32 @@ def build_user_prompt(
         current_week: 현재 주차
         last_mock_exam_week: 마지막 사설모의고사 주차
         memory_context: 대화 메모리 컨텍스트 (과거 대화 요약 + 최근 대화)
-        career_info: 진로 정보 (진로 관련 키워드가 있을 때만 포함)
-        affection_tone: 호감도 말투
 
     Returns:
         str: 사용자 프롬프트
     """
-    # 모든 프롬프트 요소를 동등한 가중치로 수집 (순서에 의존하지 않음)
-    instruction_sections = []
+    prompt_parts = []
 
-    # 호감도 말투
-    if affection_tone and affection_tone.strip():
-        instruction_sections.append(affection_tone.strip())
-
-    # 게임 상태 컨텍스트
-    if state_context and state_context.strip():
-        instruction_sections.append(state_context.strip())
-    
-    # 사설모의고사 제한 안내
+    if state_context:
+        prompt_parts.append(state_context)
+    # 사설모의고사 한 주에 한 번 제한 안내
     if current_week == last_mock_exam_week and last_mock_exam_week >= 0:
-        instruction_sections.append(f"이번 주({current_week}주차)에 이미 사설모의고사를 봤습니다. 플레이어가 '사설모의고사 응시'를 요청하면, 이미 이번 주에 봤다는 것을 알려주고 다음 주에 볼 수 있다고 안내하세요.")
-    
-    # 모의고사 피드백 상태 안내
+        prompt_parts.append(f"이번 주({current_week}주차)에 이미 사설모의고사를 봤습니다. 플레이어가 '사설모의고사 응시'를 요청하면, 이미 이번 주에 봤다는 것을 알려주고 다음 주에 볼 수 있다고 안내하세요.")
+    # 6exam_feedback 또는 9exam_feedback 상태에서는 절대로 여러 과목을 한 번에 말하지 않도록 지시
     if game_state == "6exam_feedback" or game_state == "9exam_feedback":
-        instruction_sections.append("절대로 여러 과목(국어, 수학, 영어, 탐구1, 탐구2)을 한 번에 말하지 마세요. 현재 대화하고 있는 과목 하나만 얘기하세요. 예를 들어, 국어에 대해 얘기하고 있다면 국어만 언급하고 수학, 영어, 탐구 등을 함께 말하지 마세요.")
+        prompt_parts.append("절대로 여러 과목(국어, 수학, 영어, 탐구1, 탐구2)을 한 번에 말하지 마세요. 현재 대화하고 있는 과목 하나만 얘기하세요. 예를 들어, 국어에 대해 얘기하고 있다면 국어만 언급하고 수학, 영어, 탐구 등을 함께 말하지 마세요.")
     
-    # 진로 관련 키워드 필터링
-    if career_info and career_info.strip():
-        # 진로 관련 키워드 목록
-        career_keywords = [
-            "진로", "직업", "꿈", "목표", "미래", "장래", "희망", "하고 싶", "되고 싶",
-            "가고 싶", "되려", "가려", "전공", "대학", "학과", "계열", "분야",
-            "의사", "변호사", "교사", "공무원", "엔지니어", "연구원", "기자", "작가"
-        ]
-        
-        # 사용자 메시지에서 진로 관련 키워드 확인
-        user_message_lower = user_message.lower()
-        has_career_keyword = any(keyword in user_message_lower for keyword in career_keywords)
-        
-        # 진로 관련 키워드가 있을 때만 진로 정보 추가
-        if has_career_keyword:
-            instruction_sections.append(career_info.strip())
-    
-    # 모든 지시사항을 동등하게 결합 (순서는 중요하지 않음)
-    prompt = ""
-    if instruction_sections:
-        prompt = "\n\n".join(instruction_sections) + "\n\n"
+    # 프롬프트 조립
+    sys_prompt = "\n\n".join(prompt_parts)
+
+    prompt = sys_prompt.strip() + "\n\n"
 
     # 대화 메모리 추가 (과거 대화 요약 + 최근 대화)
     if memory_context and memory_context.strip():
         prompt += "[대화 기록]\n" + memory_context.strip() + "\n\n"
 
-    # 참고 정보 추가
-    if context and context.strip():
+    if context:
         prompt += "[참고 정보]\n" + context.strip() + "\n\n"
-    
-    # 사용자 메시지 추가
     prompt += f"{username}: {user_message.strip()}"
     return prompt
 

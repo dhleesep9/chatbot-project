@@ -2223,7 +2223,7 @@ class ChatbotService:
 
     def _build_prompt(self, user_message: str, context: str = None, username: str = "사용자", affection: int = 5, game_state: str = "ice_break", selected_subjects: list = None, subject_selected: bool = False, schedule_set: bool = False, official_mock_exam_grade_info: dict = None):
         """LLM 프롬프트 구성 (호감도 및 게임 상태 반영)"""
-        from services.utils.prompt_builder import build_user_prompt, get_affection_tone
+        from services.utils.prompt_builder import build_user_prompt, get_affection_tone, should_include_career_info
         from services.utils.career_manager import get_career_description
 
         if selected_subjects is None:
@@ -2232,12 +2232,15 @@ class ChatbotService:
         # 호감도 말투 추가
         affection_tone = get_affection_tone(self.config, affection)
 
-        # 진로 정보 추가
-        career = self._get_career(username)
+        # 진로 정보 추가 (조건부 - 10n-9: 1, 11, 21, 31, 41, ...)
+        conversation_count = self._get_conversation_count(username)
         career_info = ""
-        if career:
-            career_desc = get_career_description(career)
-            career_info = f"[진로 목표]\n당신의 진로 목표는 '{career}'입니다. ({career_desc})\n플레이어(멘토)가 진로에 대해 물어보면 자연스럽게 자신의 진로 목표와 그 이유, 그리고 그 진로를 향한 열정을 표현하세요."
+        if should_include_career_info(conversation_count):
+            career = self._get_career(username)
+            if career:
+                career_desc = get_career_description(career)
+                career_info = f"[진로 목표]\n당신의 진로 목표는 '{career}'입니다. ({career_desc})\n플레이어(멘토)가 진로에 대해 물어보면 자연스럽게 자신의 진로 목표와 그 이유, 그리고 그 진로를 향한 열정을 표현하세요."
+                print(f"[CAREER_INFO] conversation_count={conversation_count}: 진로 정보 포함 - {career}")
 
         # 게임 상태 컨텍스트
         state_context = self._get_state_context(game_state)
@@ -2252,7 +2255,7 @@ class ChatbotService:
             except Exception as e:
                 print(f"[WARN] 메모리 로드 실패: {e}")
 
-        # 프롬프트 빌드 (career_info와 affection_tone 전달)
+        # 프롬프트 빌드
         user_prompt = build_user_prompt(
             user_message=user_message,
             context=context,
@@ -2264,11 +2267,19 @@ class ChatbotService:
             official_mock_exam_grade_info=official_mock_exam_grade_info,
             current_week=self._get_current_week(username),
             last_mock_exam_week=self.mock_exam_last_week.get(username, -1),
-            memory_context=memory_context,
-            career_info=career_info,
-            affection_tone=affection_tone
+            memory_context=memory_context
         )
 
+        # 호감도 말투와 진로 정보를 앞에 추가
+        prompt_parts = []
+        if affection_tone.strip():
+            prompt_parts.append(affection_tone.strip())
+        if career_info:
+            prompt_parts.append(career_info)
+
+        # 기존 프롬프트와 결합
+        if prompt_parts:
+            return "\n\n".join(prompt_parts) + "\n\n" + user_prompt
         return user_prompt
     
     
