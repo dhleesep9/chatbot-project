@@ -2252,7 +2252,7 @@ class ChatbotService:
             except Exception as e:
                 print(f"[WARN] 메모리 로드 실패: {e}")
 
-        # 프롬프트 빌드
+        # 프롬프트 빌드 (career_info와 affection_tone 전달)
         user_prompt = build_user_prompt(
             user_message=user_message,
             context=context,
@@ -2264,19 +2264,11 @@ class ChatbotService:
             official_mock_exam_grade_info=official_mock_exam_grade_info,
             current_week=self._get_current_week(username),
             last_mock_exam_week=self.mock_exam_last_week.get(username, -1),
-            memory_context=memory_context
+            memory_context=memory_context,
+            career_info=career_info,
+            affection_tone=affection_tone
         )
 
-        # 호감도 말투와 진로 정보를 앞에 추가
-        prompt_parts = []
-        if affection_tone.strip():
-            prompt_parts.append(affection_tone.strip())
-        if career_info:
-            prompt_parts.append(career_info)
-
-        # 기존 프롬프트와 결합
-        if prompt_parts:
-            return "\n\n".join(prompt_parts) + "\n\n" + user_prompt
         return user_prompt
     
     
