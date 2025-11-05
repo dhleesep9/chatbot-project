@@ -20,6 +20,16 @@
   },
   "next_state": "exam_strategy"
 }
+
+또는
+
+{
+  "trigger_type": "user_input",
+  "conditions": {
+    "input_contains_any": ["화이팅", "파이팅", "잘하고", "응원"]
+  },
+  "next_state": "6exam"
+}
 """
 
 
@@ -37,24 +47,35 @@ def evaluate(transition: dict, context: dict) -> bool:
     conditions = transition.get("conditions", {})
     input_equals = conditions.get("input_equals", "")
     input_contains = conditions.get("input_contains", "")
-
-    # input_equals가 있으면 사용, 없으면 input_contains 사용
-    if input_equals:
-        target_string = input_equals
-    elif input_contains:
-        target_string = input_contains
-    else:
-        return False
+    input_contains_any = conditions.get("input_contains_any", [])
 
     user_message = context.get('user_message', '')
-    
-    # 대소문자 구분 없이 포함 여부 체크
     user_message_lower = user_message.lower()
-    target_string_lower = target_string.lower()
-    
-    is_contained = target_string_lower in user_message_lower
 
-    if is_contained:
-        print(f"[TRIGGER] user_input 트리거 발동: '{target_string}' in '{user_message}'")
+    # input_equals 체크 (완전 일치)
+    if input_equals:
+        target_string_lower = input_equals.lower()
+        is_matched = user_message_lower == target_string_lower
+        if is_matched:
+            print(f"[TRIGGER] user_input 트리거 발동 (equals): '{input_equals}' == '{user_message}'")
+        return is_matched
 
-    return is_contained
+    # input_contains 체크 (단일 문자열 포함)
+    elif input_contains:
+        target_string_lower = input_contains.lower()
+        is_contained = target_string_lower in user_message_lower
+        if is_contained:
+            print(f"[TRIGGER] user_input 트리거 발동 (contains): '{input_contains}' in '{user_message}'")
+        return is_contained
+
+    # input_contains_any 체크 (여러 문자열 중 하나라도 포함)
+    elif input_contains_any:
+        for keyword in input_contains_any:
+            keyword_lower = keyword.lower()
+            if keyword_lower in user_message_lower:
+                print(f"[TRIGGER] user_input 트리거 발동 (contains_any): '{keyword}' in '{user_message}'")
+                return True
+        return False
+
+    else:
+        return False
