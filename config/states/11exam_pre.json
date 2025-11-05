@@ -1,0 +1,18 @@
+{
+  "name": "수능 응원",
+  "description": "수능 시작 전 응원받는 상태",
+  "from_states": ["daily_routine"],
+  "to_states": ["11exam"],
+  "narration": "오늘은 수능 날입니다. 가윤이 시험을 잘 보고 올 수 있도록 응원해주세요.",
+  "context": "오늘은 수능 날입니다.\n- 수능을 앞둔 당신은 극도의 불안과 긴장을 표현합니다.",
+  "transitions": [
+    {
+      "trigger_type": "user_input",
+      "conditions": {
+        "input_contains_any": ["화이팅", "파이팅", "잘하고", "잘 보고", "응원", "힘내", "잘할 수", "할 수 있", "믿어", "수고", "좋은 결과", "좋은결과", "기도", "잘되", "잘 되", "최선", "열심히", "잘봐", "잘 봐"]
+      },
+      "next_state": "11exam",
+      "transition_narration": "수능이 끝났습니다."
+    }
+  ]
+}

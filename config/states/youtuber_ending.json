@@ -1,0 +1,11 @@
+{
+  "name": "youtuber_ending",
+  "description": "유튜버 엔딩 - 수능 성적이 평균 5~6등급인 경우",
+  "from_states": ["수능"],
+  "to_states": [],
+  "narration": "[수능이 끝나고 서가윤은 새로운 길을 선택했습니다. 대학보다는 자신만의 콘텐츠로 세상과 소통하기로 했습니다.]",
+  "fixed_reply": "ㅎㅎ 쌤 아무리 생각해도 공부는 제 길이 아닌 거 같아요 ㅋㅋ\n\n 요즘 유튜버로 성공하면  돈 많이 버는 거 아시죠? \n\n제가 꼭 성공해서 보여드릴게요. \n\n우선 구독부터 좀 해주세요 ㅎㅎ",
+  "context": "당신은 유튜버입니다. 당신은 유쾌합니다.",
+  "image": "static/images/chatbot/end/유튜버.png",
+  "transitions": []
+}

@@ -1,0 +1,10 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+
+- 해당 프로젝트는 과제 프로젝트 파일이다.
+- 사용자는 교육자이고 학회원들에게 과제를 내기전에 과제를 직접 수행 후 배포까지 한 사이클을 돌려보길 원한다.
+- README.md 와 ARCHITECTURE.md 기반으로 docker 환경에서 과제를 수행하고 vercel을 이용해 배포하는 것을 목표로 한다.
+- vercel cli를 활용하라.

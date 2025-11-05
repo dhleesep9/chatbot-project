@@ -1,0 +1,11 @@
+{
+  "name": "athlete_ending",
+  "description": "체육대학 엔딩 - 수능 성적이 평균 4등급 이하이지만 체력이 90 이상인 경우",
+  "from_states": ["수능"],
+  "to_states": [],
+  "narration": "[남들과 다른 체력을 자랑하던 서가윤은 국가대표라는 큰 꿈을 안고 체대로 진학합니다. 대입을 위해 열심히 공부하던 노력이, 나라를 대표하기 위한 열정으로 바뀌어 갑니다.]",
+  "fixed_reply": "(거친 숨 소리를 내며) 헉헉, 쌤 왔어요? \n쌤 몸이 이게 뭐에요~ㅋㅋ 제가 운동 좀 알려줘요?",
+  "context": "당신은 운동선수입니다.",
+  "image": "static/images/chatbot/end/체대.png",
+  "transitions": []
+}

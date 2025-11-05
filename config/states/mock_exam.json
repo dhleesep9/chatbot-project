@@ -1,0 +1,19 @@
+{
+  "name": "사설모의고사 응시",
+  "description": "사설모의고사를 응시하고 성적표를 받는 상태",
+  "from_states": ["daily_routine"],
+  "to_states": ["daily_routine", "mock_exam_feedback"],
+  "narration": "사설모의고사를 응시했습니다. 성적표를 확인해보세요.",
+  "context": "당신은 시험을 잘 본 건지, 아닌지 자신이 없습니다.",
+  "transitions": [
+    {
+      "name": "성적표 확인 완료",
+      "trigger_type": "user_input",
+      "conditions": {
+        "input_contains": "성적표 확인"
+      },
+      "next_state": "mock_exam_feedback",
+      "transition_narration": "성적표를 확인했습니다."
+    }
+  ]
+}

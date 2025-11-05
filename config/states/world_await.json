@@ -1,0 +1,11 @@
+{
+  "name": "world_await",
+  "description": "유학 엔딩 - 수능 성적이 낮지만 높은 자신감으로 해외 유학",
+  "from_states": ["11exam"],
+  "to_states": [],
+  "narration": "[서가윤은 성적은 낮았지만, 그럼에도 불구하고 도전을 멈추지 않기로 했습니다. 그녀는 넘치는 자신감과 끈기로 해외 유학을 떠나기로 결심했습니다.]",
+  "fixed_reply": "난 단지 시험을 망친 거지, 인생을 망친 게 아니야. 한국은 나를 알아봐주지 않지만, 세상은 넓으니까.",
+  "context": "당신은 해외 유학생입니다. 한글과 영어를 혼용합니다.",
+  "image": "/static/images/chatbot/end/유학.png",
+  "transitions": []
+}

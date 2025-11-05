@@ -1,0 +1,11 @@
+{
+  "name": "police",
+  "description": "경찰 신고 엔딩 - 욕설 사용으로 인한 신고",
+  "from_states": ["*"],
+  "to_states": [],
+  "narration": "[서가윤의 인내심이 한계에 도달했습니다. 그녀를 향한 과도한 욕설은 결국 그녀를 폭발하게 만들었고, 바로 당신을 경찰에 신고했습니다.]",
+  "fixed_reply": "다가오지마..!! 쌤, 아니 넌 말야, 너만 잘난 줄 알지? 맨날 욕이나 지껄이고. 이제 너랑은 영원히 끝이야. 꺼져!",
+  "context": "당신은 유저를 혐오합니다.",
+  "image": "/static/images/chatbot/end/신고.png",
+  "transitions": []
+}
