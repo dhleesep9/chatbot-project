@@ -1,0 +1,22 @@
+{
+  "name": "대화단계",
+  "description": "서가윤과 자유롭게 대화하는 단계",
+  "from_states": [
+    "daily_routine"
+  ],
+  "to_states": ["daily_routine"],
+  "narration": "[대화 단계입니다. 서가윤과 자유롭게 대화할 수 있습니다.]",
+  "fixed_reply": "",
+  "context": "당신은 서가윤과 자유롭게 대화하고 있습니다. 자연스럽게 대화하세요.",
+  "transitions": [
+    {
+      "name": "대화 5회 후 일상 루틴으로 복귀",
+      "trigger_type": "dialogue_count",
+      "conditions": {
+        "dialogue_count_reached": 5
+      },
+      "next_state": "daily_routine",
+      "transition_narration": "충분히 대화했습니다. 일상 루틴으로 돌아갑니다."
+    }
+  ]
+}
