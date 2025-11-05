@@ -71,20 +71,25 @@ class MockDisplayHandler(BaseStateHandler):
 
         print(f"[MOCK_DISPLAY] {username}의 사설모의고사 성적표 생성 완료.")
         print(f"[MOCK_DISPLAY] 과목별 문제점 생성 완료: {list(subject_problems.keys())}")
+        print(f"[MOCK_DISPLAY] 성적표 narration: {mock_exam_narration}")
 
-        # mock_display에서는 성적표 narration만 표시하고,
-        # 바로 mock_exam으로 자동 전이
+        # state 정보 가져오기
+        state_info = self.service._get_state_info("mock_display")
+        state_name = state_info.get("name", "사설모의고사 성적 발표") if state_info else "사설모의고사 성적 발표"
+
+        # mock_display에서는 성적표 narration을 표시하고 사용자 입력을 기다림
+        # 사용자가 입력하면 handle()에서 mock_exam으로 전환
         return {
             'skip_llm': True,  # LLM 호출 건너뛰기
-            'reply': None,  # 성적표는 narration으로만 표시
-            'narration': mock_exam_narration,
-            'transition_to': 'mock_exam'  # 바로 mock_exam으로 전이
+            'reply': f"[{state_name}] 성적표를 확인하세요.\n\n확인 후 아무 메시지나 입력하면 과목별 피드백을 시작합니다.",
+            'narration': mock_exam_narration  # 성적표는 narration으로 표시
+            # transition_to 제거: 사용자 입력을 기다림
         }
 
     def handle(self, username: str, user_message: str, context: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
         mock_display state에서 사용자 입력 처리
-        (일반적으로 자동 전이되므로 호출되지 않음)
+        사용자가 성적표 확인 후 입력하면 mock_exam으로 전환
 
         Args:
             username: 사용자 이름
@@ -94,12 +99,12 @@ class MockDisplayHandler(BaseStateHandler):
         Returns:
             Dict: 처리 결과
         """
-        print(f"[MOCK_DISPLAY] {username}이(가) mock_display 상태에서 입력했습니다. mock_exam으로 전환합니다.")
+        print(f"[MOCK_DISPLAY] {username}이(가) 성적표를 확인했습니다. mock_exam으로 전환합니다.")
 
-        # 바로 mock_exam으로 전환
+        # 성적표 확인 완료, mock_exam으로 전환
         return {
             'skip_llm': True,
             'reply': None,
-            'narration': None,
             'transition_to': 'mock_exam'
+            # narration은 반환하지 않음 (기존 성적표 narration 유지)
         }
