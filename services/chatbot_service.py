@@ -302,6 +302,10 @@ class ChatbotService:
         self.conversation_counts = {}  # {username: count}
         print("[ChatbotService] 대화 횟수 시스템 초기화 완료")
 
+        # 9.2. dialogue state 대화 횟수 추적
+        self.dialogue_conversation_counts = {}  # {username: count}
+        print("[ChatbotService] dialogue state 대화 횟수 시스템 초기화 완료")
+
         # 10. 현재 주(week) 추적
         self.current_weeks = {}  # {username: week_number}
         print("[ChatbotService] 주(week) 추적 시스템 초기화 완료")
@@ -638,8 +642,45 @@ class ChatbotService:
         except Exception as e:
             print(f"[WARN][RAG] 임베딩 생성 실패: {e}")
             return (None, None, None)
-    
-    
+
+    def _search_conversation_logs(self, username: str, query: str, top_k: int = 3):
+        """
+        대화 로그 파일에서 관련 대화 검색 (dialogue state에서만 사용)
+        """
+        try:
+            log_file = BASE_DIR / f"data/log/{username}.txt"
+            if not log_file.exists():
+                print(f"[CONVERSATION_LOG_RAG] {username}의 대화 로그 파일이 없습니다.")
+                return None
+
+            with open(log_file, "r", encoding="utf-8") as f:
+                content = f.read()
+
+            if not content.strip():
+                print(f"[CONVERSATION_LOG_RAG] {username}의 대화 로그가 비어있습니다.")
+                return None
+
+            # 대화를 개별 블록으로 분리
+            conversation_blocks = content.split("-" * 50)
+            conversation_blocks = [block.strip() for block in conversation_blocks if block.strip()]
+
+            if not conversation_blocks:
+                return None
+
+            # 최근 대화부터 검색 (최대 top_k개)
+            recent_conversations = conversation_blocks[-min(top_k, len(conversation_blocks)):]
+
+            # 대화 로그를 하나의 컨텍스트로 결합
+            context = "\n\n".join(recent_conversations)
+
+            print(f"[CONVERSATION_LOG_RAG] {username}의 최근 {len(recent_conversations)}개 대화 검색 완료")
+            return context
+
+        except Exception as e:
+            print(f"[ERROR] 대화 로그 검색 실패: {e}")
+            return None
+
+
     def _get_affection(self, username: str) -> int:
         """
         사용자의 현재 호감도 반환 (없으면 기본값 5)
@@ -685,7 +726,8 @@ class ChatbotService:
             lambda: self._get_mental(username),
             lambda: self.mock_exam_last_week.get(username, -1),
             lambda: self._get_career(username),
-            lambda: self._get_confidence(username)
+            lambda: self._get_confidence(username),
+            lambda: self.dialogue_conversation_counts.get(username, 0)
         )
 
     def _load_user_data(self, username: str):
@@ -705,7 +747,8 @@ class ChatbotService:
             lambda v: self._set_mental(username, v),
             lambda v: self.mock_exam_last_week.__setitem__(username, v),
             lambda v: self._set_career(username, v) if v else None,
-            lambda v: self._set_confidence(username, v)
+            lambda v: self._set_confidence(username, v),
+            lambda v: self.dialogue_conversation_counts.__setitem__(username, v)
         )
 
     def _get_abilities(self, username: str) -> dict:
@@ -1269,7 +1312,51 @@ class ChatbotService:
         """
         self.conversation_counts[username] = 0
         self._save_user_data(username)  # 변경사항 저장
-    
+
+    def _get_dialogue_conversation_count(self, username: str) -> int:
+        """
+        사용자의 dialogue state 대화 횟수 반환
+        """
+        return self.dialogue_conversation_counts.get(username, 0)
+
+    def _increment_dialogue_conversation_count(self, username: str):
+        """
+        사용자의 dialogue state 대화 횟수 증가
+        """
+        self.dialogue_conversation_counts[username] = self.dialogue_conversation_counts.get(username, 0) + 1
+        self._save_user_data(username)  # 변경사항 저장
+        print(f"[DIALOGUE] {username}의 대화 횟수: {self.dialogue_conversation_counts[username]}")
+
+    def _reset_dialogue_conversation_count(self, username: str):
+        """
+        사용자의 dialogue state 대화 횟수 초기화
+        """
+        self.dialogue_conversation_counts[username] = 0
+        self._save_user_data(username)  # 변경사항 저장
+        print(f"[DIALOGUE] {username}의 대화 횟수 초기화")
+
+    def _save_conversation_log(self, username: str, user_message: str, bot_reply: str):
+        """
+        대화 기록을 data/log/{username}.txt에 저장
+        """
+        try:
+            from datetime import datetime
+            log_dir = BASE_DIR / "data/log"
+            log_dir.mkdir(parents=True, exist_ok=True)
+
+            log_file = log_dir / f"{username}.txt"
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+            with open(log_file, "a", encoding="utf-8") as f:
+                f.write(f"[{timestamp}]\n")
+                f.write(f"사용자: {user_message}\n")
+                f.write(f"서가윤: {bot_reply}\n")
+                f.write("-" * 50 + "\n")
+
+            print(f"[CONVERSATION_LOG] {username}의 대화 기록 저장 완료")
+        except Exception as e:
+            print(f"[ERROR] 대화 로그 저장 실패: {e}")
+
     def _get_current_week(self, username: str) -> int:
         """
         사용자의 현재 주(week) 반환
@@ -2577,7 +2664,32 @@ class ChatbotService:
             study_schedule_transition_reply = None
             if state_changed and new_state == "study_schedule":
                 study_schedule_transition_reply = "14시간 안에 어떻게 분배를 해야할까요?"
-            
+
+            # dialogue state 진입 시 대화 횟수 초기화
+            if state_changed and new_state == "dialogue":
+                self._reset_dialogue_conversation_count(username)
+                print(f"[DIALOGUE] {username}이(가) dialogue state로 진입. 대화 횟수 초기화")
+
+            # dialogue state에서 대화 횟수 체크 및 전이
+            if new_state == "dialogue":
+                current_dialogue_count = self._get_dialogue_conversation_count(username)
+
+                # 대화 횟수가 5에 도달하면 daily_routine으로 전이
+                if current_dialogue_count >= 5:
+                    self._set_game_state(username, "daily_routine")
+                    new_state = "daily_routine"
+                    state_changed = True
+                    self._reset_dialogue_conversation_count(username)
+
+                    # 전이 나레이션 추가
+                    dialogue_end_narration = "충분히 대화했습니다. 일상 루틴으로 돌아갑니다."
+                    if narration:
+                        narration = f"{narration}\n\n{dialogue_end_narration}"
+                    else:
+                        narration = dialogue_end_narration
+
+                    print(f"[DIALOGUE] {username}의 대화 5회 완료. daily_routine으로 전이")
+
             # [1.6.5] "멘토링 종료" 트리거 처리 (어떤 상태에서든 가능)
             week_advanced = False
             week_advance_narration = None
@@ -3484,14 +3596,23 @@ class ChatbotService:
                 # state 진입 이후에는 fixed_reply와 narration을 사용하지 않고 LLM 응답 사용
                 print(f"[STATE_CONTINUE] {new_state} state 계속 - LLM 응답 사용")
 
-            # [2] RAG 검색
+            # [2] RAG 검색 (dialogue state에서는 대화 로그 사용)
             try:
-                context, similarity, metadata = self._search_similar(
-                    query=user_message,
-                    threshold=0.45,
-                    top_k=5
-                )
-                has_context = (context is not None)
+                if new_state == "dialogue":
+                    # dialogue state에서는 대화 로그 기반 RAG 사용
+                    context = self._search_conversation_logs(username, user_message, top_k=3)
+                    similarity, metadata = None, None
+                    has_context = (context is not None)
+                    if has_context:
+                        print(f"[DIALOGUE_RAG] 대화 로그 기반 RAG 사용")
+                else:
+                    # 다른 상태에서는 기존 ChromaDB RAG 사용
+                    context, similarity, metadata = self._search_similar(
+                        query=user_message,
+                        threshold=0.45,
+                        top_k=5
+                    )
+                    has_context = (context is not None)
             except Exception as e:
                 print(f"[WARN] RAG 검색 실패: {e}")
                 context, similarity, metadata = None, None, None
@@ -4076,6 +4197,13 @@ class ChatbotService:
                     print(f"[MEMORY] {username}의 대화 저장 완료")
                 except Exception as e:
                     print(f"[WARN] 메모리 저장 실패: {e}")
+
+            # [5.3] 대화 로그 저장 (모든 대화)
+            self._save_conversation_log(username, user_message, reply)
+
+            # [5.4] dialogue state에서 대화 횟수 증가
+            if new_state == "dialogue":
+                self._increment_dialogue_conversation_count(username)
 
             # [5.5] 상태별 이미지 설정
             # 우선순위: state의 image > handler의 image

@@ -25,7 +25,8 @@ def save_user_data(
     get_mental: Callable[[], int],
     get_mock_exam_last_week: Callable[[], int],
     get_career: Callable[[], Optional[str]],
-    get_confidence: Callable[[], int]
+    get_confidence: Callable[[], int],
+    get_dialogue_conversation_count: Optional[Callable[[], int]] = None
 ):
     """
     사용자 게임 데이터를 JSON 파일로 저장
@@ -48,7 +49,8 @@ def save_user_data(
             "mental": get_mental(),
             "mock_exam_last_week": get_mock_exam_last_week(),
             "career": get_career(),
-            "confidence": get_confidence()
+            "confidence": get_confidence(),
+            "dialogue_conversation_count": get_dialogue_conversation_count() if get_dialogue_conversation_count else 0
         }
 
         user_file = BASE_DIR / f"data/users/{username}.json"
@@ -76,7 +78,8 @@ def load_user_data(
     set_mental: Callable[[int], None],
     set_mock_exam_last_week: Callable[[int], None],
     set_career: Callable[[Optional[str]], None],
-    set_confidence: Callable[[int], None]
+    set_confidence: Callable[[int], None],
+    set_dialogue_conversation_count: Optional[Callable[[int], None]] = None
 ) -> bool:
     """
     사용자 게임 데이터를 JSON 파일에서 로드
@@ -111,6 +114,10 @@ def load_user_data(
         set_mental(user_data.get("mental", 40))
         set_mock_exam_last_week(user_data.get("mock_exam_last_week", -1))
         set_confidence(user_data.get("confidence", 50))
+
+        # dialogue_conversation_count 로드
+        if set_dialogue_conversation_count:
+            set_dialogue_conversation_count(user_data.get("dialogue_conversation_count", 0))
 
         # 진로 로드 (없으면 None)
         existing_career = user_data.get("career")
