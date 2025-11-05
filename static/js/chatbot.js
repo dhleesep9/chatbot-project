@@ -101,15 +101,27 @@ async function sendMessage(isInitial = false) {
     // 응답 파싱 및 표시 (나레이션보다 먼저 표시)
     let replyText, imagePath;
     if (data.reply) {
-      if (typeof data.reply === "object" && data.reply !== null) {
+      if (Array.isArray(data.reply)) {
+        // 배열인 경우 각 요소를 별도의 메시지로 표시
+        console.log("[REPLY] 배열 형식 reply 감지, 개수:", data.reply.length);
+        data.reply.forEach((msg, index) => {
+          if (msg) {
+            // 첫 번째 메시지에만 이미지 포함
+            appendMessage("bot", msg, index === 0 ? data.image : null);
+          }
+        });
+      } else if (typeof data.reply === "object" && data.reply !== null) {
         replyText = data.reply.reply || data.reply;
         imagePath = data.reply.image || null;
+        if (replyText) {
+          appendMessage("bot", replyText, imagePath);
+        }
       } else {
         replyText = data.reply;
         imagePath = null;
-      }
-      if (replyText) {
-        appendMessage("bot", replyText, imagePath);
+        if (replyText) {
+          appendMessage("bot", replyText, imagePath);
+        }
       }
     } else {
       // reply가 없는 경우 기본 메시지 표시

@@ -72,7 +72,7 @@ class OfficialExamHandlerBase(BaseStateHandler):
                 # 성적표가 비어있지 않은 경우에만 나레이션 생성
                 if score_parts:
                     # 나레이션에는 성적 발표 안내와 성적표 포함
-                    narration = f"[{self.EXAM_DISPLAY_NAME} 성적이 발표되었습니다.]\n" + " ".join(score_parts)
+                    narration = f"{self.EXAM_DISPLAY_NAME} 성적이 발표되었습니다.\n" + " ".join(score_parts)
                     print(f"[{self.EXAM_NAME.upper()}] 생성된 나레이션: {narration}")
                 else:
                     print(f"[{self.EXAM_NAME.upper()}] 오류: 성적표가 비어있습니다!")
@@ -139,20 +139,25 @@ class JuneExamHandler(OfficialExamHandlerBase):
         # 호감도 가져오기
         affection = self.service._get_affection(username)
 
-        # 호감도에 따른 메시지 선택
+        # 호감도에 따른 메시지 선택 (배열로 분리)
         if affection >= 50:
-            reply = "쌤 ... 너무 떨려용..\n재수 시작하고 제대로 치는 첫 평가원 모의고사에요...\n저 잘 할 수 있겠죠 ..??  응원해주세요 ㅠㅠ"
+            # \n으로 구분하여 별도의 말뭉치로 출력
+            fixed_reply = [
+                "쌤 ... 너무 떨려용..",
+                "재수 시작하고 제대로 치는 첫 평가원 모의고사에요...",
+                "저 잘 할 수 있겠죠 ..??  응원해주세요 ㅠㅠ"
+            ]
         else:
-            reply = "썜 .. 잘하고 올게요.. ㅠ"
+            fixed_reply = ["썜 .. 잘하고 올게요.. ㅠ"]
 
-        print(f"[6EXAM] {username}의 호감도: {affection} - 메시지: '{reply[:50]}...'")
+        print(f"[6EXAM] {username}의 호감도: {affection} - 메시지 개수: {len(fixed_reply)}")
 
         # narration 설정
-        narration = "[6월 모의고사가 끝났습니다.]"
+        narration = "6월 모의고사가 끝났습니다."
 
         return {
             'skip_llm': True,  # LLM 호출 건너뛰기
-            'reply': reply,
+            'fixed_reply': fixed_reply,  # 배열로 반환
             'narration': narration,
             'transition_to': None
         }
@@ -176,17 +181,20 @@ class SeptemberExamHandler(OfficialExamHandlerBase):
         Returns:
             Dict: 처리 결과
         """
-        # 고정 메시지
-        reply = "쌤, 이번엔 진짜 잡을 거예요.\n9평은… 절대 안 망할꺼에요!!!!"
+        # 고정 메시지 (배열로 분리)
+        fixed_reply = [
+            "쌤, 이번엔 진짜 잡을 거예요.",
+            "9평은… 절대 안 망할꺼에요!!!!"
+        ]
 
-        print(f"[9EXAM] {username} - 메시지: '{reply[:50]}...'")
+        print(f"[9EXAM] {username} - 메시지 개수: {len(fixed_reply)}")
 
         # narration 설정
-        narration = "[9월 모의고사가 끝났습니다.]"
+        narration = "9월 모의고사가 끝났습니다."
 
         return {
             'skip_llm': True,  # LLM 호출 건너뛰기
-            'reply': reply,
+            'fixed_reply': fixed_reply,  # 배열로 반환
             'narration': narration,
             'transition_to': None
         }
@@ -214,28 +222,31 @@ class CSATExamHandler(OfficialExamHandlerBase):
         affection = self.service._get_affection(username)
         mental = self.service._get_mental(username)
 
-        # 우선순위대로 메시지 선택
+        # 우선순위대로 메시지 선택 (배열로 분리)
         if mental < 30:
             # 멘탈 30 미만 (최우선)
-            reply = "선생님 ㅠㅠㅠㅠ 저 잘 볼 수 있겠죠?? 너무 불안하고 떨려요 ... 아는 것도 다 실수 할 거 같아요 ...."
+            fixed_reply = [
+                "선생님 ㅠㅠㅠㅠ 저 잘 볼 수 있겠죠??",
+                "너무 불안하고 떨려요 ... 아는 것도 다 실수 할 거 같아요 ...."
+            ]
         elif affection < 20:
             # 호감도 20 미만
-            reply = "....."
+            fixed_reply = ["....."]
         elif affection < 50:
             # 호감도 50 미만
-            reply = "선생님 저 잘 보고 올게요 .."
+            fixed_reply = ["선생님 저 잘 보고 올게요 .."]
         else:
             # 호감도 50 이상
-            reply = "쌤,  최선을 다해서 잘 보고 올게요...! 저 위해서 꼭 기도해주셔야 해요 !!"
+            fixed_reply = ["쌤,  최선을 다해서 잘 보고 올게요...! 저 위해서 꼭 기도해주셔야 해요 !!"]
 
-        print(f"[11EXAM] {username}의 호감도: {affection}, 멘탈: {mental} - 메시지: '{reply[:50]}...'")
+        print(f"[11EXAM] {username}의 호감도: {affection}, 멘탈: {mental} - 메시지 개수: {len(fixed_reply)}")
 
         # narration 설정
-        narration = "[오늘은 수능 날입니다. 가윤이 시험을 잘 보고 올 수 있도록 응원해주세요.]"
+        narration = "오늘은 수능 날입니다. 가윤이 시험을 잘 보고 올 수 있도록 응원해주세요."
 
         return {
             'skip_llm': True,  # LLM 호출 건너뛰기
-            'reply': reply,
+            'fixed_reply': fixed_reply,  # 배열로 반환
             'narration': narration,
             'transition_to': None
         }
@@ -293,7 +304,7 @@ class CSATExamHandler(OfficialExamHandlerBase):
                         score_parts.append(f"{subject} {score_data['grade']}등급 (백분위 {score_data['percentile']}%)")
 
                 # 나레이션: 수능 끝 안내 + 성적표
-                narration = f"[수능이 끝났습니다.]\n\n{self.EXAM_DISPLAY_NAME} 성적이 발표되었습니다:\n" + " ".join(score_parts)
+                narration = f"수능이 끝났습니다.\n\n{self.EXAM_DISPLAY_NAME} 성적이 발표되었습니다.\n" + " ".join(score_parts)
                 
                 # 성적 정보 저장
                 if not hasattr(self.service, self.PROBLEM_STORAGE_ATTR):

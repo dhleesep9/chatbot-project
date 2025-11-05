@@ -2718,6 +2718,7 @@ class ChatbotService:
             official_mock_exam_processed = False  # 정규모의고사 피드백 처리 플래그
             june_exam_processed = False  # 6월 모의고사 피드백 처리 플래그
             september_exam_processed = False  # 9월 모의고사 피드백 처리 플래그
+            handler_fixed_reply = None  # handler에서 반환한 fixed_reply (state의 fixed_reply보다 우선)
             mock_exam_scores = None
             weak_subject = None
             weakness_message = None
@@ -2784,6 +2785,11 @@ class ChatbotService:
                         june_exam_processed = True
                         reply = handler_result.get('reply')
 
+                    # handler에서 반환한 fixed_reply 저장 (state의 fixed_reply보다 우선)
+                    if handler_result.get('fixed_reply'):
+                        handler_fixed_reply = handler_result.get('fixed_reply')
+                        print(f"[6EXAM] handler에서 fixed_reply 반환: {handler_fixed_reply}")
+
                     # 헬퍼로 narration 및 전이 처리
                     narration, transition_to, handler_state_changed = self._process_handler_result(handler_result, narration)
                     if transition_to:
@@ -2816,6 +2822,11 @@ class ChatbotService:
                     if handler_result.get('skip_llm'):
                         september_exam_processed = True
                         reply = handler_result.get('reply')
+
+                    # handler에서 반환한 fixed_reply 저장 (state의 fixed_reply보다 우선)
+                    if handler_result.get('fixed_reply'):
+                        handler_fixed_reply = handler_result.get('fixed_reply')
+                        print(f"[9EXAM] handler에서 fixed_reply 반환: {handler_fixed_reply}")
 
                     # 헬퍼로 narration 및 전이 처리
                     narration, transition_to, handler_state_changed = self._process_handler_result(handler_result, narration)
@@ -2918,6 +2929,11 @@ class ChatbotService:
                     if handler_result.get('skip_llm'):
                         csat_exam_processed = True
                         reply = handler_result.get('reply')
+
+                    # handler에서 반환한 fixed_reply 저장 (state의 fixed_reply보다 우선)
+                    if handler_result.get('fixed_reply'):
+                        handler_fixed_reply = handler_result.get('fixed_reply')
+                        print(f"[11EXAM] handler에서 fixed_reply 반환: {handler_fixed_reply}")
 
                     # 헬퍼로 narration 및 전이 처리
                     narration, transition_to, handler_state_changed = self._process_handler_result(handler_result, narration)
@@ -3270,8 +3286,14 @@ class ChatbotService:
                     narration = state_narration
                     print(f"[STATE_NARRATION] {new_state} state - narration 사용: '{narration[:100]}...'")
 
-                # fixed_reply가 있으면 무조건 사용 (state 전환 여부와 관계없이)
-                if fixed_reply:
+                # handler의 fixed_reply가 있으면 이를 우선 사용, 없으면 state의 fixed_reply 사용
+                if handler_fixed_reply:
+                    # handler에서 반환한 fixed_reply 사용 (배열 형식)
+                    reply = handler_fixed_reply
+                    ending_processed = True
+                    print(f"[HANDLER_FIXED_REPLY] handler의 fixed_reply 사용: {handler_fixed_reply}")
+                elif fixed_reply:
+                    # state의 fixed_reply 사용
                     reply = fixed_reply
                     ending_processed = True
 
