@@ -1,9 +1,8 @@
 """Mock Exam State Handler
 
-사설모의고사 응시 state에서의 로직을 처리합니다.
-- 성적표 생성
-- 취약 과목 식별
-- 취약점 메시지 생성
+사설모의고사 과목별 피드백 state에서의 로직을 처리합니다.
+- mock_display에서 이미 성적표와 과목별 문제점이 생성됨
+- 첫 번째 과목 문제점을 표시
 - mock_exam_feedback 상태로 자동 전이
 """
 
@@ -16,7 +15,7 @@ class MockExamHandler(BaseStateHandler):
 
     def on_enter(self, username: str, context: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
-        mock_exam state 진입 시 자동으로 성적표 생성 및 피드백 전이
+        mock_exam state 진입 시 첫 번째 과목 문제점 표시 및 피드백 전이
 
         Args:
             username: 사용자 이름
@@ -25,73 +24,39 @@ class MockExamHandler(BaseStateHandler):
         Returns:
             Dict: 처리 결과
         """
-        # 현재 주차 기록 (한 주에 한 번만 보도록)
-        current_week = self.service._get_current_week(username)
-        self.service.mock_exam_last_week[username] = current_week
-        print(f"[MOCK_EXAM] {username}의 사설모의고사 응시 주차 기록: {current_week}주차")
+        # mock_display에서 이미 생성된 정보 가져오기
+        weakness_info = self.service.mock_exam_weakness.get(username, {})
 
-        # 사설모의고사 응시 후 체력과 멘탈 감소
-        current_stamina = self.service._get_stamina(username)
-        current_mental = self.service._get_mental(username)
-        new_stamina = max(0, current_stamina - 10)
-        new_mental = max(0, current_mental - 10)
-        self.service._set_stamina(username, new_stamina)
-        self.service._set_mental(username, new_mental)
-        print(f"[MOCK_EXAM] {username}의 체력 {current_stamina} → {new_stamina} (-10), 멘탈 {current_mental} → {new_mental} (-10)")
+        if not weakness_info:
+            print(f"[MOCK_EXAM_WARN] {username}의 weakness 정보가 없습니다. mock_display를 거쳐야 합니다.")
+            return {
+                'skip_llm': True,
+                'reply': "사설모의고사 성적 정보가 없습니다. daily_routine에서 다시 시도해주세요.",
+                'narration': None,
+                'transition_to': 'daily_routine'
+            }
 
-        # 사설모의고사 응시 - 성적표 생성
-        mock_exam_scores = self.service._calculate_mock_exam_scores(username)
+        subject_problems = weakness_info.get("subject_problems", {})
+        subject_order = weakness_info.get("subject_order", [])
+        current_index = weakness_info.get("current_index", 0)
 
-        # 성적표 나레이션 생성
-        score_lines = []
-        for subject, score_data in mock_exam_scores.items():
-            score_lines.append(f"- {subject}: {score_data['grade']}등급 (백분위 {score_data['percentile']}%)")
+        if not subject_problems or not subject_order:
+            print(f"[MOCK_EXAM_WARN] 과목별 문제점 정보가 없습니다.")
+            return {
+                'skip_llm': True,
+                'reply': "과목별 문제점 정보가 없습니다.",
+                'narration': None,
+                'transition_to': 'daily_routine'
+            }
 
-        # 평균 등급 계산 및 반응 생성
-        average_grade = self.service._calculate_average_grade(mock_exam_scores)
-        grade_reaction = self.service._generate_grade_reaction("mock_exam", average_grade)
+        print(f"[MOCK_EXAM] {username}의 과목별 피드백 시작. 과목 수: {len(subject_order)}")
 
-        # 나레이션에는 성적표만 포함
-        mock_exam_narration = "사설모의고사 성적표가 발표되었습니다:\n" + "\n".join(score_lines)
-
-        # 각 과목별 문제점 생성
-        subject_problems = {}
-        for subject, score_data in mock_exam_scores.items():
-            problem_message = self.service._generate_weakness_message(subject, score_data)
-            if not problem_message or len(problem_message.strip()) == 0:
-                problem_message = f"{subject}에서 어려운 부분이 많았어요. 특히 응용 문제가 어려웠어요."
-            subject_problems[subject] = problem_message
-
-        # 과목 순서 정의 (고정 순서)
-        subject_order = list(mock_exam_scores.keys())
-
-        # 피드백 처리를 위한 정보 저장
-        self.service.mock_exam_weakness[username] = {
-            "scores": mock_exam_scores,
-            "subject_problems": subject_problems,
-            "subject_order": subject_order,
-            "current_index": 0,  # 현재 처리 중인 과목 인덱스
-            "completed_subjects": []  # 완료된 과목 목록
-        }
-
-        print(f"[MOCK_EXAM] {username}의 사설모의고사 성적표 생성 완료.")
-        print(f"[MOCK_EXAM] 과목별 문제점 생성 완료: {list(subject_problems.keys())}")
-
-        # state 정보 가져오기
-        state_info = self.service._get_state_info("mock_exam")
-        state_name = state_info.get("name", "사설모의고사 응시") if state_info else "사설모의고사 응시"
-
-        # mock_exam에서는 성적표 narration만 표시하고,
-        # reply는 mock_exam_feedback의 on_enter에서 표시
+        # mock_exam_feedback으로 바로 전이 (첫 번째 과목 문제점은 mock_exam_feedback의 on_enter에서 표시)
         return {
             'skip_llm': True,  # LLM 호출 건너뛰기
             'reply': None,  # mock_exam_feedback의 on_enter에서 표시
-            'narration': mock_exam_narration,
-            'transition_to': 'mock_exam_feedback',
-            'data': {
-                'mock_exam_scores': mock_exam_scores,
-                'grade_reaction': grade_reaction
-            }
+            'narration': None,
+            'transition_to': 'mock_exam_feedback'
         }
 
     def handle(self, username: str, user_message: str, context: Dict[str, Any]) -> Optional[Dict[str, Any]]:

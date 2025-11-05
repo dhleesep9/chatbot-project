@@ -1,19 +1,17 @@
 {
-  "name": "사설모의고사 응시",
-  "description": "사설모의고사를 응시하고 성적표를 받는 상태",
-  "from_states": ["daily_routine"],
-  "to_states": ["daily_routine", "mock_exam_feedback"],
-  "narration": "사설모의고사를 응시했습니다. 성적표를 확인해보세요.",
-  "context": "당신은 시험을 잘 본 건지, 아닌지 자신이 없습니다.",
+  "name": "사설모의고사 과목별 피드백",
+  "description": "사설모의고사 과목별 문제점을 분석하는 상태",
+  "from_states": ["mock_display"],
+  "to_states": ["mock_exam_feedback"],
+  "narration": "과목별 문제점을 분석합니다.",
+  "context": "각 과목에서 어떤 부분이 어려웠는지 파악하고 있습니다.",
   "transitions": [
     {
-      "name": "성적표 확인 완료",
-      "trigger_type": "user_input",
-      "conditions": {
-        "input_contains": "성적표 확인"
-      },
+      "name": "피드백 시작",
+      "trigger_type": "auto",
+      "conditions": {},
       "next_state": "mock_exam_feedback",
-      "transition_narration": "성적표를 확인했습니다."
+      "transition_narration": "과목별 조언을 받습니다."
     }
   ]
 }

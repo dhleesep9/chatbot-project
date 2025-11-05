@@ -264,12 +264,12 @@ class MockExamFeedbackHandlerBase(BaseStateHandler):
                     'transition_to': None  # 전이하지 않음
                 }
 
-            print(f"[{self.EXAM_NAME.upper()}] {self.RETEST_KEYWORD} 감지 - mock_exam으로 전환")
+            print(f"[{self.EXAM_NAME.upper()}] {self.RETEST_KEYWORD} 감지 - mock_display로 전환")
             return {
                 'skip_llm': True,
                 'reply': None,
                 'narration': None,
-                'transition_to': 'mock_exam',
+                'transition_to': 'mock_display',
                 'retest': True
             }
 

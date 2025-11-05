@@ -1,0 +1,17 @@
+{
+  "name": "사설모의고사 성적 발표",
+  "description": "사설모의고사 성적표를 확인하는 상태",
+  "from_states": ["daily_routine"],
+  "to_states": ["mock_exam"],
+  "narration": "사설모의고사 성적표를 확인합니다.",
+  "context": "성적표를 확인한 후 과목별 피드백으로 넘어갑니다.",
+  "transitions": [
+    {
+      "name": "과목별 피드백 시작",
+      "trigger_type": "auto",
+      "conditions": {},
+      "next_state": "mock_exam",
+      "transition_narration": "과목별 문제점을 분석합니다."
+    }
+  ]
+}

@@ -21,7 +21,7 @@
       "conditions": {
         "input_contains": "사설모의고사 응시"
       },
-      "next_state": "mock_exam",
+      "next_state": "mock_display",
       "transition_narration": "사설모의고사를 다시 응시합니다."
     }
   ]

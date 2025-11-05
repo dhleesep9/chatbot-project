@@ -154,6 +154,7 @@ class ChatbotService:
         from services.handlers.handler_registry import HandlerRegistry
         from services.handlers.exam_strategy_handler import ExamStrategyHandler
         from services.handlers.study_schedule_handler import StudyScheduleHandler
+        from services.handlers.mock_display_handler import MockDisplayHandler
         from services.handlers.mock_exam_handler import MockExamHandler
         from services.handlers.official_exam_handler import (
             SixExamPreHandler, NineExamPreHandler, ElevenExamPreHandler,
@@ -167,6 +168,7 @@ class ChatbotService:
         self.handler_registry = HandlerRegistry()
         self.handler_registry.register('exam_strategy', ExamStrategyHandler(self))
         self.handler_registry.register('study_schedule', StudyScheduleHandler(self))
+        self.handler_registry.register('mock_display', MockDisplayHandler(self))
         self.handler_registry.register('mock_exam', MockExamHandler(self))
         self.handler_registry.register('6exam_pre', SixExamPreHandler(self))
         self.handler_registry.register('9exam_pre', NineExamPreHandler(self))
@@ -180,7 +182,7 @@ class ChatbotService:
         self.handler_registry.register('mock_exam_feedback', MockExamFeedbackHandler(self))
         self.handler_registry.register('official_mock_exam_feedback', OfficialMockExamFeedbackHandler(self))
         self.handler_registry.register('university_application', UniversityApplicationHandler(self))
-        print(f"[ChatbotService] handler registry loaded: exam_strategy, study_schedule, mock_exam, 6exam_pre, 9exam_pre, 11exam_pre, 6exam, 9exam, 11exam, selection, 6exam_feedback, 9exam_feedback, mock_exam_feedback, official_mock_exam_feedback, university_application")
+        print(f"[ChatbotService] handler registry loaded: exam_strategy, study_schedule, mock_display, mock_exam, 6exam_pre, 9exam_pre, 11exam_pre, 6exam, 9exam, 11exam, selection, 6exam_feedback, 9exam_feedback, mock_exam_feedback, official_mock_exam_feedback, university_application")
 
         # 2. OpenAI Client 초기화
         try:
@@ -2735,7 +2737,50 @@ class ChatbotService:
             official_mock_exam_advice_reply = None  # 정규모의고사 조언에 대한 서가윤의 반응 (LLM 생성)
             official_mock_exam_advice_user_input = None  # 정규모의고사 사용자의 조언 내용
             official_mock_exam_advice_is_good = None  # 정규모의고사 조언 적절성 플래그
-            
+
+            # [1.7.5.2] mock_display 상태 처리 (성적표 출력 및 mock_exam으로 자동 전이)
+            if new_state == "mock_display":
+                # state 진입 시 on_enter 호출
+                if state_changed or current_state != "mock_display":
+                    print(f"[MOCK_DISPLAY] {username}이(가) mock_display 상태에 진입했습니다. on_enter() 호출")
+                    handler_result = self.handler_registry.call_on_enter(
+                        'mock_display', username,
+                        {'current_state': current_state, 'new_state': new_state}
+                    )
+
+                    if handler_result:
+                        if handler_result.get('skip_llm'):
+                            mock_exam_processed = True
+
+                        if handler_result.get('reply'):
+                            reply = handler_result.get('reply')
+
+                        # narration 및 전이 처리
+                        print(f"[MOCK_DISPLAY_DEBUG] narration before _process_handler_result: {narration[:200] if narration else 'None'}...")
+                        narration, transition_to, handler_state_changed = self._process_handler_result(handler_result, narration)
+                        print(f"[MOCK_DISPLAY_DEBUG] narration after _process_handler_result: {narration[:200] if narration else 'None'}...")
+                        print(f"[MOCK_DISPLAY_DEBUG] transition_to: {transition_to}, state_changed: {handler_state_changed}")
+
+                        if transition_to:
+                            self._set_game_state(username, transition_to)
+                            new_state = transition_to
+                            state_changed = handler_state_changed
+                else:
+                    # 이미 mock_display 상태인 경우 handle 호출 (바로 mock_exam으로 전환)
+                    print(f"[MOCK_DISPLAY] {username}이(가) mock_display 상태에서 입력했습니다. handle() 호출")
+                    handler_result = self.handler_registry.call_handle(
+                        'mock_display', username, user_message,
+                        {'current_state': current_state, 'new_state': new_state}
+                    )
+
+                    if handler_result:
+                        narration, transition_to, handler_state_changed = self._process_handler_result(handler_result, narration)
+                        if transition_to:
+                            self._set_game_state(username, transition_to)
+                            new_state = transition_to
+                            state_changed = handler_state_changed
+
+            # [1.7.5.3] mock_exam 상태 처리 (과목별 문제점 제시)
             if new_state == "mock_exam":
                 # state 진입 시 on_enter 호출, 이미 mock_exam 상태라면 handle 호출
                 if current_state != "mock_exam":
