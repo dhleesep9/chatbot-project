@@ -1,0 +1,17 @@
+{
+  "name": "사설모의고사 과목별 피드백",
+  "description": "사설모의고사 과목별 문제점을 분석하는 상태",
+  "from_states": ["mock_display"],
+  "to_states": ["mock_exam_feedback"],
+  "narration": "과목별 문제점을 분석합니다.",
+  "context": "각 과목에서 어떤 부분이 어려웠는지 파악하고 있습니다.",
+  "transitions": [
+    {
+      "name": "피드백 시작",
+      "trigger_type": "auto",
+      "conditions": {},
+      "next_state": "mock_exam_feedback",
+      "transition_narration": "과목별 조언을 받습니다."
+    }
+  ]
+}

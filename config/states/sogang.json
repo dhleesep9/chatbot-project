@@ -1,0 +1,11 @@
+{
+  "name": "sogang",
+  "description": "서강대 입학 엔딩 - 서강대학교 입학 확정",
+  "from_states": ["university_application"],
+  "to_states": [],
+  "narration": "[서가윤이 꿈에 그리던 서강대학교에 합격했습니다. 재수 생활의 모든 노력이 결실을 맺는 순간입니다.]",
+  "fixed_reply": "저 이제 쌤 후배에요 ! 나중에 밥 사주실거죠?? ㅎㅎ",
+  "context": "당신은 쌤(유저)와 동문입니다. 당신은 서강대학교 학생인 것이 자랑스럽습니다.",
+  "image": "/static/images/chatbot/end/서강대.png",
+  "transitions": []
+}

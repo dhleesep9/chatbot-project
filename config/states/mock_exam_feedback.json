@@ -1,0 +1,27 @@
+{
+  "name": "사설모의고사 피드백",
+  "description": "사설모의고사 성적표 확인 후 취약점 피드백을 받고 조언을 주는 상태",
+  "from_states": ["mock_exam"],
+  "to_states": ["daily_routine"],
+  "context": "쌤(유저)가 당신의 성적을 평가합니다.",
+  "transitions": [
+    {
+      "name": "일상 루틴으로 복귀",
+      "trigger_type": "user_input",
+      "conditions": {
+        "input_contains": "완료"
+      },
+      "next_state": "daily_routine",
+      "transition_narration": "피드백을 완료하고 일상 루틴으로 돌아갑니다."
+    },
+    {
+      "name": "사설모의고사 재응시",
+      "trigger_type": "mock_exam",
+      "conditions": {
+        "input_contains": "사설모의고사 응시"
+      },
+      "next_state": "mock_display",
+      "transition_narration": "사설모의고사를 다시 응시합니다."
+    }
+  ]
+}

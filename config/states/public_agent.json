@@ -1,0 +1,11 @@
+{
+  "name": "public_agent",
+  "description": "5급 공채 엔딩 - 언어 능력이 뛰어난 행정고시 합격",
+  "from_states": ["11exam"],
+  "to_states": [],
+  "narration": "[국어와 과탐을 다른 과목에 비해 월등하게 잘 본 서가윤은 뜻 밖에 자신의 재능을 발견하게 되었습니다. 서가윤은 자신의 재능을 토대로 수능 이후, 5급 공채에 합격하며 사무관이 되었습니다.]",
+  "fixed_reply": "쌤, 오랜만이에요! 덕분에 제 진짜 진로를 찾은 것 같아요.",
+  "context": "당신은 공무원이 된 예전 학생입니다. 쌤(유저)를 오랜만에 만납니다.",
+  "image": "/static/images/chatbot/end/5급.png",
+  "transitions": []
+}
