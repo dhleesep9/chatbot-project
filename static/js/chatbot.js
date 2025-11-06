@@ -84,7 +84,11 @@ async function sendMessage(isInitial = false) {
     }
 
     // 서가윤 상태 업데이트
-    if (data.stamina !== undefined || data.mental !== undefined || data.confidence !== undefined) {
+    if (
+      data.stamina !== undefined ||
+      data.mental !== undefined ||
+      data.confidence !== undefined
+    ) {
       updateCharacterStatus(data.stamina, data.mental, data.confidence);
     }
 
@@ -146,7 +150,10 @@ async function sendMessage(isInitial = false) {
       // state에 지정된 이미지가 있으면 저장 (다른 함수가 덮어쓰지 못하도록)
       currentStateImage = data.image;
 
-      console.log(`[IMAGE] ${data.game_state} state 이미지 설정 (고정):`, data.image);
+      console.log(
+        `[IMAGE] ${data.game_state} state 이미지 설정 (고정):`,
+        data.image
+      );
       sideImage.src = data.image;
 
       // state 이미지가 있을 때는 절대 애니메이션 실행하지 않음
@@ -431,7 +438,12 @@ function updateCharacterStatus(stamina, mental, confidence) {
       const isActuallyArrogant =
         currentConfidence !== undefined && currentConfidence >= 90;
 
-      if (!isActuallyDisease && !isActuallyBurnout && !isActuallyDiscouraged && !isActuallyArrogant) {
+      if (
+        !isActuallyDisease &&
+        !isActuallyBurnout &&
+        !isActuallyDiscouraged &&
+        !isActuallyArrogant
+      ) {
         const defaultImage = getDefaultImageByAffection(currentAffection);
         sideImage.src = defaultImage;
       }
@@ -474,6 +486,77 @@ function updateScheduleDisplay(schedule, gameState) {
     return;
   }
 
+  // 진로와 선택과목 정보 가져오기
+  const savedGameState = localStorage.getItem(GAME_STATE_KEY);
+  let career = null;
+  let selectedSubjects = [];
+
+  if (savedGameState) {
+    try {
+      const gameStateData = JSON.parse(savedGameState);
+      career = gameStateData.career || null;
+      selectedSubjects = gameStateData.selected_subjects || [];
+    } catch (e) {
+      console.error("[SCHEDULE] 게임 상태 파싱 실패:", e);
+    }
+  }
+
+  // 진로-과목 매핑 함수 (간단한 매핑 로직)
+  function isCareerSubjectMatch(career, subject, actualSubject) {
+    if (!career || !actualSubject) return false;
+
+    // 탐구1, 탐구2를 실제 선택과목으로 매핑
+    const subjectMapping = {
+      탐구1: selectedSubjects[0] || "",
+      탐구2: selectedSubjects[1] || "",
+    };
+
+    const mappedSubject = subjectMapping[subject] || subject;
+
+    // 진로별 관련 과목 매핑 (간단한 버전)
+    const careerSubjectMap = {
+      임상심리사: ["생활과윤리", "윤리와사상"],
+      변호사: ["사회문화", "정치와법", "세계사"],
+      검사: ["사회문화", "정치와법", "세계사"],
+      판사: ["사회문화", "정치와법", "세계사"],
+      법무사: ["사회문화", "정치와법"],
+      교사: ["사회문화", "세계사", "동아시아사"],
+      대학교수: ["세계사", "동아시아사"],
+      유치원교사: ["생활과윤리"],
+      행정고시: ["사회문화", "정치와법", "경제"],
+      외무고시: ["세계사", "동아시아사", "세계지리", "정치와법"],
+      법무고시: ["사회문화", "정치와법", "세계사"],
+      입법고시: ["사회문화", "정치와법", "경제"],
+      "5급공무원": ["사회문화", "정치와법", "경제"],
+      "7급공무원": ["사회문화", "정치와법"],
+      경찰공무원: ["사회문화", "정치와법"],
+      소방공무원: ["물리학1"],
+      토목기술자: ["물리학1", "물리학2", "지구과학1"],
+      기계공학자: ["물리학1", "물리학2"],
+      전기전자공학자: ["물리학1", "물리학2"],
+      화학공학자: ["화학1", "화학2", "물리학1"],
+      컴퓨터공학자: ["물리학1", "물리학2"],
+      산업공학자: ["물리학1", "물리학2"],
+      회계사: ["경제"],
+      세무사: ["경제"],
+      관세사: ["경제", "정치와법"],
+      경영컨설턴트: ["경제", "정치와법"],
+      금융분석가: ["경제"],
+      투자분석가: ["경제", "정치와법"],
+      기자: ["사회문화", "세계사", "동아시아사"],
+      PD: ["사회문화", "세계사"],
+      작가: ["세계사", "동아시아사", "한국지리"],
+      사회복지사: ["사회문화", "생활과윤리"],
+      상담사: ["생활과윤리", "윤리와사상"],
+      외교관: ["세계사", "동아시아사", "세계지리", "정치와법"],
+      연구원: ["물리학1", "화학1", "생명과학1", "지구과학1"],
+      연구개발원: ["물리학1", "물리학2", "화학1", "화학2"],
+    };
+
+    const relatedSubjects = careerSubjectMap[career] || [];
+    return relatedSubjects.includes(mappedSubject);
+  }
+
   const subjects = ["국어", "수학", "영어", "탐구1", "탐구2"];
   let total = 0;
 
@@ -483,6 +566,31 @@ function updateScheduleDisplay(schedule, gameState) {
     const elem = document.getElementById(`schedule-${subject}`);
     if (elem) {
       elem.textContent = `${hours}시간`;
+    }
+
+    // 효율 표시 업데이트
+    const efficiencyElem = document.getElementById(
+      `schedule-efficiency-${subject}`
+    );
+    if (efficiencyElem) {
+      // 탐구1, 탐구2만 진로 매칭 체크
+      if ((subject === "탐구1" || subject === "탐구2") && career) {
+        const actualSubject =
+          subject === "탐구1" ? selectedSubjects[0] : selectedSubjects[1];
+        if (
+          actualSubject &&
+          isCareerSubjectMatch(career, subject, actualSubject)
+        ) {
+          efficiencyElem.textContent = "⭐ 효율 업!";
+          efficiencyElem.style.display = "inline";
+        } else {
+          efficiencyElem.textContent = "";
+          efficiencyElem.style.display = "none";
+        }
+      } else {
+        efficiencyElem.textContent = "";
+        efficiencyElem.style.display = "none";
+      }
     }
   });
 
@@ -609,8 +717,16 @@ function loadGameState() {
       }
 
       // 서가윤 상태 복원
-      if (gameState.stamina !== undefined || gameState.mental !== undefined || gameState.confidence !== undefined) {
-        updateCharacterStatus(gameState.stamina, gameState.mental, gameState.confidence);
+      if (
+        gameState.stamina !== undefined ||
+        gameState.mental !== undefined ||
+        gameState.confidence !== undefined
+      ) {
+        updateCharacterStatus(
+          gameState.stamina,
+          gameState.mental,
+          gameState.confidence
+        );
       }
 
       // 시간표 복원
@@ -735,7 +851,8 @@ function startSpeakingAnimation(affection = null) {
   // 모든 상태이상을 우선적으로 확인 (우선순위: 질병 > 번아웃 > 자신감)
   const isDisease = currentStamina !== undefined && currentStamina <= 10;
   const isBurnout = currentMental !== undefined && currentMental <= 10;
-  const isDiscouraged = currentConfidence !== undefined && currentConfidence <= 10;
+  const isDiscouraged =
+    currentConfidence !== undefined && currentConfidence <= 10;
   const isArrogant = currentConfidence !== undefined && currentConfidence >= 90;
 
   // 호감도가 전달되지 않으면 현재 저장된 호감도 사용

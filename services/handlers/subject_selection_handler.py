@@ -92,28 +92,49 @@ class SubjectSelectionHandler(BaseStateHandler):
             career = self.service._get_career(username)
             synergy_messages = []
             
+            print(f"[SELECTION_NARRATION] 진로: {career}, 선택과목: {found_subjects}")
+            
             if career:
                 from services.utils.career_manager import get_career_subject_bonus_multiplier
                 
                 for subject in found_subjects:
                     multiplier = get_career_subject_bonus_multiplier(career, subject)
+                    print(f"[SELECTION_NARRATION] 체크 중: 진로 '{career}'와 과목 '{subject}', 배율: {multiplier}")
                     if multiplier > 1.0:
-                        synergy_messages.append(f"'{career}' 진로와 '{subject}' 탐구과목이 시너지를 발휘합니다! 탐구과목 배율 {multiplier}배")
+                        synergy_messages.append(f"⭐ '{career}' 진로와 '{subject}' 탐구과목이 시너지를 발휘합니다! 탐구과목 효율이 {multiplier}배 상승합니다.")
                         print(f"[CAREER_SYNERGY] {username}의 '{career}' 진로와 '{subject}' 과목 시너지 발생! (배율: {multiplier}배)")
 
             # 나레이션 구성
             narration_parts = [f"탐구과목 선택이 완료되었습니다! ({', '.join(found_subjects)})"]
             
             if synergy_messages:
+                narration_parts.append("")  # 빈 줄 추가
                 narration_parts.extend(synergy_messages)
+                print(f"[SELECTION_NARRATION] 시너지 메시지 추가됨: {synergy_messages}")
+            else:
+                print(f"[SELECTION_NARRATION] 시너지 메시지 없음. 진로: {career}, 선택과목: {found_subjects}")
             
             narration = "\n".join(narration_parts)
+            print(f"[SELECTION_NARRATION] 최종 나레이션: {narration}")
+
+            # 진로-과목 시너지 정보를 LLM 프롬프트에 전달하기 위한 정보 구성
+            career_synergy_info = None
+            if synergy_messages and career:
+                from services.utils.career_manager import get_career_subject_bonus_multiplier
+                synergy_info_parts = []
+                for subject in found_subjects:
+                    multiplier = get_career_subject_bonus_multiplier(career, subject)
+                    if multiplier > 1.0:
+                        synergy_info_parts.append(f"'{career}' 진로와 '{subject}' 탐구과목이 시너지를 발휘합니다! 탐구과목 효율이 {multiplier}배 상승합니다.")
+                if synergy_info_parts:
+                    career_synergy_info = "\n".join(synergy_info_parts)
 
             return {
                 'subjects_selected': True,
                 'subjects': found_subjects,
                 'transition_to': 'daily_routine',
                 'narration': narration,
+                'career_synergy_info': career_synergy_info,  # LLM 프롬프트에 추가할 정보
                 'error': None
             }
         else:

@@ -1448,24 +1448,26 @@ class ChatbotService:
         final_increase = base_increase
         multipliers_applied = []
         
-        # 1. 진로-과목 배율 적용
+        # 1. 진로-과목 배율 적용 (탐구과목에만 적용)
         career = self._get_career(username)
         selected_subjects = self._get_selected_subjects(username)
         
-        # 탐구1, 탐구2를 실제 선택과목으로 매핑
-        actual_subject = subject
-        if subject == "탐구1" and len(selected_subjects) > 0:
-            actual_subject = selected_subjects[0]
-        elif subject == "탐구2" and len(selected_subjects) > 1:
-            actual_subject = selected_subjects[1]
-        
-        # 진로와 관련된 선택과목인지 확인
-        if career and actual_subject in selected_subjects:
-            from services.utils.career_manager import get_career_subject_bonus_multiplier
-            career_multiplier = get_career_subject_bonus_multiplier(career, actual_subject)
-            if career_multiplier > 1.0:
-                final_increase = final_increase * career_multiplier
-                multipliers_applied.append(f"진로-과목 {career_multiplier}배")
+        # 탐구1, 탐구2만 진로-과목 배율 적용
+        if subject in ["탐구1", "탐구2"]:
+            # 탐구1, 탐구2를 실제 선택과목으로 매핑
+            actual_subject = None
+            if subject == "탐구1" and len(selected_subjects) > 0:
+                actual_subject = selected_subjects[0]
+            elif subject == "탐구2" and len(selected_subjects) > 1:
+                actual_subject = selected_subjects[1]
+            
+            # 진로와 관련된 선택과목인지 확인
+            if career and actual_subject:
+                from services.utils.career_manager import get_career_subject_bonus_multiplier
+                career_multiplier = get_career_subject_bonus_multiplier(career, actual_subject)
+                if career_multiplier > 1.0:
+                    final_increase = final_increase * career_multiplier
+                    multipliers_applied.append(f"진로-과목 {career_multiplier}배")
         
         # 2. 시험 전략 배율 적용
         strategy_multiplier = self._get_strategy_multiplier(username, subject)
@@ -2319,15 +2321,24 @@ class ChatbotService:
         # 호감도 말투 추가
         affection_tone = get_affection_tone(self.config, affection)
 
-        # 진로 정보 추가 (조건부 - 10n-9: 1, 11, 21, 31, 41, ...)
+        # 진로 정보 추가 (조건부 - 10n-9: 1, 11, 21, 31, 41, ... 또는 진로 질문 시)
         conversation_count = self._get_conversation_count(username)
         career_info = ""
-        if should_include_career_info(conversation_count):
+        
+        # 사용자가 진로에 대해 물어보는 경우 감지
+        career_keywords = ["진로", "꿈", "장래희망", "직업", "되고 싶", "되려고", "목표", "미래", "나중에 뭐 할"]
+        user_asking_about_career = any(keyword in user_message for keyword in career_keywords)
+        
+        # 진로 정보 포함 조건: 10n-9 패턴이거나 사용자가 진로에 대해 물어본 경우
+        should_include = should_include_career_info(conversation_count) or user_asking_about_career
+        
+        if should_include:
             career = self._get_career(username)
             if career:
                 career_desc = get_career_description(career)
                 career_info = f"[진로 목표]\n당신의 진로 목표는 '{career}'입니다. ({career_desc})\n플레이어(멘토)가 진로에 대해 물어보면 자연스럽게 자신의 진로 목표와 그 이유, 그리고 그 진로를 향한 열정을 표현하세요."
-                print(f"[CAREER_INFO] conversation_count={conversation_count}: 진로 정보 포함 - {career}")
+                reason = "진로 질문 감지" if user_asking_about_career else f"conversation_count={conversation_count}"
+                print(f"[CAREER_INFO] {reason}: 진로 정보 포함 - {career}")
 
         # 게임 상태 컨텍스트
         state_context = self._get_state_context(game_state)
@@ -2366,8 +2377,11 @@ class ChatbotService:
 
         # 기존 프롬프트와 결합
         if prompt_parts:
-            return "\n\n".join(prompt_parts) + "\n\n" + user_prompt
-        return user_prompt
+            prompt = "\n\n".join(prompt_parts) + "\n\n" + user_prompt
+        else:
+            prompt = user_prompt
+        
+        return prompt
     
     
     def generate_response(self, user_message: str, username: str = "사용자") -> dict:
@@ -3359,6 +3373,14 @@ class ChatbotService:
             # [1.7.10] 탐구과목 선택 처리 (selection 상태에서만, Handler 사용)
             subjects_selected = False
             selected_subjects = None
+            # 이전 턴에서 선택과목이 선택되었는지 확인 (상태 전이 후에도 유지)
+            if hasattr(self, '_subjects_selected_this_turn'):
+                if username in self._subjects_selected_this_turn:
+                    subjects_selected = self._subjects_selected_this_turn[username]
+                    selected_subjects = self._subjects_selected_this_turn.get(f'{username}_subjects')
+                    if subjects_selected:
+                        print(f"[SELECTION] 이전 턴에서 선택과목 선택 플래그 복원: subjects_selected={subjects_selected}, selected_subjects={selected_subjects}")
+            
             if new_state == "selection" or current_state == "selection":
                 # Handler로 처리
                 handler_result = self.handler_registry.call_handle(
@@ -3369,6 +3391,20 @@ class ChatbotService:
                     if handler_result.get('subjects_selected'):
                         subjects_selected = True
                         selected_subjects = handler_result.get('subjects')
+                        # 상태 전이 후에도 유지하기 위해 저장
+                        if not hasattr(self, '_subjects_selected_this_turn'):
+                            self._subjects_selected_this_turn = {}
+                        self._subjects_selected_this_turn[username] = True
+                        self._subjects_selected_this_turn[f'{username}_subjects'] = selected_subjects
+                        print(f"[SELECTION] 🚨 탐구과목 선택 완료 감지: subjects_selected={subjects_selected}, selected_subjects={selected_subjects}")
+                    
+                    # 진로-과목 시너지 정보 저장 (프롬프트에 추가하기 위해)
+                    if handler_result.get('career_synergy_info'):
+                        # 전역 변수나 인스턴스 변수에 저장하여 프롬프트 빌드 시 사용
+                        if not hasattr(self, '_career_synergy_info'):
+                            self._career_synergy_info = {}
+                        self._career_synergy_info[username] = handler_result.get('career_synergy_info')
+                        print(f"[SELECTION] 진로-과목 시너지 정보 저장: {handler_result.get('career_synergy_info')}")
                     
                     # 헬퍼로 narration 및 전이 처리
                     narration, transition_to, handler_state_changed = self._process_handler_result(handler_result, narration)
@@ -3376,7 +3412,11 @@ class ChatbotService:
                         self._set_game_state(username, transition_to)
                         new_state = transition_to
                         state_changed = handler_state_changed
-                        print(f"[STATE_TRANSITION] 탐구과목 선택 완료로 인해 {transition_to} 상태로 전이했습니다.")
+                        print(f"[STATE_TRANSITION] 🚨 탐구과목 선택 완료로 인해 {transition_to} 상태로 전이했습니다.")
+                        print(f"[SELECTION] 🚨 최종 확인: subjects_selected={subjects_selected}, selected_subjects={selected_subjects}, state_changed={state_changed}, new_state={new_state}")
+                        # 상태 전이 후에도 subjects_selected 플래그 유지
+                        if subjects_selected:
+                            print(f"[SELECTION] 🚨 상태 전이 후 subjects_selected 플래그 유지: {subjects_selected}")
 
             # [1.8] 시간표 처리 (학습 시간표 관리 상태에서만, Handler 사용)
             schedule_updated = False
@@ -3384,22 +3424,36 @@ class ChatbotService:
             current_schedule = None  # 변수 선언
             if new_state == "study_schedule" or current_state == "study_schedule":
                 # Handler로 처리
+                print(f"[STUDY_SCHEDULE] 핸들러 호출 시작 - current_state: {current_state}, new_state: {new_state}")
                 handler_result = self.handler_registry.call_handle(
                     'study_schedule', username, user_message,
                     {'current_state': current_state, 'new_state': new_state}
                 )
+                print(f"[STUDY_SCHEDULE] 핸들러 결과: {handler_result}")
                 if handler_result:
                     if handler_result.get('schedule_updated'):
                         schedule_updated = True
                         current_schedule = handler_result.get('schedule')
                     
+                    # 진로-과목 시너지 정보 저장 (프롬프트에 추가하기 위해)
+                    if handler_result.get('career_synergy_info'):
+                        # 전역 변수나 인스턴스 변수에 저장하여 프롬프트 빌드 시 사용
+                        if not hasattr(self, '_career_synergy_info'):
+                            self._career_synergy_info = {}
+                        self._career_synergy_info[username] = handler_result.get('career_synergy_info')
+                        print(f"[STUDY_SCHEDULE] 진로-과목 시너지 정보 저장: {handler_result.get('career_synergy_info')}")
+                    
                     # 헬퍼로 narration 및 전이 처리
+                    print(f"[STUDY_SCHEDULE] 처리 전 narration: {narration}")
                     narration, transition_to, handler_state_changed = self._process_handler_result(handler_result, narration)
+                    print(f"[STUDY_SCHEDULE] 처리 후 narration: {narration}")
                     if transition_to:
                         self._set_game_state(username, transition_to)
                         new_state = transition_to
                         state_changed = handler_state_changed
                         print(f"[STATE_TRANSITION] 시간표 설정 완료로 인해 {transition_to} 상태로 복귀했습니다.")
+                else:
+                    print(f"[STUDY_SCHEDULE] 핸들러 결과가 None입니다. 시간표 파싱 실패 또는 LLM으로 처리.")
             
             # daily_routine 상태에서 대화 횟수 증가 등의 처리
             if new_state == "daily_routine":
@@ -3561,24 +3615,48 @@ class ChatbotService:
             # [1.9] fixed_reply와 narration 체크 (모든 핸들러 실행 후 최종 상태에서 체크)
             # 핸들러들이 상태를 변경할 수 있으므로, 모든 핸들러 실행 후 최종 new_state로 체크
             # state 진입 시에만 fixed_reply와 narration 사용 (이후에는 LLM 사용)
+            
+            # 디버깅: subjects_selected 상태 확인
+            print(f"[DEBUG] [1.9] fixed_reply 체크 전 - subjects_selected={subjects_selected}, new_state={new_state}, state_changed={state_changed}")
+            if 'selected_subjects' in locals():
+                print(f"[DEBUG] [1.9] selected_subjects={selected_subjects}")
+            
             state_info = self._get_state_info(new_state)
             if state_info and state_changed:
                 fixed_reply = state_info.get('fixed_reply')
                 state_narration = state_info.get('narration')
                 to_states = state_info.get('to_states', [])
 
+                # 선택과목 선택 시에는 fixed_reply와 state narration을 사용하지 않음 (선택과목에 대한 응답을 먼저 생성)
+                print(f"[DEBUG] [1.9] fixed_reply 체크 - subjects_selected={subjects_selected}, fixed_reply 존재={fixed_reply is not None}, state_narration 존재={state_narration is not None}")
+                if subjects_selected:
+                    print(f"[FIXED_REPLY] 🚨🚨🚨 선택과목 선택으로 인한 state 전이 감지!")
+                    print(f"[FIXED_REPLY] subjects_selected={subjects_selected}, selected_subjects={selected_subjects if 'selected_subjects' in locals() else 'N/A'}")
+                    print(f"[FIXED_REPLY] fixed_reply={fixed_reply}, state_narration={state_narration}")
+                    print(f"[FIXED_REPLY] fixed_reply와 state narration 무시하고 LLM으로 선택과목에 대한 응답 생성")
+                    # handler의 narration은 유지 (선택과목 선택 완료 메시지 등)
+                    # ending_processed는 False로 유지하여 LLM 호출 보장
+                    ending_processed = False
+                    fixed_reply = None  # 명시적으로 None으로 설정하여 사용 방지
+                    state_narration = None  # state narration도 무시
+                    print(f"[FIXED_REPLY] 🚨 fixed_reply와 state_narration을 None으로 설정 완료")
                 # state narration이 있으면 사용 (state 진입 시에만)
-                if state_narration:
+                elif state_narration:
                     narration = state_narration
                     print(f"[STATE_NARRATION] {new_state} state 진입 - narration 사용: '{narration[:100]}...'")
 
                 # handler의 fixed_reply가 있으면 이를 우선 사용, 없으면 state의 fixed_reply 사용
-                if handler_fixed_reply:
+                # 단, subjects_selected가 True면 무조건 LLM 사용
+                if subjects_selected:
+                    print(f"[FIXED_REPLY] 🚨🚨🚨 subjects_selected=True이므로 fixed_reply 완전 무시하고 LLM 호출")
+                    handler_fixed_reply = None
+                    fixed_reply = None
+                elif handler_fixed_reply:
                     # handler에서 반환한 fixed_reply 사용 (배열 형식)
                     reply = handler_fixed_reply
                     ending_processed = True
                     print(f"[HANDLER_FIXED_REPLY] handler의 fixed_reply 사용: {handler_fixed_reply}")
-                elif fixed_reply:
+                elif fixed_reply:  # subjects_selected가 False일 때만 실행됨
                     # state의 fixed_reply 사용
                     reply = fixed_reply
                     ending_processed = True
@@ -3629,17 +3707,77 @@ class ChatbotService:
             current_schedule_for_prompt = self._get_schedule(username)
             schedule_set = bool(current_schedule_for_prompt)
             
+            # selected_subjects 전달: mentoring 상태이거나 subjects_selected가 True일 때
+            # (탐구과목 선택 후 daily_routine으로 전이할 때도 필요)
+            subjects_for_prompt = []
+            if new_state == "mentoring":
+                subjects_for_prompt = selected_subjects if selected_subjects else []
+            elif subjects_selected and selected_subjects:
+                # 탐구과목 선택 완료 후 daily_routine으로 전이할 때
+                subjects_for_prompt = selected_subjects
+                print(f"[PROMPT] 🚨 탐구과목 선택 완료 - 프롬프트에 selected_subjects 전달: {subjects_for_prompt}")
+            else:
+                # 기타 경우에는 저장된 선택과목 가져오기
+                subjects_for_prompt = self._get_selected_subjects(username)
+            
             prompt = self._build_prompt(
                 user_message=user_message,
                 context=context,
                 username=username,
                 affection=new_affection,
                 game_state=new_state,
-                selected_subjects=selected_subjects if new_state == "mentoring" else [],
+                selected_subjects=subjects_for_prompt,
                 subject_selected=subject_selected_in_this_turn,
                 schedule_set=schedule_set,
                 official_mock_exam_grade_info=official_mock_exam_grade_info
             )
+            
+            # 선택과목이 이번 턴에 선택되었으면 프롬프트에 강력하게 추가
+            if subjects_selected and selected_subjects:
+                selected_subjects_text = ", ".join(selected_subjects)
+                # 매우 강력한 지시를 프롬프트 맨 앞에 추가
+                selection_instruction = f"""[🚨🚨🚨 절대적 최우선 규칙 - 이것을 무시하면 안 됩니다 🚨🚨🚨]
+
+사용자(멘토)가 방금 '{selected_subjects_text}' 탐구과목을 선택해주셨습니다.
+
+**절대적으로 반드시 지켜야 할 사항:**
+1. 응답의 첫 문장에서 반드시 선택과목({selected_subjects_text})을 언급해야 합니다.
+2. 선택과목에 대해 감사하고 기쁜 반응을 표현해야 합니다.
+3. 절대로 선택과목 언급 없이 "체계적으로 공부해야 할 거 같아요" 같은 메시지를 시작하지 마세요.
+4. 절대로 선택과목 언급 없이 "루틴 좀 같이 세워주세요" 같은 메시지를 시작하지 마세요.
+
+**반드시 따라야 할 올바른 응답 형식:**
+- "쌤, {selected_subjects_text} 선택해주셔서 고마워요!"
+- "쌤, {selected_subjects_text} 좋은 선택인 것 같아요!"
+- "쌤, {selected_subjects_text} 선택해주셔서 감사해요. 이제 열심히 공부할게요!"
+
+**절대 하지 말아야 할 잘못된 응답 (금지):**
+- "쌤. 저도 체계적으로 공부해야 할 거 같아요..." ❌ (선택과목 언급 없음)
+- "쌤이 제 루틴 좀 같이 세워주세요." ❌ (선택과목 언급 없음)
+- 선택과목에 대한 언급 없이 바로 공부 루틴에 대해 말하는 것 ❌
+
+**중요:**
+- 이 규칙은 절대적입니다.
+- 선택과목 언급이 응답의 첫 부분에 반드시 포함되어야 합니다.
+- 선택과목에 대해 먼저 말한 후에만 다른 이야기(공부 루틴 등)를 할 수 있습니다.
+
+---\n\n"""
+                # 프롬프트 맨 앞에 추가
+                prompt = selection_instruction + prompt
+                prompt += f"\n\n[🚨 최종 확인: 선택과목 선택 완료]\n사용자(멘토)가 '{selected_subjects_text}' 탐구과목을 선택해주셨습니다. 반드시 첫 문장에서 이 선택과목에 대해 감사하고 기쁜 반응을 표현하세요. 예: '쌤, {selected_subjects_text} 선택해주셔서 고마워요!' 또는 '쌤, 좋은 선택인 것 같아요!' 선택과목에 대해 먼저 언급한 후에만 다른 이야기를 하세요."
+                print(f"[PROMPT] 🚨 선택과목 선택 정보 프롬프트에 최우선 규칙으로 추가: {selected_subjects_text}")
+                print(f"[PROMPT] subjects_selected={subjects_selected}, selected_subjects={selected_subjects}")
+                print(f"[PROMPT] 프롬프트 길이: {len(prompt)} 문자")
+                print(f"[PROMPT] 프롬프트 앞부분 (처음 500자): {prompt[:500]}")
+            
+            # 진로-과목 시너지 정보가 있으면 프롬프트에 추가
+            if hasattr(self, '_career_synergy_info') and username in self._career_synergy_info:
+                synergy_info = self._career_synergy_info[username]
+                if synergy_info:
+                    prompt += f"\n\n[중요한 정보]\n{synergy_info}\n\n이 정보를 바탕으로 서가윤의 캐릭터에 맞게 자연스럽게 효율 상승에 대해 기쁘고 감사하는 반응을 표현하세요. 선택과목에 대한 감사 인사와 함께 효율 상승에 대한 기쁨을 표현하세요. 예를 들어 '쌤, 제 진로와 이 과목이 잘 맞는 것 같아요! 공부 효율이 올라갈 것 같아서 기대돼요!' 같은 느낌으로 말하세요."
+                    print(f"[PROMPT] 진로-과목 시너지 정보 프롬프트에 추가: {synergy_info}")
+                    # 한 번 사용한 후 삭제 (다음 턴에서는 사용하지 않음)
+                    del self._career_synergy_info[username]
             
             # 선택과목 목록 요청 시 프롬프트에 추가
             if new_state in ["icebreak", "mentoring"] and ("탐구과목" in user_message or "선택과목" in user_message or "과목 선택" in user_message or "과목 목록" in user_message):
@@ -4216,6 +4354,14 @@ class ChatbotService:
 
             # [5.3] 대화 로그 저장 (모든 대화)
             self._save_conversation_log(username, user_message, reply)
+
+            # [5.3.5] subjects_selected 플래그 초기화 (LLM 응답 생성 완료 후)
+            if hasattr(self, '_subjects_selected_this_turn'):
+                if username in self._subjects_selected_this_turn:
+                    del self._subjects_selected_this_turn[username]
+                if f'{username}_subjects' in self._subjects_selected_this_turn:
+                    del self._subjects_selected_this_turn[f'{username}_subjects']
+                    print(f"[SELECTION] subjects_selected 플래그 초기화 완료")
 
             # [5.4] dialogue state에서 대화 횟수 증가
             if new_state == "dialogue":
