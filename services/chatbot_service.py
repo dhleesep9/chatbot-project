@@ -2319,32 +2319,15 @@ class ChatbotService:
         # 호감도 말투 추가
         affection_tone = get_affection_tone(self.config, affection)
 
-        # 진로 관련 키워드 확인
-        career_keywords = [
-            "진로", "직업", "꿈", "목표", "미래", "장래", "희망", "하고 싶", "되고 싶",
-            "가고 싶", "되려", "가려", "전공", "대학", "학과", "계열", "분야",
-            "의사", "변호사", "교사", "공무원", "엔지니어", "연구원", "기자", "작가",
-            "뭐 하고 싶", "뭐 되고 싶", "뭐가 되고 싶", "무엇을 하고 싶", "무엇이 되고 싶"
-        ]
-        user_message_lower = user_message.lower()
-        has_career_keyword = any(keyword in user_message_lower for keyword in career_keywords)
-
-        # 진로 정보 추가 (진로 관련 키워드가 있거나 조건부 패턴일 때)
+        # 진로 정보 추가 (조건부 - 10n-9: 1, 11, 21, 31, 41, ...)
         conversation_count = self._get_conversation_count(username)
         career_info = ""
-        should_include = should_include_career_info(conversation_count) or has_career_keyword
-        
-        if should_include:
+        if should_include_career_info(conversation_count):
             career = self._get_career(username)
             if career:
                 career_desc = get_career_description(career)
-                if has_career_keyword:
-                    # 진로 관련 질문이 있을 때는 더 명확하게 지시
-                    career_info = f"[진로 목표]\n당신의 진로 목표는 '{career}'입니다. ({career_desc})\n플레이어(멘토)가 진로에 대해 물어보고 있으므로, 자신의 진로 목표와 그 이유, 그리고 그 진로를 향한 열정을 자연스럽고 상세하게 표현하세요."
-                else:
-                    # 조건부 포함일 때는 기본 지시
-                    career_info = f"[진로 목표]\n당신의 진로 목표는 '{career}'입니다. ({career_desc})\n플레이어(멘토)가 진로에 대해 물어보면 자연스럽게 자신의 진로 목표와 그 이유, 그리고 그 진로를 향한 열정을 표현하세요."
-                print(f"[CAREER_INFO] conversation_count={conversation_count}, has_career_keyword={has_career_keyword}: 진로 정보 포함 - {career}")
+                career_info = f"[진로 목표]\n당신의 진로 목표는 '{career}'입니다. ({career_desc})\n플레이어(멘토)가 진로에 대해 물어보면 자연스럽게 자신의 진로 목표와 그 이유, 그리고 그 진로를 향한 열정을 표현하세요."
+                print(f"[CAREER_INFO] conversation_count={conversation_count}: 진로 정보 포함 - {career}")
 
         # 게임 상태 컨텍스트
         state_context = self._get_state_context(game_state)
