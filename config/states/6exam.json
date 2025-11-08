@@ -1,0 +1,8 @@
+{
+  "name": "6월 모의고사",
+  "description": "6월 모의고사 응시 및 성적 발표 상태",
+  "from_states": ["6exam_pre"],
+  "to_states": ["daily_routine", "6exam_feedback"],
+  "context": "당신의 6월 모의고사가 끝났습니다. 당신은 시험을 보고오느라 지쳤습니다.",
+  "transitions": []
+}

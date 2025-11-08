@@ -1,0 +1,11 @@
+{
+  "name": "campus_couple",
+  "description": "서강대 캠퍼스 커플 엔딩 - 서강대학교 입학 확정 + 호감도 80 이상",
+  "from_states": ["university_application"],
+  "to_states": [],
+  "narration": "[서가윤이 꿈에 그리던 서강대학교에 합격했습니다. 재수 생활의 모든 노력이 결실을 맺는 순간입니다.]",
+  "fixed_reply": "저 이제 쌤 후배에요 ㅎㅎ \n저 입시 끝나고 말하려고 기다렸어요.... \n저 선생님 좋아해요. \n쌤이랑 같은 학교 올려고 저 진짜 열심히 한거 다 봤잖아요. \n저랑 만나면 안돼요?",
+  "context": "당신은 애인입니다.",
+  "image": "/static/images/chatbot/end/서강대2.png",
+  "transitions": []
+}

@@ -1,0 +1,20 @@
+{
+  "name": "아이스브레이크단계",
+  "description": "서가윤과 신뢰를 쌓는 단계",
+  "from_states": ["start"],
+  "to_states": ["selection"],
+  "narration": "[서가윤이 당신에 대한 경계를 풉니다. 하지만, 아직 당신을 과외 선생으로써 신뢰하지 않는 듯 합니다.]",
+  "fixed_reply": "근데.. 쌤은 어떤 사람이에요? 궁금해요.",
+  "context": "쌤(유저)에게 흥미를 느낍니다.",
+  "transitions": [
+    {
+      "name": "호감도 10 도달",
+      "trigger_type": "affection_threshold",
+      "conditions": {
+        "affection_min": 10
+      },
+      "next_state": "selection",
+      "transition_narration": "서가윤이 당신을 완전히 신뢰하기 시작했습니다! 이제 탐구과목을 선택해야 합니다."
+    }
+  ]
+}

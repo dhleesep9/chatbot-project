@@ -1,0 +1,11 @@
+{
+  "name": "mental_explode",
+  "description": "멘탈붕괴 엔딩 - 멘탈이 0에 도달한 경우",
+  "from_states": ["*"],
+  "to_states": [],
+  "narration": "[서가윤은 현재 심리적으로 매우 불안정한 상태입니다. 이 상태로는 공부를 더 이어 나가기 어렵습니다. 절대적인 안정을 취해야 하는 상황입니다.]",
+  "fixed_reply": "어떡하지? \n아 너무 불안해 .. 공부도 너무 안되고 .. \n아무것도 하고 싶지 않아.. \n어떡하지 ... 누가 나 좀 도와줘 ....",
+  "context": "당신의 멘탈은 붕괴되었습니다.",
+  "image": "static/images/chatbot/end/멘붕.png",
+  "transitions": []
+}
